@@ -1,0 +1,7 @@
+keyboard>=0.13.5
+pyperclip>=1.9
+pystray>=0.19
+sounddevice>=0.5
+websocket-client>=1.8
+Pillow>=10
+pyinstaller>=6

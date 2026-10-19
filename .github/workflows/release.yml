@@ -1,0 +1,40 @@
+name: Build and release Windows app
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+          cache: pip
+
+      - name: Build single-file executable
+        shell: pwsh
+        run: .\build.ps1 -OutputDirectory .\release
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: main-${{ github.run_number }}
+          name: Speak build ${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          make_latest: true
+          body: |
+            Windows x64 CPU build.
+
+            The executable includes Python and both inference runtimes. Nemotron and cleanup model weights download on first use.
+
+            Source commit: ${{ github.sha }}
+          files: release/Speak.exe
