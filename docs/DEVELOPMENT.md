@@ -65,7 +65,7 @@ Advanced settings can pin the Small or Large model.
 ## Releases
 
 - `.github/workflows/build.yml` builds `Speak.exe` on every push and pull request (downloadable artifact). These builds have no version and never update themselves.
-- `.github/workflows/release.yml` is run by hand (Actions → Release → Run workflow) with a version like `1.2.0`. It writes `VERSION` to `speak/_build.py`, builds, and publishes release `v1.2.0` with `Speak.exe`. Tick *pre-release* to publish without offering it to installed apps.
+- `.github/workflows/release.yml` is run by hand (Actions → Release → Run workflow) with a version like `1.2.0`. It writes `VERSION` to `speak/_build.py`, builds, and publishes release `v1.2.0` with `Speak.exe`. Tick *pre-release* to publish without offering it to installed apps. Optional *ref* (commit SHA, branch or tag; default `main`) releases an earlier commit. It refuses a version whose tag exists, lists issues closed since the previous tag (`Closes #N` in commit messages) in the notes, and comments the release on each. The version only comes from this input, never from source.
 
 Installed apps check the GitHub releases API at start and daily. Depending on the Updates setting they download the new `Speak.exe` beside the running one (verified against GitHub's sha256 digest) and swap it in on quit or via "Restart to update", or just show the button. Source runs and non-Windows builds open the release page instead.
 
