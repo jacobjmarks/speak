@@ -99,19 +99,15 @@ class MainWindow(QMainWindow):
         self.settings = SettingsPage(settings, can_rescan_mics)
         self.about = AboutPage(Logo(56))
         self.nav = QButtonGroup(self)
-        # About sits apart at the bottom of the sidebar, away from the main pages
         for i, (label, page) in enumerate((("Dictate", self.dictate), ("History", self.history),
-                                           ("Settings", self.settings), (None, None), ("About", self.about))):
-            if page is None:
-                side.addStretch(1)
-                continue
+                                           ("Settings", self.settings), ("About", self.about))):
             self.stack.addWidget(page)
             button = QPushButton(label, objectName="nav", checkable=True, cursor=Qt.PointingHandCursor)
-            self.nav.addButton(button, self.stack.indexOf(page))
+            self.nav.addButton(button, i)
             side.addWidget(button)
         self.nav.button(0).setChecked(True)
         self.nav.idClicked.connect(self.show_page)
-        side.addSpacing(10)
+        side.addStretch(1)
 
         self.update_button = QPushButton(objectName="update", cursor=Qt.PointingHandCursor)
         self.update_button.clicked.connect(self.update_clicked)
