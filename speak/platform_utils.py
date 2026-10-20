@@ -34,6 +34,47 @@ def hidden_process_kwargs() -> dict:
     return {"start_new_session": True}
 
 
+_job = None
+
+
+def tie_to_app(process: subprocess.Popen) -> None:
+    """Make a child process die with Speak, even if Speak crashes or is killed (Windows job object).
+
+    Elsewhere, ManagedServer.stop() on normal exit is relied on. Best effort.
+    """
+    global _job
+    if not IS_WINDOWS:
+        return
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        if _job is None:
+            class Basic(ctypes.Structure):
+                _fields_ = [("PerProcessUserTimeLimit", ctypes.c_int64), ("PerJobUserTimeLimit", ctypes.c_int64),
+                            ("LimitFlags", wintypes.DWORD), ("MinimumWorkingSetSize", ctypes.c_size_t),
+                            ("MaximumWorkingSetSize", ctypes.c_size_t), ("ActiveProcessLimit", wintypes.DWORD),
+                            ("Affinity", ctypes.c_size_t), ("PriorityClass", wintypes.DWORD),
+                            ("SchedulingClass", wintypes.DWORD)]
+
+            class Extended(ctypes.Structure):
+                _fields_ = [("Basic", Basic), ("IoInfo", ctypes.c_ulonglong * 6),
+                            ("ProcessMemoryLimit", ctypes.c_size_t), ("JobMemoryLimit", ctypes.c_size_t),
+                            ("PeakProcessMemoryUsed", ctypes.c_size_t), ("PeakJobMemoryUsed", ctypes.c_size_t)]
+
+            kernel32.CreateJobObjectW.restype = wintypes.HANDLE
+            job = kernel32.CreateJobObjectW(None, None)
+            info = Extended()
+            info.Basic.LimitFlags = 0x2000  # JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+            if not kernel32.SetInformationJobObject(wintypes.HANDLE(job), 9, ctypes.byref(info), ctypes.sizeof(info)):
+                return
+            _job = job  # handle intentionally kept open for the app's lifetime
+        kernel32.AssignProcessToJobObject(wintypes.HANDLE(_job), wintypes.HANDLE(process._handle))
+    except Exception:
+        pass
+
+
 def paste_shortcut() -> str:
     return "cmd+v" if IS_MAC else "ctrl+v"
 

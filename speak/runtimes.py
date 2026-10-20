@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from .config import ASR_LOG, CLEANUP_LOG, CLEANUP_MODELS, MODELS_DIR
-from .platform_utils import bundle_root, exe_name, hidden_process_kwargs
+from .platform_utils import bundle_root, exe_name, hidden_process_kwargs, tie_to_app
 
 # progress(message, percent_or_None)
 Progress = Callable[[str, Optional[int]], None]
@@ -60,6 +60,7 @@ class ManagedServer:
                 stderr=subprocess.STDOUT,
                 **hidden_process_kwargs(),
             )
+            tie_to_app(self.process)
             deadline = time.monotonic() + timeout
             while time.monotonic() < deadline:
                 if self.process.poll() is not None:
