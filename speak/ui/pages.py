@@ -194,8 +194,10 @@ class SettingRow(QWidget):
         text = QVBoxLayout()
         text.setSpacing(2)
         text.addWidget(_label(title))
-        if hint:
-            text.addWidget(_label(hint, "hint"))
+        self.hint = _label(hint, "hint")
+        self.hint.setWordWrap(True)
+        self.hint.setVisible(bool(hint))
+        text.addWidget(self.hint)
         layout.addLayout(text, 1)
         layout.addSpacing(16)
         layout.addWidget(control, 0, Qt.AlignVCenter)
@@ -210,7 +212,6 @@ def _combo(options: dict, current: str) -> QComboBox:
     return combo
 
 
-TIDY = {"smart": "Smart", "literal": "Light", "off": "Off"}
 LANGUAGES = {"auto": "Detect automatically", "en": "English", "es": "Spanish", "fr": "French", "de": "German",
              "it": "Italian", "pt": "Portuguese", "nl": "Dutch", "ja": "Japanese", "zh": "Chinese"}
 
@@ -234,12 +235,9 @@ class SettingsPage(QScrollArea):
         self.shortcut.captured.connect(self._on_shortcut)
         self._row(rows, "Shortcut", "Press it anywhere to start and stop dictation", self.shortcut)
 
-        tidy = "off" if not settings["cleanup_enabled"] else settings["cleanup_mode"]
-        self.tidy = _combo(TIDY, tidy)
-        self.tidy.currentIndexChanged.connect(self._on_tidy)
-        self._row(rows, "Tidy up my words",
-                  "Smart: punctuation, paragraphs, drops ums and applies corrections like “no, I mean…”. "
-                  "Light: punctuation only.", self.tidy)
+        self.tidy = _combo(config.TIDY_LEVELS, settings["tidy"])
+        self.tidy.currentIndexChanged.connect(lambda: self.changed.emit({"tidy": self.tidy.currentData()}))
+        self.tidy_row = self._row(rows, "Tidy up my words", " ", self.tidy)
 
         self.paste = self._toggle(settings["auto_paste"], "auto_paste")
         self._row(rows, "Type into the app I'm using", "Otherwise text is just shown here to copy", self.paste)
@@ -266,6 +264,20 @@ class SettingsPage(QScrollArea):
         self._row(rows, "Appearance", "", self.theme, last=True)
         layout.addWidget(card)
 
+        # --- indicator ---
+        layout.addWidget(_label("While dictating", "section"))
+        card, rows = _card()
+        self.overlay = self._toggle(settings["overlay_enabled"], "overlay_enabled")
+        self._row(rows, "Show indicator", "Hidden when Speak's own window is in front", self.overlay)
+        self.position = _combo(config.OVERLAY_POSITIONS, settings["overlay_position"])
+        self.position.currentIndexChanged.connect(
+            lambda: self.changed.emit({"overlay_position": self.position.currentData()}))
+        self._row(rows, "Position", "", self.position)
+        self.live = _combo(config.LIVE_PREVIEWS, settings["live_preview"])
+        self.live.currentIndexChanged.connect(lambda: self.changed.emit({"live_preview": self.live.currentData()}))
+        self._row(rows, "Live text", "Words appear under the indicator as you speak", self.live, last=True)
+        layout.addWidget(card)
+
         # --- advanced (collapsed) ---
         self.advanced_button = QPushButton("Advanced  ›", objectName="ghost", cursor=Qt.PointingHandCursor)
         self.advanced_button.setCheckable(True)
@@ -273,11 +285,6 @@ class SettingsPage(QScrollArea):
         layout.addWidget(self.advanced_button, 0, Qt.AlignLeft)
 
         self.advanced, rows = _card()
-        self.overlay = self._toggle(settings["overlay_enabled"], "overlay_enabled")
-        self._row(rows, "Floating indicator", "Small pill near your cursor while dictating", self.overlay)
-        self.live = self._toggle(settings["live_preview"], "live_preview")
-        self._row(rows, "Live text preview", "Show words under the indicator as you speak", self.live)
-
         self.language = QComboBox(cursor=Qt.PointingHandCursor, editable=True)
         for code, label in LANGUAGES.items():
             self.language.addItem(f"{label} ({code})" if code != "auto" else label, code)
@@ -299,7 +306,8 @@ class SettingsPage(QScrollArea):
         self.cleanup_model = _combo(models, settings["cleanup_model"])
         self.cleanup_model.currentIndexChanged.connect(
             lambda: self.changed.emit({"cleanup_model": self.cleanup_model.currentData()}))
-        self._row(rows, "Tidy-up model", "Downloaded on first use", self.cleanup_model)
+        self._row(rows, "Tidy-up model", "Automatic picks by tidy level and what your computer runs fast",
+                  self.cleanup_model)
 
         folder = QPushButton("Open", cursor=Qt.PointingHandCursor)
         folder.clicked.connect(lambda: (config.APP_DIR.mkdir(parents=True, exist_ok=True),
@@ -313,12 +321,17 @@ class SettingsPage(QScrollArea):
                                         easingCurve=QEasingCurve.OutCubic)
         self._anim.finished.connect(self._anim_done)
 
-    def _row(self, rows: QVBoxLayout, title: str, hint: str, control: QWidget, last: bool = False):
-        rows.addWidget(SettingRow(title, hint, control))
+    def _row(self, rows: QVBoxLayout, title: str, hint: str, control: QWidget, last: bool = False) -> SettingRow:
+        row = SettingRow(title, hint, control)
+        rows.addWidget(row)
         if not last:
             divider = QFrame(objectName="divider")
             divider.setFixedHeight(1)
             rows.addWidget(divider)
+        return row
+
+    def set_tidy_summary(self, summary: str):
+        self.tidy_row.hint.setText(summary)
 
     def _toggle(self, value: bool, key: str) -> Toggle:
         toggle = Toggle()
@@ -343,13 +356,6 @@ class SettingsPage(QScrollArea):
 
     def _on_shortcut(self, combo: str):
         self.shortcut_changed.emit(combo)
-
-    def _on_tidy(self):
-        value = self.tidy.currentData()
-        if value == "off":
-            self.changed.emit({"cleanup_enabled": False})
-        else:
-            self.changed.emit({"cleanup_enabled": True, "cleanup_mode": value})
 
     def _on_language(self):
         data = self.language.currentData()

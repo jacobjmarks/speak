@@ -12,10 +12,11 @@ $archive = Join-Path $work $archiveName
 $extract = Join-Path $work 'extract'
 $vendor = Join-Path $PSScriptRoot 'vendor\nemo-speech'
 $llamaVersion = 'b11669'
-$llamaArchiveName = "llama-$llamaVersion-bin-win-cpu-x64.zip"
+# Vulkan build: GPU offload on any vendor, and includes the CPU backends as fallback.
+$llamaArchiveName = "llama-$llamaVersion-bin-win-vulkan-x64.zip"
 $llamaArchiveUrl = "https://github.com/ggml-org/llama.cpp/releases/download/$llamaVersion/$llamaArchiveName"
-$llamaArchiveHash = '37b3efcf962847ca869745fd4ccf7f5e7e8dacfeff9fa3523b4ca8cdc66d632b'
-$llamaWork = Join-Path $env:TEMP "speak-llama-$llamaVersion"
+$llamaArchiveHash = '2c07574e7bde71321cb785282b20cc821e951132149eeceeea32ddebdbf0598e'
+$llamaWork = Join-Path $env:TEMP "speak-llama-$llamaVersion-vulkan"
 $llamaArchive = Join-Path $llamaWork $llamaArchiveName
 $llamaExtract = Join-Path $llamaWork 'extract'
 $llamaVendor = Join-Path $PSScriptRoot 'vendor\llama-cpp'

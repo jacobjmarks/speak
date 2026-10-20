@@ -3,12 +3,13 @@
 Controller callbacks arrive on worker threads; `Bridge` re-emits them as Qt signals (queued onto the UI thread).
 """
 import sys
+import threading
 
 from PySide6.QtCore import QObject, Qt, Signal
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
-from .. import config, hotkey
+from .. import config, hotkey, tidy
 from ..controller import Dictation, Listener, State
 from . import theme
 from .overlay import Overlay
@@ -22,6 +23,7 @@ class Bridge(QObject, Listener):
     result = Signal(str, str)
     error = Signal(str)
     hotkey = Signal()
+    probed = Signal()
 
     def on_state(self, state):
         self.state.emit(state.value)
@@ -60,6 +62,7 @@ class SpeakApp(QObject):
         b.result.connect(self._on_result)
         b.error.connect(self._on_error)
         b.hotkey.connect(self.dictation.toggle)
+        b.probed.connect(self._refresh_tidy)
 
         w = self.window
         w.close_requested.connect(self._on_close)
@@ -73,6 +76,9 @@ class SpeakApp(QObject):
         self._register_hotkey()
         w.dictate.set_shortcut(self.settings["hotkey"])
         w.history.refresh(self.settings["history_enabled"])
+        self._refresh_tidy()
+        threading.Thread(target=lambda: (tidy._probed.wait(30), b.probed.emit()), daemon=True).start()
+        self.dictation.warm_up()
         if not (background and self.tray):
             w.show()
 
@@ -89,7 +95,13 @@ class SpeakApp(QObject):
             self.window.dictate.set_shortcut(self.settings["hotkey"])
         if "history_enabled" in changes:
             self.window.history.refresh(self.settings["history_enabled"])
+        if {"tidy", "cleanup_model"} & changes.keys():
+            self._refresh_tidy()
         self.window.settings.sync(self.settings)
+
+    def _refresh_tidy(self):
+        summary = tidy.plan(self.settings).summary if tidy.probed() else "Checking what your computer can run…"
+        self.window.settings.set_tidy_summary(summary)
 
     def _apply_theme(self):
         self.palette = theme.resolve(self.settings["theme"])
@@ -124,7 +136,7 @@ class SpeakApp(QObject):
         if state == State.LISTENING:
             self.window.dictate.set_live("")
         if self.settings["overlay_enabled"]:
-            self.overlay.show_text = self.settings["live_preview"]
+            self.overlay.show_text = self.settings["live_preview"] != "off"
             self.overlay.set_mode(state)
 
     def _on_progress(self, message: str, percent):
@@ -137,7 +149,7 @@ class SpeakApp(QObject):
 
     def _on_live(self, text: str):
         self.window.dictate.set_live(text)
-        if self.settings["live_preview"]:
+        if self.settings["live_preview"] != "off":
             self.overlay.set_text(text)
 
     def _on_result(self, text: str, note: str):

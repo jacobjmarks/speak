@@ -38,10 +38,11 @@ class ManagedServer:
     def running(self, key) -> bool:
         return self.process is not None and self.process.poll() is None and self.key == key
 
-    def start(self, key, executable: Path, args: list, cwd: Path, env: dict, timeout: float = 300):
+    def start(self, key, executable: Path, args: list, cwd: Path, env: dict, timeout: float = 300) -> bool:
+        """Start the server for `key` unless already running. Returns True if a new process was started."""
         with self.lock:
             if self.running(key):
-                return
+                return False
             self._stop_locked()
             if not executable.exists():
                 raise RuntimeError(f"Bundled {self.name} runtime is missing ({executable}). Run the build script first.")
@@ -59,8 +60,6 @@ class ManagedServer:
                 stderr=subprocess.STDOUT,
                 **hidden_process_kwargs(),
             )
-            self.port = port
-            self.key = key
             deadline = time.monotonic() + timeout
             while time.monotonic() < deadline:
                 if self.process.poll() is not None:
@@ -68,7 +67,8 @@ class ManagedServer:
                 try:
                     with urllib.request.urlopen(f"http://127.0.0.1:{port}{self.ready_path}", timeout=2) as response:
                         if response.status == 200:
-                            return
+                            self.port, self.key = port, key  # only now visible to running()
+                            return True
                 except (OSError, urllib.error.URLError):
                     pass
                 time.sleep(0.5)
@@ -116,7 +116,7 @@ class AsrServer(ManagedServer):
     def ensure(self, model: str, progress: Progress):
         if self.running(model):
             return
-        progress("Loading speech model", None)
+        progress("Getting ready", None)
         root = asr_root()
         executable = root / "bin" / exe_name("nemo-speech")
         self.start(
@@ -132,21 +132,25 @@ class CleanupServer(ManagedServer):
     def __init__(self):
         super().__init__("llama.cpp cleanup", CLEANUP_LOG, "/health")
 
-    def ensure(self, model_id: str, progress: Progress):
-        if self.running(model_id):
-            return
-        model_path = download_cleanup_model(model_id, progress)
-        progress("Loading cleanup model", None)
+    def ensure(self, plan, progress: Progress) -> bool:
+        """Start (or restart) the server for `plan` (a tidy.Plan). Returns True if it was (re)started."""
+        if self.running(plan.key):
+            return False
+        model_path = download_cleanup_model(plan.model_id, progress)
+        progress("Getting ready", None)
         executable = llama_root() / exe_name("llama-server")
         threads = max(2, min(8, (os.cpu_count() or 4) - 1))
-        self.start(
-            model_id,
+        device = ["--device", plan.device, "--n-gpu-layers", "99"] if plan.device else \
+            ["--device", "none", "--n-gpu-layers", "0"]
+        return self.start(
+            plan.key,
             executable,
             [
                 "--model", str(model_path),
-                "--ctx-size", "8192",
+                "--ctx-size", "4096",
+                "--parallel", "1",
                 "--threads", str(threads),
-                "--n-gpu-layers", "0",
+                *device,
                 "--jinja",
                 "--reasoning", "off",
                 "--no-ui",
@@ -154,7 +158,6 @@ class CleanupServer(ManagedServer):
             cwd=executable.parent,
             env={},
         )
-
 
 def download_cleanup_model(model_id: str, progress: Progress) -> Path:
     info = CLEANUP_MODELS[model_id]
@@ -165,7 +168,7 @@ def download_cleanup_model(model_id: str, progress: Progress) -> Path:
         return model_path
     partial = model_path.with_suffix(model_path.suffix + ".part")
     url = f"https://huggingface.co/{info['repo']}/resolve/main/{info['file']}?download=true"
-    progress("Downloading cleanup model", 0)
+    progress("Downloading", 0)
     try:
         with urllib.request.urlopen(url, timeout=60) as response, partial.open("wb") as output:
             total = int(response.headers.get("Content-Length", 0))
@@ -174,7 +177,7 @@ def download_cleanup_model(model_id: str, progress: Progress) -> Path:
                 output.write(chunk)
                 downloaded += len(chunk)
                 if total:
-                    progress("Downloading cleanup model", min(99, downloaded * 100 // total))
+                    progress("Downloading", min(99, downloaded * 100 // total))
         if total and downloaded != total:
             raise IOError(f"Incomplete model download ({downloaded} of {total} bytes).")
         if downloaded < 100_000_000:

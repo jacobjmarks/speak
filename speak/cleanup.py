@@ -6,6 +6,7 @@ import difflib
 import json
 import re
 import urllib.request
+from collections import Counter
 
 PAUSE = "⟦pause⟧"
 
@@ -74,6 +75,7 @@ def apply_rules(text: str, mode: str) -> str:
         text = re.sub(_STUTTER, r"\1", text, flags=re.I)
     text = re.sub(r"[ \t]+", " ", text)
     text = re.sub(r" +([,.?!;:])", r"\1", text)
+    text = re.sub(r"(\w)\n\n", r"\1.\n\n", text)  # "…offsite new paragraph thanks" -> "…offsite.\n\nThanks"
     # Capitalize the first letter of each line/sentence that the edits above exposed.
     text = re.sub(r"(^|[\n.?!]\s*)([a-z])", lambda m: m.group(1) + m.group(2).upper(), text.strip())
     return text
@@ -103,6 +105,10 @@ def validate(raw: str, cleaned: str, mode: str):
     similarity = difflib.SequenceMatcher(None, raw_words, new_words).ratio()
     if similarity < (0.75 if mode == "literal" else 0.5):
         return f"similarity {similarity:.2f}"
+    if mode == "literal":
+        dropped = [w for w in (Counter(raw_words) - Counter(new_words)).elements() if not re.fullmatch(_FILLERS, w)]
+        if dropped:
+            return f"dropped words {dropped[:5]}"
     novel = set(re.findall(r"\d+", cleaned)) - set(re.findall(r"\d+", raw))
     if novel:
         return f"invented numbers {sorted(novel)}"
@@ -145,16 +151,27 @@ def clean(transcript: str, port: int, mode: str = "smart") -> str:
         raise ValueError(f"cleanup rejected ({reason})")
     return cleaned
 
-def finalize(raw: str, mode: str, port=None):
-    """Full post-processing: rules, then the model (when `port` is given), then marker removal.
+def warm(port: int, mode: str) -> None:
+    """Prime the server's prompt cache (system prompt + examples) so the first real dictation is fast."""
+    try:
+        clean("Hello there.", port, mode)
+    except Exception:
+        pass
 
+
+def finalize(raw: str, level: str, llm_mode: str = "literal", port=None):
+    """Full post-processing for a tidy level ("off" | "fast" | "balanced" | "best").
+
+    Rules first, then the model (when `port` is given), then marker removal.
     Returns (text, note). On model failure or guardrail rejection the rule-based text is kept.
     """
-    text = apply_rules(raw, mode if port else "literal")
+    text = apply_rules(raw, "literal" if level == "off" else "smart")
+    if level != "off" and not (port and llm_mode == "smart"):  # smart model reads the markers itself
+        text = re.sub(rf"([.?!])\s*{PAUSE}\s*", r"\1\n\n", text)
     note = ""
     if port and text:
         try:
-            text = clean(text, port, mode)
+            return strip_markers(clean(text, port, llm_mode)), note
         except Exception as exc:
             note = f"Kept unedited transcript ({exc})"
     return strip_markers(text), note

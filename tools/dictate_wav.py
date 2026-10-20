@@ -1,25 +1,33 @@
-"""Dev tool: run a 16-bit mono WAV through the real ASR + cleanup pipeline without the UI.
+"""Dev tool: run a 16-bit mono WAV through the real ASR + tidy pipeline without the UI.
 
-    python -m tools.dictate_wav path/to/file.wav [--mode smart,literal] [--model qwen25-q4km]
+    python -m tools.dictate_wav path/to/file.wav [--tidy fast,balanced,best] [--cpu]
+
+Prints the plan per level (model, device) and warm timings (the model is warmed before timing).
 """
 import argparse
+import dataclasses
 import time
 import wave
 
-from speak import cleanup
+from speak import cleanup, tidy
 from speak.asr import AsrSession
-from speak.config import cleanup_model_id, load_settings
-from speak.runtimes import AsrServer, CleanupServer
+from speak.config import load_settings
+from speak.platform_utils import exe_name
+from speak.runtimes import AsrServer, CleanupServer, llama_root
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("wav")
-    parser.add_argument("--mode", default=None, help="cleanup mode(s), comma separated")
-    parser.add_argument("--model", default=None, help="cleanup model id(s), comma separated")
+    parser.add_argument("--tidy", default="off,fast,balanced,best", help="tidy level(s), comma separated")
+    parser.add_argument("--cpu", action="store_true", help="ignore the GPU")
     args = parser.parse_args()
     settings = load_settings()
     progress = lambda message, percent: print(f"  .. {message} {percent if percent is not None else ''}")
+    tidy.probe(llama_root() / exe_name("llama-server"))
+    if args.cpu:
+        tidy._gpu = None
+    print(f"GPU: {tidy.gpu()}")
 
     asr, llm = AsrServer(), CleanupServer()
     try:
@@ -35,12 +43,17 @@ def main():
         raw = session.finish()
         print(f"RAW: {raw}")
 
-        for model in (args.model or cleanup_model_id(settings)).split(","):
-            llm.ensure(model, progress)
-            for mode in (args.mode or ",".join(cleanup.SYSTEM_PROMPTS)).split(","):
-                started = time.monotonic()
-                result, note = cleanup.finalize(raw, mode, llm.port)
-                print(f"--- {model} {mode} ({time.monotonic() - started:.1f}s) {note}:\n{result}")
+        for level in args.tidy.split(","):
+            plan = tidy.plan({**settings, "tidy": level})
+            port = None
+            if plan.model_id:
+                if llm.ensure(plan, progress):
+                    cleanup.warm(llm.port, plan.llm_mode)
+                port = llm.port
+            started = time.monotonic()
+            result, note = cleanup.finalize(raw, plan.level, plan.llm_mode, port)
+            details = {k: v for k, v in dataclasses.asdict(plan).items() if k != "summary"}
+            print(f"--- {details} ({time.monotonic() - started:.2f}s) {note}\n    {plan.summary}\n{result}")
     finally:
         asr.stop()
         llm.stop()

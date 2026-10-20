@@ -38,6 +38,31 @@ def paste_shortcut() -> str:
     return "cmd+v" if IS_MAC else "ctrl+v"
 
 
+def available_memory_mb() -> int:
+    """Free physical memory in MiB (best effort; 0 if unknown)."""
+    try:
+        if IS_WINDOWS:
+            import ctypes
+
+            class MemoryStatus(ctypes.Structure):
+                _fields_ = [("dwLength", ctypes.c_ulong), ("dwMemoryLoad", ctypes.c_ulong),
+                            ("ullTotalPhys", ctypes.c_ulonglong), ("ullAvailPhys", ctypes.c_ulonglong),
+                            ("ullTotalPageFile", ctypes.c_ulonglong), ("ullAvailPageFile", ctypes.c_ulonglong),
+                            ("ullTotalVirtual", ctypes.c_ulonglong), ("ullAvailVirtual", ctypes.c_ulonglong),
+                            ("ullAvailExtendedVirtual", ctypes.c_ulonglong)]
+
+            status = MemoryStatus()
+            status.dwLength = ctypes.sizeof(MemoryStatus)
+            ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status))
+            return status.ullAvailPhys // 2**20
+        if IS_MAC:
+            total = int(subprocess.run(["sysctl", "-n", "hw.memsize"], capture_output=True, text=True).stdout)
+            return total // 2 // 2**20  # macOS has no cheap "available"; assume half is usable
+        return os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_AVPHYS_PAGES") // 2**20
+    except Exception:
+        return 0
+
+
 def _launch_command() -> list:
     if getattr(sys, "frozen", False):
         return [sys.executable]

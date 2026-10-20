@@ -5,11 +5,12 @@ All listener callbacks fire on background threads; the UI must marshal them onto
 import threading
 from enum import Enum
 
-from . import cleanup, history, output
+from . import cleanup, history, output, tidy
 from .asr import AsrSession
-from .config import cleanup_model_id
 from .audio import Microphone
-from .runtimes import AsrServer, CleanupServer
+from .config import CLEANUP_MODELS, MODELS_DIR
+from .platform_utils import exe_name
+from .runtimes import AsrServer, CleanupServer, llama_root
 
 
 class State(str, Enum):
@@ -40,6 +41,7 @@ class Dictation:
         self.session = None
         self.latest = ""
         self._lock = threading.Lock()
+        threading.Thread(target=tidy.probe, args=(llama_root() / exe_name("llama-server"),), daemon=True).start()
 
     @property
     def level(self) -> float:
@@ -48,23 +50,49 @@ class Dictation:
     def toggle(self):
         with self._lock:
             if self.state == State.IDLE:
-                self._set_state(State.PREPARING)
-                threading.Thread(target=self._prepare, daemon=True).start()
+                self._start_locked()
             elif self.state == State.LISTENING:
-                self._set_state(State.PROCESSING)
-                threading.Thread(target=self._finish, daemon=True).start()
+                self._stop_locked()
+
+    def start(self):
+        with self._lock:
+            if self.state == State.IDLE:
+                self._start_locked()
+
+    def stop(self):
+        with self._lock:
+            if self.state == State.LISTENING:
+                self._stop_locked()
+
+    def _start_locked(self):
+        self._set_state(State.PREPARING)
+        threading.Thread(target=self._prepare, daemon=True).start()
+
+    def _stop_locked(self):
+        self._set_state(State.PROCESSING)
+        threading.Thread(target=self._finish, daemon=True).start()
 
     def warm_up(self):
-        """Start runtimes in the background so the first dictation is fast. Errors are ignored."""
+        """Start already-downloaded runtimes in the background so the first dictation is fast.
+
+        Never triggers a download; errors are ignored.
+        """
         def run():
             try:
-                self._ensure_runtimes(lambda *_: None)
+                tidy._probed.wait(15)
+                if not any(p.name != "cleanup" for p in MODELS_DIR.glob("*")):
+                    return  # speech model not downloaded yet
+                self.asr_server.ensure(self.settings["model"], lambda *_: None)
+                plan = tidy.plan(self.settings)
+                if plan.model_id and (MODELS_DIR / "cleanup" / CLEANUP_MODELS[plan.model_id]["file"]).exists():
+                    self._ensure_cleanup(plan, lambda *_: None)
             except Exception:
                 pass
         threading.Thread(target=run, daemon=True).start()
 
     def settings_changed(self):
-        if self.cleanup_server.key not in (None, cleanup_model_id(self.settings)):
+        plan = tidy.plan(self.settings)
+        if self.cleanup_server.key not in (None, plan.key):
             self.cleanup_server.stop()
 
     def shutdown(self):
@@ -79,10 +107,16 @@ class Dictation:
         self.state = state
         self.listener.on_state(state)
 
+    def _ensure_cleanup(self, plan, progress):
+        if self.cleanup_server.ensure(plan, progress):
+            cleanup.warm(self.cleanup_server.port, plan.llm_mode)
+
     def _ensure_runtimes(self, progress):
+        tidy._probed.wait(15)
         self.asr_server.ensure(self.settings["model"], progress)
-        if self.settings["cleanup_enabled"]:
-            self.cleanup_server.ensure(cleanup_model_id(self.settings), progress)
+        plan = tidy.plan(self.settings)
+        if plan.model_id:
+            self._ensure_cleanup(plan, progress)
 
     def _prepare(self):
         try:
@@ -132,15 +166,18 @@ class Dictation:
             self._set_state(State.IDLE)
             self.listener.on_error("No audio captured")
             return
+        self.listener.on_progress("Transcribing", None)
         text = session.finish()
+        plan = tidy.plan(self.settings)
         port = None
-        if text and self.settings["cleanup_enabled"]:
+        if text and plan.model_id:
             try:
-                self.cleanup_server.ensure(cleanup_model_id(self.settings), self.listener.on_progress)
+                self._ensure_cleanup(plan, self.listener.on_progress)
                 port = self.cleanup_server.port
+                self.listener.on_progress("Tidying up", None)
             except Exception:
                 pass
-        text, note = cleanup.finalize(text, self.settings["cleanup_mode"], port)
+        text, note = cleanup.finalize(text, plan.level, plan.llm_mode, port)
         if not text:
             self._set_state(State.IDLE)
             self.listener.on_error("No speech recognized")

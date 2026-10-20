@@ -17,56 +17,39 @@ DEFAULTS = {
     "history_enabled": False,
     "auto_paste": True,
     "overlay_enabled": True,
-    "live_preview": True,
+    "overlay_position": "cursor",
+    "live_preview": "line",
     "model": "nemotron-3.5",
     "language": "auto",
-    "cleanup_enabled": True,
-    "cleanup_mode": "smart",
+    "tidy": "balanced",
     "cleanup_model": "auto",
     "theme": "System",
 }
 
 ASR_MODELS = {"nemotron-3.5": "Nemotron 3.5 ASR (multilingual)"}
 
+# Benchmarks: docs/wayfinder/research/dictation-quality.md. Only Large handles self-corrections.
 CLEANUP_MODELS = {
-    "qwen3-4b-2507": {
-        "label": "Qwen3 4B Instruct 2507 (smartest, 2.5 GB)",
-        "repo": "bartowski/Qwen_Qwen3-4B-Instruct-2507-GGUF",
-        "file": "Qwen_Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
-    },
-    "qwen3-1.7b": {
-        "label": "Qwen3 1.7B (best, 1.3 GB)",
-        "repo": "bartowski/Qwen_Qwen3-1.7B-GGUF",
-        "file": "Qwen_Qwen3-1.7B-Q4_K_M.gguf",
-    },
-    "qwen25-1.5b": {
-        "label": "Qwen 2.5 1.5B (1.1 GB)",
-        "repo": "Qwen/Qwen2.5-1.5B-Instruct-GGUF",
-        "file": "qwen2.5-1.5b-instruct-q4_k_m.gguf",
-    },
     "qwen25-q4km": {
-        "label": "Qwen 2.5 0.5B (fastest, 491 MB)",
+        "label": "Small · Qwen 2.5 0.5B (0.5 GB)",
         "repo": "Qwen/Qwen2.5-0.5B-Instruct-GGUF",
         "file": "qwen2.5-0.5b-instruct-q4_k_m.gguf",
+        "size_mb": 491,
     },
-    "qwen25-q8": {
-        "label": "Qwen 2.5 0.5B Q8 (676 MB)",
-        "repo": "Qwen/Qwen2.5-0.5B-Instruct-GGUF",
-        "file": "qwen2.5-0.5b-instruct-q8_0.gguf",
+    "qwen3-4b-2507": {
+        "label": "Large · Qwen3 4B Instruct (2.5 GB)",
+        "repo": "bartowski/Qwen_Qwen3-4B-Instruct-2507-GGUF",
+        "file": "Qwen_Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
+        "size_mb": 2500,
     },
 }
+SMALL_MODEL, LARGE_MODEL = "qwen25-q4km", "qwen3-4b-2507"
 
-CLEANUP_MODES = {"literal": "Light: punctuation only (fast)", "smart": "Smart: also fixes self-corrections & fillers"}
-# "auto" picks the model per mode; benchmarks in docs/wayfinder/research/dictation-quality.md.
-AUTO_CLEANUP_MODEL = {"literal": "qwen25-q4km", "smart": "qwen3-4b-2507"}
+TIDY_LEVELS = {"off": "Off", "fast": "Fast", "balanced": "Balanced", "best": "Best"}
 CLOSE_ACTIONS = {"ask": "Ask me", "tray": "Keep running in the tray", "exit": "Quit Speak"}
+OVERLAY_POSITIONS = {"cursor": "Near my cursor", "top": "Top of screen", "bottom": "Bottom of screen"}
+LIVE_PREVIEWS = {"line": "One sliding line", "full": "Full text", "off": "Off"}
 THEMES = ("System", "Light", "Dark")
-
-
-def cleanup_model_id(settings: dict) -> str:
-    if settings["cleanup_model"] in CLEANUP_MODELS:
-        return settings["cleanup_model"]
-    return AUTO_CLEANUP_MODEL[settings["cleanup_mode"]]
 
 
 def load_settings() -> dict:
@@ -75,16 +58,21 @@ def load_settings() -> dict:
     except (OSError, json.JSONDecodeError):
         stored = {}
     settings = {**DEFAULTS, **stored}
-    if stored and "cleanup_mode" not in stored:
-        settings["cleanup_model"] = "auto"  # pre-0.3 settings pinned a model the old UI always saved
+    if stored and "tidy" not in stored:  # pre-tidy settings used cleanup_enabled + cleanup_mode
+        settings["tidy"] = "balanced" if stored.get("cleanup_enabled", True) else "off"
+        settings["cleanup_model"] = "auto"
+    if isinstance(settings["live_preview"], bool):
+        settings["live_preview"] = "line" if settings["live_preview"] else "off"
+    for key in ("cleanup_enabled", "cleanup_mode"):
+        settings.pop(key, None)
     if settings["model"] not in ASR_MODELS:
         settings["model"] = DEFAULTS["model"]
     if settings["cleanup_model"] not in CLEANUP_MODELS:
         settings["cleanup_model"] = "auto"
-    if settings["cleanup_mode"] not in CLEANUP_MODES:
-        settings["cleanup_mode"] = DEFAULTS["cleanup_mode"]
-    if settings["close_action"] not in CLOSE_ACTIONS:
-        settings["close_action"] = DEFAULTS["close_action"]
+    for key, allowed in (("tidy", TIDY_LEVELS), ("close_action", CLOSE_ACTIONS),
+                         ("overlay_position", OVERLAY_POSITIONS), ("live_preview", LIVE_PREVIEWS)):
+        if settings[key] not in allowed:
+            settings[key] = DEFAULTS[key]
     return settings
 
 
