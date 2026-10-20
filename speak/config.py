@@ -29,6 +29,7 @@ DEFAULTS = {
     "cleanup_model": "auto",
     "theme": "System",
     "updates": "auto",
+    "unload_after": "5",  # minutes idle before models leave RAM/VRAM; "never" keeps them
 }
 
 ASR_MODELS = {"nemotron-3.5": "Nemotron 3.5 ASR (multilingual)"}
@@ -56,6 +57,8 @@ CLOSE_ACTIONS = {"ask": "Ask me", "tray": "Keep running in the tray", "exit": "Q
 OVERLAY_POSITIONS = {"cursor": "Near my cursor", "top": "Top of screen", "bottom": "Bottom of screen"}
 LIVE_PREVIEWS = {"line": "One sliding line", "full": "Full text", "off": "Off"}
 THEMES = ("System", "Light", "Dark")
+# Speech model ~1 GB RAM, large tidy model ~3 GB VRAM. Reloading costs ~2-4 s on the next dictation.
+UNLOAD_AFTER = {"0": "Right away (slower start)", "5": "After 5 minutes", "30": "After 30 minutes", "never": "Never"}
 UPDATE_MODES = {"auto": "Install automatically", "notify": "Just tell me", "off": "Don't check"}
 
 
@@ -84,7 +87,7 @@ def load_settings() -> dict:
         settings["cleanup_model"] = "auto"
     for key, allowed in (("tidy", TIDY_LEVELS), ("close_action", CLOSE_ACTIONS),
                          ("overlay_position", OVERLAY_POSITIONS), ("live_preview", LIVE_PREVIEWS), ("updates", UPDATE_MODES),
-                         ("shortcut_mode", SHORTCUT_MODES)):
+                         ("shortcut_mode", SHORTCUT_MODES), ("unload_after", UNLOAD_AFTER)):
         if settings[key] not in allowed:
             settings[key] = DEFAULTS[key]
     return settings

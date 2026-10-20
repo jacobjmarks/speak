@@ -42,9 +42,10 @@ class Dictation:
         self.mic = None
         self.session = None
         self.latest = ""
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()  # re-entered by _set_state from _abort
         self._cancelled = False
         self._target = None  # window focused when dictation started
+        self._unload_timer = None
         threading.Thread(target=tidy.probe, args=(llama_root() / exe_name("llama-server"),), daemon=True).start()
 
     @property
@@ -72,6 +73,7 @@ class Dictation:
                 self._cancelled = True
 
     def _start_locked(self):
+        self._cancel_unload()
         self._cancelled = False
         self._target = platform_utils.foreground_window()
         self._set_state(State.PREPARING)
@@ -97,14 +99,48 @@ class Dictation:
                     self._ensure_cleanup(plan, lambda *_: None)
             except Exception:
                 pass
+            with self._lock:
+                if self.state == State.IDLE:
+                    self._schedule_unload()
         threading.Thread(target=run, daemon=True).start()
 
     def settings_changed(self):
+        with self._lock:
+            if self.state == State.IDLE:
+                self._schedule_unload()
         plan = tidy.plan(self.settings)
         if self.cleanup_server.key not in (None, plan.key):
             self.cleanup_server.stop()
 
+    # ----- free RAM/VRAM when idle -----
+
+    def _cancel_unload(self):
+        if self._unload_timer is not None:
+            self._unload_timer.cancel()
+            self._unload_timer = None
+
+    def _schedule_unload(self):
+        """Call with the lock held, when going idle. Stops both runtimes after settings["unload_after"] minutes."""
+        self._cancel_unload()
+        after = self.settings.get("unload_after", "5")
+        if after == "never":
+            return
+        timer = threading.Timer(float(after) * 60, lambda: self._unload(timer))
+        timer.daemon = True
+        self._unload_timer = timer
+        timer.start()
+
+    def _unload(self, timer):
+        with self._lock:
+            if self.state != State.IDLE or self._unload_timer is not timer:
+                return
+            self._unload_timer = None
+        # Outside the lock: a dictation starting now just waits for the stop, then reloads.
+        self.asr_server.stop()
+        self.cleanup_server.stop()
+
     def shutdown(self):
+        self._cancel_unload()
         if self.mic is not None:
             self.mic.stop()
         if self.session is not None:
@@ -113,7 +149,10 @@ class Dictation:
         self.cleanup_server.stop()
 
     def _set_state(self, state: State):
-        self.state = state
+        with self._lock:
+            self.state = state
+            if state == State.IDLE:
+                self._schedule_unload()
         self.listener.on_state(state)
 
     def _ensure_cleanup(self, plan, progress):

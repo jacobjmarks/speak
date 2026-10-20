@@ -104,7 +104,8 @@ class SpeakApp(QObject):
         self._refresh_tidy()
         threading.Thread(target=lambda: (tidy._probed.wait(30), b.probed.emit()), daemon=True).start()
         updates.cleanup()
-        self.dictation.warm_up()
+        if not background and self.settings["unload_after"] != "0":  # login start: load on first use instead
+            self.dictation.warm_up()
         self._update_timer = QTimer(self, interval=24 * 3600 * 1000, timeout=self._check_updates)
         self._update_timer.start()
         QTimer.singleShot(5000, self._check_updates)

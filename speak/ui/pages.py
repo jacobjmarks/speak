@@ -386,6 +386,12 @@ class SettingsPage(QScrollArea):
         self._row(rows, "Tidy-up model", "Automatic picks by tidy level and what your computer runs fast",
                   self.cleanup_model)
 
+        self.unload = _combo(config.UNLOAD_AFTER, settings["unload_after"])
+        self.unload.currentIndexChanged.connect(lambda: self.changed.emit({"unload_after": self.unload.currentData()}))
+        self._row(rows, "Free up memory when idle",
+                  "Unloads the speech and tidy-up models (1 to 4 GB). The next dictation then takes a few seconds to start",
+                  self.unload)
+
         folder = QPushButton("Open", cursor=Qt.PointingHandCursor)
         folder.clicked.connect(lambda: (config.APP_DIR.mkdir(parents=True, exist_ok=True),
                                         platform_utils.open_path(config.APP_DIR)))
