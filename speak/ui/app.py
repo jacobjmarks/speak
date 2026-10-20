@@ -6,11 +6,11 @@ import sys
 import threading
 import time
 
-from PySide6.QtCore import QObject, Qt, Signal
+from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
-from .. import config, hotkey, tidy
+from .. import config, hotkey, tidy, updates
 from ..controller import Dictation, Listener, State
 from . import theme
 from .overlay import Overlay
@@ -26,6 +26,7 @@ class Bridge(QObject, Listener):
     hotkey_down = Signal()
     hotkey_up = Signal()
     probed = Signal()
+    update_found = Signal(str)
 
     def on_state(self, state):
         self.state.emit(state.value)
@@ -74,6 +75,7 @@ class SpeakApp(QObject):
         b.hotkey_down.connect(self._on_hotkey_down)
         b.hotkey_up.connect(self._on_hotkey_up)
         b.probed.connect(self._refresh_tidy)
+        b.update_found.connect(self.window.set_update)
 
         w = self.window
         w.close_requested.connect(self._on_close)
@@ -91,6 +93,9 @@ class SpeakApp(QObject):
         self._refresh_tidy()
         threading.Thread(target=lambda: (tidy._probed.wait(30), b.probed.emit()), daemon=True).start()
         self.dictation.warm_up()
+        self._update_timer = QTimer(self, interval=24 * 3600 * 1000, timeout=self._check_updates)
+        self._update_timer.start()
+        QTimer.singleShot(5000, self._check_updates)
         if not (background and self.tray):
             w.show()
 
@@ -109,7 +114,16 @@ class SpeakApp(QObject):
             self.window.history.refresh(self.settings["history_enabled"])
         if {"tidy", "cleanup_model"} & changes.keys():
             self._refresh_tidy()
+        if "check_updates" in changes:
+            self._check_updates()
         self.window.settings.sync(self.settings)
+
+    def _check_updates(self):
+        if not self.settings["check_updates"]:
+            self.window.set_update("")
+            return
+        threading.Thread(target=lambda: self.bridge.update_found.emit(updates.newer_release() or ""),
+                         daemon=True).start()
 
     def _refresh_tidy(self):
         summary = tidy.plan(self.settings).summary if tidy.probed() else "Checking what your computer can run…"

@@ -20,6 +20,10 @@ jobs:
           python-version: '3.14'
           cache: pip
 
+      - name: Stamp build number (used by the in-app update check)
+        shell: pwsh
+        run: Set-Content speak/_build.py "BUILD = ${{ github.run_number }}"
+
       - name: Build single-file executable
         shell: pwsh
         run: .\build.ps1 -OutputDirectory .\release

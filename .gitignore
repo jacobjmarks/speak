@@ -7,3 +7,5 @@ __pycache__/
 /vendor/
 *.spec
 /docs/wayfinder/
+
+speak/_build.py

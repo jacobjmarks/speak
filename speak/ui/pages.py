@@ -5,7 +5,7 @@ from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt, QTimer, Signal
 from PySide6.QtWidgets import (QComboBox, QFrame, QHBoxLayout, QLabel, QPlainTextEdit, QPushButton, QScrollArea,
                                QVBoxLayout, QWidget)
 
-from .. import config, history, hotkey, output, platform_utils
+from .. import config, history, hotkey, output, platform_utils, updates
 from .widgets import MicButton, ShortcutButton, Toggle
 
 
@@ -263,7 +263,11 @@ class SettingsPage(QScrollArea):
 
         self.theme = _combo({t: t for t in config.THEMES}, settings["theme"])
         self.theme.currentIndexChanged.connect(lambda: self.changed.emit({"theme": self.theme.currentData()}))
-        self._row(rows, "Appearance", "", self.theme, last=True)
+        self._row(rows, "Appearance", "", self.theme)
+
+        self.updates = self._toggle(settings["check_updates"], "check_updates")
+        self._row(rows, "Tell me about updates", "Checks GitHub for new versions. Nothing about you is sent",
+                  self.updates, last=True)
         layout.addWidget(card)
 
         # --- indicator ---
@@ -314,7 +318,8 @@ class SettingsPage(QScrollArea):
         folder = QPushButton("Open", cursor=Qt.PointingHandCursor)
         folder.clicked.connect(lambda: (config.APP_DIR.mkdir(parents=True, exist_ok=True),
                                         platform_utils.open_path(config.APP_DIR)))
-        self._row(rows, "Data folder", "Models, logs and settings", folder, last=True)
+        self._row(rows, "Data folder", "Models, logs and settings", folder)
+        self._row(rows, "Version", "", _label(updates.version(), "muted"), last=True)
         self.advanced.setMaximumHeight(0)
         self.advanced.setVisible(False)
         layout.addWidget(self.advanced)

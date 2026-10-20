@@ -67,6 +67,9 @@ def stylesheet(p: Palette) -> str:
     QPushButton#primary:hover {{ background: {QColor(p.accent).lighter(110).name()}; }}
     QPushButton#ghost {{ background: transparent; border: none; color: {p.muted}; padding: 6px 8px; }}
     QPushButton#ghost:hover {{ color: {p.text}; }}
+    QPushButton#update {{ background: {p.accent}; color: {p.accent_text}; border: none; border-radius: 14px;
+                          padding: 6px 12px; font-weight: 600; }}
+    QPushButton#update:hover {{ background: {QColor(p.accent).lighter(110).name()}; }}
     QPushButton#danger {{ background: transparent; border: 1px solid {p.border}; color: {p.danger}; }}
     QPushButton#shortcut {{ font-family: "Consolas", "Menlo", monospace; font-weight: 600;
                             padding: 7px 16px; min-width: 150px; }}

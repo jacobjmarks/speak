@@ -24,6 +24,7 @@ DEFAULTS = {
     "tidy": "balanced",
     "cleanup_model": "auto",
     "theme": "System",
+    "check_updates": True,
 }
 
 ASR_MODELS = {"nemotron-3.5": "Nemotron 3.5 ASR (multilingual)"}

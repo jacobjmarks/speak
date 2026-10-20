@@ -1,6 +1,6 @@
 """Main window (sidebar + pages), app icon, and the first-close prompt."""
-from PySide6.QtCore import QPointF, QRectF, Qt, Signal
-from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
+from PySide6.QtCore import QPointF, QRectF, Qt, QUrl, Signal
+from PySide6.QtGui import QColor, QDesktopServices, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (QButtonGroup, QDialog, QHBoxLayout, QLabel, QMainWindow, QPushButton, QStackedWidget,
                                QVBoxLayout, QWidget)
 
@@ -105,6 +105,14 @@ class MainWindow(QMainWindow):
         self.nav.idClicked.connect(self.show_page)
         side.addStretch(1)
 
+        self.update_button = QPushButton("Update available", objectName="update", cursor=Qt.PointingHandCursor)
+        self.update_button.setToolTip("Open the download page")
+        self.update_button.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(self._update_url)))
+        self.update_button.hide()
+        self._update_url = ""
+        side.addWidget(self.update_button)
+        side.addSpacing(8)
+
         status = QHBoxLayout()
         self.status_dot = StatusDot()
         self.status_text = QLabel("Ready", objectName="hint")
@@ -121,6 +129,10 @@ class MainWindow(QMainWindow):
         self.stack.setCurrentIndex(index)
         if self.stack.currentWidget() is self.history:
             self.history.refresh(self.history.enabled)
+
+    def set_update(self, url: str):
+        self._update_url = url
+        self.update_button.setVisible(bool(url))
 
     def set_status(self, text: str, color: str):
         self.status_text.setText(text)
