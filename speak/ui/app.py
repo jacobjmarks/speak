@@ -4,6 +4,7 @@ Controller callbacks arrive on worker threads; `Bridge` re-emits them as Qt sign
 """
 import sys
 import threading
+import time
 
 from PySide6.QtCore import QObject, Qt, Signal
 from PySide6.QtGui import QGuiApplication
@@ -22,7 +23,8 @@ class Bridge(QObject, Listener):
     live = Signal(str)
     result = Signal(str, str)
     error = Signal(str)
-    hotkey = Signal()
+    hotkey_down = Signal()
+    hotkey_up = Signal()
     probed = Signal()
 
     def on_state(self, state):
@@ -41,6 +43,10 @@ class Bridge(QObject, Listener):
         self.error.emit(message)
 
 
+HOLD_SECONDS = 0.4      # held longer than this = push-to-talk (release stops)
+CAPTURE_GRACE = 0.6     # ignore the hotkey this long after recording a new shortcut
+
+
 class SpeakApp(QObject):
     def __init__(self, app: QApplication, background: bool):
         super().__init__()
@@ -54,6 +60,9 @@ class SpeakApp(QObject):
         self.overlay = Overlay(level)
         self.tray = self._make_tray()
         self.palette = theme.LIGHT
+        self._capturing = False
+        self._capture_ended = 0.0
+        self._pressed_at = None  # set when a hotkey press started (or will stop) dictation
 
         b = self.bridge
         b.state.connect(self._on_state)
@@ -61,7 +70,8 @@ class SpeakApp(QObject):
         b.live.connect(self._on_live)
         b.result.connect(self._on_result)
         b.error.connect(self._on_error)
-        b.hotkey.connect(self.dictation.toggle)
+        b.hotkey_down.connect(self._on_hotkey_down)
+        b.hotkey_up.connect(self._on_hotkey_up)
         b.probed.connect(self._refresh_tidy)
 
         w = self.window
@@ -70,6 +80,7 @@ class SpeakApp(QObject):
         w.history.enable_requested.connect(lambda: self._update({"history_enabled": True}))
         w.settings.changed.connect(self._update)
         w.settings.shortcut_changed.connect(lambda combo: self._update({"hotkey": combo}))
+        w.settings.shortcut_recording.connect(self._on_shortcut_recording)
         QGuiApplication.styleHints().colorSchemeChanged.connect(lambda *_: self._apply_theme())
 
         self._apply_theme()
@@ -114,10 +125,36 @@ class SpeakApp(QObject):
 
     def _register_hotkey(self):
         try:
-            hotkey.register(self.settings["hotkey"], self.bridge.hotkey.emit)
+            hotkey.register(self.settings["hotkey"], self.bridge.hotkey_down.emit, self.bridge.hotkey_up.emit)
         except Exception as exc:
             self.window.set_status("Shortcut unavailable", self.palette.danger)
             self.window.dictate.set_result("", f"Couldn't use that shortcut: {exc}")
+
+    def _on_shortcut_recording(self, active: bool):
+        self._capturing = active
+        self._capture_ended = time.monotonic()
+        self._pressed_at = None
+
+    # ----- hotkey: tap toggles, hold = push-to-talk -----
+
+    def _hotkey_blocked(self) -> bool:
+        return self._capturing or time.monotonic() - self._capture_ended < CAPTURE_GRACE
+
+    def _on_hotkey_down(self):
+        if self._hotkey_blocked():
+            return
+        state = self.dictation.state
+        if state == State.IDLE:
+            self._pressed_at = time.monotonic()
+            self.dictation.start()
+        elif state == State.LISTENING:
+            self._pressed_at = None
+            self.dictation.stop()
+
+    def _on_hotkey_up(self):
+        pressed_at, self._pressed_at = self._pressed_at, None
+        if pressed_at is not None and not self._hotkey_blocked() and time.monotonic() - pressed_at >= HOLD_SECONDS:
+            self.dictation.stop()
 
     # ----- dictation events -----
 

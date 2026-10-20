@@ -41,6 +41,7 @@ class Dictation:
         self.session = None
         self.latest = ""
         self._lock = threading.Lock()
+        self._cancelled = False
         threading.Thread(target=tidy.probe, args=(llama_root() / exe_name("llama-server"),), daemon=True).start()
 
     @property
@@ -60,11 +61,15 @@ class Dictation:
                 self._start_locked()
 
     def stop(self):
+        """Finish listening; if still preparing, give up instead (e.g. hold-to-talk released too early)."""
         with self._lock:
             if self.state == State.LISTENING:
                 self._stop_locked()
+            elif self.state == State.PREPARING:
+                self._cancelled = True
 
     def _start_locked(self):
+        self._cancelled = False
         self._set_state(State.PREPARING)
         threading.Thread(target=self._prepare, daemon=True).start()
 
@@ -130,9 +135,13 @@ class Dictation:
                 on_update=lambda final, partial: self.listener.on_live_text(f"{final} {partial}".strip()),
                 on_error=self.listener.on_error,
             )
-            self.mic.start()
-            self.listener.on_live_text("")
-            self._set_state(State.LISTENING)
+            with self._lock:
+                if self._cancelled:
+                    self._abort("Let go before Speak was ready. Hold the shortcut until the mic turns red.")
+                    return
+                self.mic.start()
+                self.listener.on_live_text("")
+                self._set_state(State.LISTENING)
         except Exception as exc:
             self._abort(str(exc))
 

@@ -277,12 +277,14 @@ class ShortcutButton(QPushButton):
     """Click, press a key combo, done. Emits `captured(combo)`."""
 
     captured = Signal(str)
+    recording = Signal(bool)  # app ignores the global hotkey while True
     _done = Signal(str)
 
     def __init__(self, combo: str, parent=None):
         super().__init__(parent)
         self.setObjectName("shortcut")
         self.setCursor(Qt.PointingHandCursor)
+        self.setFocusPolicy(Qt.NoFocus)  # Space/Enter in a captured combo must not re-click it
         self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.combo = combo
         self.setText(hotkey.display(combo))
@@ -299,6 +301,7 @@ class ShortcutButton(QPushButton):
         self.setText("Press keys…")
         self.setProperty("recording", True)
         self.style().polish(self)
+        self.recording.emit(True)
         hotkey.unregister()
 
         def run():
@@ -318,3 +321,4 @@ class ShortcutButton(QPushButton):
             self.combo = combo
         self.setText(hotkey.display(self.combo))
         self.captured.emit(self.combo)
+        self.recording.emit(False)

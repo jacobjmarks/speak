@@ -1,15 +1,17 @@
-"""Global hotkey registration, capture, and key sending.
+"""Global hotkey registration (press + release, for hold-to-talk), capture, and key sending.
 
 Windows uses `keyboard` (no elevation needed); macOS and Linux X11 use `pynput`.
 Combos are stored in `keyboard` syntax, e.g. "ctrl+shift+space".
 Wayland has no global key grabs; see docs/wayfinder/research/cross-platform.md (GlobalShortcuts portal).
 """
 import threading
+import time
 from typing import Callable
 
 from .platform_utils import IS_MAC, IS_WINDOWS
 
 _handle = None
+_held = threading.Event()
 
 _ALIASES = {"control": "ctrl", "option": "alt", "command": "cmd", "win": "cmd", "windows": "cmd",
             "super": "cmd", "return": "enter", "escape": "esc"}
@@ -25,23 +27,62 @@ def _to_pynput(combo: str) -> str:
 
 
 def _key_name(key) -> str:
-    name = (getattr(key, "char", None) or getattr(key, "name", None) or str(key)).lower()
+    char = getattr(key, "char", None)
+    if char and ord(char[0]) < 32:  # ctrl+letter arrives as a control character on some platforms
+        char = chr(ord(char[0]) + 96)
+    vk = getattr(key, "vk", None)
+    if not char and getattr(key, "name", None) is None and vk is not None and (48 <= vk <= 57 or 65 <= vk <= 122):
+        char = chr(vk)  # Windows reports ctrl+letter as a bare virtual-key code
+    name = (char or getattr(key, "name", None) or str(key)).lower()
     for suffix in ("_l", "_r", "_gr"):
         name = name.removesuffix(suffix)
     return _ALIASES.get(name, name)
 
 
-def register(combo: str, callback: Callable[[], None]) -> None:
+def register(combo: str, on_press: Callable[[], None], on_release: Callable[[], None]) -> None:
+    """Call `on_press` when the combo goes down and `on_release` when any of its keys comes up.
+
+    Key autorepeat while held does not re-fire `on_press`. Callbacks run on a background thread.
+    """
     unregister()
     global _handle
+    _held.clear()
     if IS_WINDOWS:
         import keyboard
 
-        _handle = keyboard.add_hotkey(combo, callback)
+        def pressed():
+            if _held.is_set():
+                return
+            _held.set()
+            on_press()
+
+            def wait_release():
+                while keyboard.is_pressed(combo):
+                    time.sleep(0.02)
+                _held.clear()
+                on_release()
+            threading.Thread(target=wait_release, daemon=True).start()
+
+        _handle = keyboard.add_hotkey(combo, pressed)
     else:
         from pynput import keyboard as kb
 
-        _handle = kb.GlobalHotKeys({_to_pynput(combo): callback})
+        wanted, down = set(_parts(combo)), set()
+
+        def press(key):
+            down.add(_key_name(key))
+            if wanted <= down and not _held.is_set():
+                _held.set()
+                on_press()
+
+        def release(key):
+            name = _key_name(key)
+            down.discard(name)
+            if name in wanted and _held.is_set():
+                _held.clear()
+                on_release()
+
+        _handle = kb.Listener(on_press=press, on_release=release)
         _handle.start()
 
 

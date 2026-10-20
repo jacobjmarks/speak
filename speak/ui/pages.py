@@ -219,6 +219,7 @@ LANGUAGES = {"auto": "Detect automatically", "en": "English", "es": "Spanish", "
 class SettingsPage(QScrollArea):
     changed = Signal(dict)  # partial settings to merge and save
     shortcut_changed = Signal(str)
+    shortcut_recording = Signal(bool)
 
     def __init__(self, settings: dict):
         super().__init__()
@@ -233,7 +234,8 @@ class SettingsPage(QScrollArea):
         card, rows = _card()
         self.shortcut = ShortcutButton(settings["hotkey"])
         self.shortcut.captured.connect(self._on_shortcut)
-        self._row(rows, "Shortcut", "Press it anywhere to start and stop dictation", self.shortcut)
+        self.shortcut.recording.connect(self.shortcut_recording)
+        self._row(rows, "Shortcut", "Tap to start and stop, or hold while you talk", self.shortcut)
 
         self.tidy = _combo(config.TIDY_LEVELS, settings["tidy"])
         self.tidy.currentIndexChanged.connect(lambda: self.changed.emit({"tidy": self.tidy.currentData()}))
