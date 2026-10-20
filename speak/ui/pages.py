@@ -73,13 +73,13 @@ class DictatePage(Page):
         if self.mic.mode == "idle":
             self.hint.setText(self._shortcut)
 
-    def set_mode(self, mode: str, percent=None):
+    def set_mode(self, mode: str, percent=None, word: str = ""):
+        """`word` is the current phase ("Getting ready", "Tidying up") shown under the mic."""
         self._revert.stop()
         self.mic.set_mode(mode, percent)
-        self.hint.setText({"idle": self._shortcut, "listening": "Listening", "preparing": "",
-                           "processing": "", "done": "", "error": ""}.get(mode, ""))
-        if percent is not None and mode == "preparing":
-            self.hint.setText(f"Downloading model · {int(percent)}%")
+        self.hint.setText({"idle": self._shortcut, "listening": "Listening"}.get(mode, ""))
+        if word:
+            self.hint.setText(word + (f" · {int(percent)}%" if percent is not None else ""))
         if mode in ("done", "error"):
             self._revert.start(1200)
             self.hint.setText("")

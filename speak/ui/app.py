@@ -63,6 +63,7 @@ class SpeakApp(QObject):
         self._capturing = False
         self._capture_ended = 0.0
         self._pressed_at = None  # set when a hotkey press started (or will stop) dictation
+        self._use_overlay = False  # decided per dictation: Speak's own window shows progress when focused
 
         b = self.bridge
         b.state.connect(self._on_state)
@@ -172,21 +173,24 @@ class SpeakApp(QObject):
         self.window.dictate.set_mode(state)
         if state == State.LISTENING:
             self.window.dictate.set_live("")
-        if self.settings["overlay_enabled"]:
-            self.overlay.show_text = self.settings["live_preview"] != "off"
+        if state == State.PREPARING:
+            self._use_overlay = self.settings["overlay_enabled"] and not (
+                self.window.isVisible() and self.window.isActiveWindow())
+            self.overlay.preview = self.settings["live_preview"]
+            self.overlay.position = self.settings["overlay_position"]
+        if self._use_overlay:
             self.overlay.set_mode(state)
 
     def _on_progress(self, message: str, percent):
         mode = "processing" if self.dictation.state == State.PROCESSING else "preparing"
-        self.window.dictate.set_mode(mode, percent)
-        self.window.dictate.mic.setToolTip(message)
-        self.window.set_status(f"{int(percent)}%" if percent is not None else "Starting", self.palette.muted)
+        self.window.dictate.set_mode(mode, percent, message)
+        self.window.set_status(message, self.palette.muted)
         if self.overlay.isVisible():
-            self.overlay.set_mode(mode, percent)
+            self.overlay.set_mode(mode, percent, message)
 
     def _on_live(self, text: str):
         self.window.dictate.set_live(text)
-        if self.settings["live_preview"] != "off":
+        if self.overlay.isVisible():
             self.overlay.set_text(text)
 
     def _on_result(self, text: str, note: str):

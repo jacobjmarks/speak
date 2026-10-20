@@ -1,4 +1,8 @@
-"""Floating always-on-top overlay: a pill showing listening/processing state, plus a live-text card below it.
+"""Floating always-on-top overlay: a pill showing listening/working state, plus live text.
+
+position: "cursor" (under the mouse), "top" / "bottom" (centred on the screen with the mouse).
+preview:  "line" (one sliding line under the pill), "full" (wrapping card, last few lines), "off".
+While preparing/processing the pill shows a one-word phase ("Getting ready", "Tidying up") instead of bars.
 
 Wayland cannot position or pin windows (protocol limit), so there it appears wherever the compositor puts it.
 """
@@ -6,7 +10,8 @@ import math
 from collections import deque
 
 from PySide6.QtCore import QEasingCurve, QPointF, QPropertyAnimation, QRect, QRectF, Qt, QTimer
-from PySide6.QtGui import QColor, QCursor, QFont, QFontMetrics, QGuiApplication, QPainter, QPen
+from PySide6.QtGui import (QBrush, QColor, QCursor, QFont, QFontMetrics, QGuiApplication, QLinearGradient,
+                           QPainter, QPen)
 from PySide6.QtWidgets import QWidget
 
 from . import theme
@@ -14,6 +19,8 @@ from .widgets import _Animated, draw_check, draw_cross, draw_ring
 
 PILL_W, PILL_H = 168, 46
 CARD_W = 380
+LINE_W, LINE_H = 280, 30
+EDGE = 24  # gap from the screen edge for top/bottom positions
 MAX_LINES = 3
 BARS = 22
 
@@ -27,9 +34,13 @@ class Overlay(_Animated):
         self.setAttribute(Qt.WA_ShowWithoutActivating)
         self.level_source = level_source
         self.palette_ = theme.LIGHT
-        self.show_text = True
+        self.preview = "line"
+        self.position = "cursor"
         self.mode = "listening"
         self.percent = None
+        self.word = ""
+        self._scroll = 0.0
+        self._card_text, self._card_h, self._card_above = "", 0, False
         self.text = ""
         self._mode_t = 0.0
         self._levels = deque([0.0] * BARS, maxlen=BARS)
@@ -45,12 +56,12 @@ class Overlay(_Animated):
 
     # ----- public API -----
 
-    def set_mode(self, mode: str, percent=None) -> None:
-        """Modes: preparing, listening, processing, done, error."""
+    def set_mode(self, mode: str, percent=None, word: str = "") -> None:
+        """Modes: preparing, listening, processing, done, error. `word` labels preparing/processing."""
         self._hide_timer.stop()
         if mode != self.mode:
             self._mode_t = self.phase
-        self.mode, self.percent = mode, percent
+        self.mode, self.percent, self.word = mode, percent, word
         if mode == "listening":
             self._sample.start()
         else:
@@ -88,7 +99,8 @@ class Overlay(_Animated):
             self._fade.stop()
         if not self.isVisible():
             self._anchor = QCursor.pos()
-            self.text = "" if self.mode in ("preparing", "listening") else self.text
+            if self.mode in ("preparing", "listening"):
+                self.text, self._scroll = "", 0.0
             self.setWindowOpacity(0.0)
             self._relayout()
             self.show()
@@ -112,8 +124,10 @@ class Overlay(_Animated):
         self._levels.append(self._smooth)
 
     def _visible_text(self) -> str:
-        if not (self.show_text and self.text and self.mode in ("listening", "processing")):
+        if not (self.preview != "off" and self.text and self.mode in ("listening", "processing")):
             return ""
+        if self.preview == "line":
+            return self.text[-300:]
         fm = QFontMetrics(self._font)
         words = self.text.split()
         text = self.text
@@ -129,19 +143,27 @@ class Overlay(_Animated):
     def _relayout(self):
         text = self._visible_text()
         fm = QFontMetrics(self._font)
-        card_h = 0
-        if text:
+        card_h, card_w = 0, 0
+        if text and self.preview == "line":
+            card_h, card_w = LINE_H, LINE_W
+        elif text:
             card_h = fm.boundingRect(QRect(0, 0, CARD_W - 32, 10_000), Qt.TextWordWrap, text).height() + 24
-        width = CARD_W + 24 if text else PILL_W + 24
+            card_w = CARD_W
+        width = max(PILL_W, card_w) + 24
         height = PILL_H + 24 + (card_h + 8 if text else 0)
-        self._card_text, self._card_h = text, card_h
+        self._card_text, self._card_h, self._card_w = text, card_h, card_w
+        self._card_above = self.position == "bottom"
         anchor = self._anchor or QCursor.pos()
         screen = QGuiApplication.screenAt(anchor) or QGuiApplication.primaryScreen()
         area = screen.availableGeometry()
-        x = anchor.x() - width // 2
-        y = anchor.y() + 18
-        if y + height > area.bottom():
-            y = anchor.y() - height - 18
+        if self.position == "cursor":
+            x = anchor.x() - width // 2
+            y = anchor.y() + 18
+            if y + height > area.bottom():
+                y = anchor.y() - height - 18
+        else:
+            x = area.center().x() - width // 2
+            y = area.top() + EDGE if self.position == "top" else area.bottom() - height - EDGE
         x = max(area.left() + 4, min(x, area.right() - width - 4))
         y = max(area.top() + 4, y)
         self.setGeometry(x, y, width, height)
@@ -155,7 +177,8 @@ class Overlay(_Animated):
         border = theme.color(pal.border)
         accent = QColor(pal.accent)
 
-        pill = QRectF((self.width() - PILL_W) / 2, 12, PILL_W, PILL_H)
+        pill_top = 12 + (self._card_h + 8 if self._card_text and self._card_above else 0)
+        pill = QRectF((self.width() - PILL_W) / 2, pill_top, PILL_W, PILL_H)
         # soft shadow
         for i, a in enumerate((26, 14, 6)):
             p.setPen(Qt.NoPen)
@@ -191,10 +214,13 @@ class Overlay(_Animated):
             p.drawEllipse(icon_c, 12, 12)
             draw_cross(p, icon_c, 12, QColor("#ffffff"))
 
-        # bars area
         left = icon_c.x() + 22
-        right = pill.right() - (48 if self.mode == "preparing" and self.percent is not None else 18)
+        right = pill.right() - 18
         mid = pill.center().y()
+        if self.mode in ("preparing", "processing") and self.word:
+            self._paint_word(p, QRectF(left, pill.top(), right - left, PILL_H))
+            self._paint_text(p, pill, bg, border)
+            return
         step = (right - left) / BARS
         bar_w = max(2.0, step * 0.5)
         p.setPen(Qt.NoPen)
@@ -217,23 +243,65 @@ class Overlay(_Animated):
             p.setBrush(col)
             p.drawRoundedRect(QRectF(x, mid - h / 2, bar_w, h), bar_w / 2, bar_w / 2)
 
-        if self.mode == "preparing" and self.percent is not None:
-            p.setPen(QColor(pal.muted))
-            f = QFont(self._font)
-            f.setPointSizeF(8)
-            p.setFont(f)
-            p.drawText(QRectF(pill.right() - 44, pill.top(), 38, PILL_H), Qt.AlignRight | Qt.AlignVCenter,
-                       f"{int(self.percent)}%")
+        self._paint_text(p, pill, bg, border)
 
-        if self._card_text:
-            card = QRectF(12, pill.bottom() + 8, self.width() - 24, self._card_h)
-            p.setPen(QPen(border, 1))
-            p.setBrush(bg)
-            p.drawRoundedRect(card, 14, 14)
-            p.setFont(self._font)
-            col = QColor(pal.text)
-            if self.mode == "processing":
-                col.setAlphaF(0.55)
-            p.setPen(col)
+    def _paint_word(self, p: QPainter, rect: QRectF):
+        """Phase word with a light sweeping across it."""
+        pal = self.palette_
+        word = self.word  # the ring shows percent
+        f = QFont(self._font)
+        f.setPointSizeF(10)
+        f.setWeight(QFont.DemiBold)
+        p.setFont(f)
+        width = QFontMetrics(f).horizontalAdvance(word)
+        start = rect.center().x() - width / 2
+        sweep = start - 40 + ((self.phase * 0.9) % 1.6) * (width + 80) / 1.6
+        grad = QLinearGradient(sweep - 40, 0, sweep + 40, 0)
+        base, shine = QColor(pal.muted), QColor(pal.text)
+        grad.setColorAt(0, base)
+        grad.setColorAt(0.5, shine)
+        grad.setColorAt(1, base)
+        p.setPen(QPen(QBrush(grad), 1))
+        p.drawText(rect, Qt.AlignCenter, word)
+
+    def _paint_text(self, p: QPainter, pill: QRectF, bg: QColor, border: QColor):
+        if not self._card_text:
+            return
+        pal = self.palette_
+        top = 12 if self._card_above else pill.bottom() + 8
+        card = QRectF((self.width() - self._card_w) / 2, top, self._card_w, self._card_h)
+        radius = self._card_h / 2 if self.preview == "line" else 14
+        p.setPen(QPen(border, 1))
+        p.setBrush(bg)
+        p.drawRoundedRect(card, radius, radius)
+        p.setFont(self._font)
+        col = QColor(pal.text)
+        if self.mode == "processing":
+            col.setAlphaF(0.55)
+        p.setPen(col)
+        if self.preview != "line":
             p.drawText(card.adjusted(16, 12, -16, -12), Qt.TextWordWrap | Qt.AlignLeft | Qt.AlignTop,
                        self._card_text)
+            return
+        # one line that slides left as words arrive, fading out at the left edge
+        inner = card.adjusted(14, 0, -14, 0)
+        overflow = max(0.0, QFontMetrics(self._font).horizontalAdvance(self._card_text) - inner.width())
+        self._scroll += (overflow - self._scroll) * 0.18
+        if abs(overflow - self._scroll) < 0.5:
+            self._scroll = overflow
+        p.save()
+        p.setClipRect(inner)
+        p.drawText(QRectF(inner.left() - self._scroll, card.top(), inner.width() + self._scroll, card.height()),
+                   Qt.AlignLeft | Qt.AlignVCenter, self._card_text)
+        p.restore()
+        if self._scroll > 0:
+            fade = QLinearGradient(inner.left() + 4, 0, inner.left() + 56, 0)
+            solid = QColor(bg)
+            solid.setAlpha(255)
+            clear = QColor(bg)
+            clear.setAlpha(0)
+            fade.setColorAt(0, solid)
+            fade.setColorAt(1, clear)
+            p.setPen(Qt.NoPen)
+            p.setBrush(fade)
+            p.drawRect(QRectF(inner.left() - 1, card.top() + 1, 57, card.height() - 2))
