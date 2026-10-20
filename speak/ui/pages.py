@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (QComboBox, QFrame, QHBoxLayout, QLabel, QPlainTex
                                QVBoxLayout, QWidget)
 
 from .. import audio, config, history, hotkey, output, platform_utils, updates
-from .widgets import MicButton, ShortcutButton, Toggle
+from .widgets import MicButton, ShortcutButton, Toggle, WaveStrip
 
 
 def _card() -> tuple:
@@ -45,9 +45,8 @@ class DictatePage(Page):
         self.mic.clicked.connect(self.toggle_requested)
         self.layout_.addWidget(self.mic, 0, Qt.AlignHCenter)
 
-        self.hint = _label("", "muted")
-        self.hint.setAlignment(Qt.AlignCenter)
-        self.layout_.addWidget(self.hint)
+        self.wave = WaveStrip(level_source)
+        self.layout_.addWidget(self.wave, 0, Qt.AlignHCenter)
         self.layout_.addSpacing(8)
 
         self.card, card_layout = _card()
@@ -66,24 +65,30 @@ class DictatePage(Page):
         self.layout_.addWidget(self.card, 2)
         self.layout_.addStretch(1)
         self._revert = QTimer(self, singleShot=True, timeout=lambda: self.mic.set_mode("idle"))
-        self.set_shortcut(config.DEFAULTS["hotkey"])
+        self.set_shortcut(config.DEFAULTS["hotkey"], config.DEFAULTS["hold_to_talk"])
 
-    def set_shortcut(self, combo: str):
-        self._shortcut = hotkey.display(combo)
+    def set_shortcut(self, combo: str, hold: bool):
+        self._shortcut = ("Hold " if hold else "Press ") + hotkey.display(combo)
         if self.mic.mode == "idle":
-            self.hint.setText(self._shortcut)
+            self.wave.set_state("idle", self._shortcut)
+
+    def set_palette(self, palette):
+        self.mic.palette_ = self.wave.palette_ = palette
+        self.mic.update()
+        self.wave.update()
 
     def set_mode(self, mode: str, percent=None, word: str = ""):
-        """`word` is the current phase ("Getting ready", "Tidying up") shown under the mic."""
+        """`word` is the current phase ("Getting ready", "Finishing up") shown over the wave under the mic."""
         self._revert.stop()
         self.mic.set_mode(mode, percent)
-        self.hint.setText({"idle": self._shortcut, "listening": "Listening"}.get(mode, ""))
-        if word:
-            self.hint.setText(word + (f" · {int(percent)}%" if percent is not None else ""))
+        if word and percent is not None:
+            word += f" · {int(percent)}%"
+        if mode in ("preparing", "processing") and not word and self.wave.mode == mode:
+            word = self.wave.text  # keep the last phase word on a bare state change
+        self.wave.set_state(mode, word or (self._shortcut if mode == "idle" else ""))
         if mode in ("done", "error"):
             self._revert.start(1200)
-            self.hint.setText("")
-            QTimer.singleShot(1250, lambda: self.mic.mode == "idle" and self.hint.setText(self._shortcut))
+            QTimer.singleShot(1250, lambda: self.mic.mode == "idle" and self.wave.set_state("idle", self._shortcut))
 
     def set_live(self, text: str):
         self.text.setPlainText(text)
@@ -264,7 +269,11 @@ class SettingsPage(QScrollArea):
         self.shortcut = ShortcutButton(settings["hotkey"])
         self.shortcut.captured.connect(self._on_shortcut)
         self.shortcut.recording.connect(self.shortcut_recording)
-        self._row(rows, "Shortcut", "Tap to start and stop, or hold while you talk", self.shortcut)
+        self._row(rows, "Shortcut", "Works in any app", self.shortcut)
+
+        self.hold = self._toggle(settings["hold_to_talk"], "hold_to_talk")
+        self._row(rows, "Hold to talk", "Hold the shortcut while you speak. Off: press once to start, again to stop",
+                  self.hold)
 
         self.mic = MicCombo(settings["mic_device"], can_rescan_mics)
         self.mic.setMaximumWidth(260)
@@ -277,6 +286,14 @@ class SettingsPage(QScrollArea):
 
         self.paste = self._toggle(settings["auto_paste"], "auto_paste")
         self._row(rows, "Type into the app I'm using", "Otherwise text is just shown here to copy", self.paste)
+
+        self.enter = self._toggle(settings["press_enter"], "press_enter")
+        self.enter.setEnabled(settings["auto_paste"])
+        self.enter_row = self._row(rows, "Press Enter afterwards",
+                                   "Experimental. Sends messages in chat apps. Skipped if you switched apps",
+                                   self.enter)
+        if not platform_utils.IS_WINDOWS:
+            self.enter_row.hide()
 
         options = {k: v for k, v in config.CLOSE_ACTIONS.items()}
         self.close_action = _combo(options, settings["close_action"])
@@ -301,8 +318,21 @@ class SettingsPage(QScrollArea):
 
         self.updates = _combo(config.UPDATE_MODES, settings["updates"])
         self.updates.currentIndexChanged.connect(lambda: self.changed.emit({"updates": self.updates.currentData()}))
-        self._row(rows, "Updates", "Checks GitHub for new versions. Nothing about you is sent",
-                  self.updates, last=True)
+        self.updates_row = self._row(rows, "Updates", " ", self.updates)
+        self._last_check = None
+
+        version = QWidget()
+        line = QHBoxLayout(version)
+        line.setContentsMargins(0, 0, 0, 0)
+        self.update_status = _label("", "hint")
+        check = QPushButton("Check now", cursor=Qt.PointingHandCursor)
+        check.clicked.connect(self.check_updates)
+        check.setEnabled(bool(updates.parse(updates.VERSION)))
+        line.addWidget(self.update_status)
+        line.addWidget(check)
+        self._row(rows, "Version", updates.version() if updates.VERSION else "Development build (doesn't update)",
+                  version, last=True)
+        self._update_hint(settings["updates"])
         layout.addWidget(card)
 
         # --- indicator ---
@@ -353,17 +383,7 @@ class SettingsPage(QScrollArea):
         folder = QPushButton("Open", cursor=Qt.PointingHandCursor)
         folder.clicked.connect(lambda: (config.APP_DIR.mkdir(parents=True, exist_ok=True),
                                         platform_utils.open_path(config.APP_DIR)))
-        self._row(rows, "Data folder", "Models, logs and settings", folder)
-        version = QWidget()
-        line = QHBoxLayout(version)
-        line.setContentsMargins(0, 0, 0, 0)
-        self.update_status = _label("", "hint")
-        check = QPushButton("Check now", cursor=Qt.PointingHandCursor)
-        check.clicked.connect(self.check_updates)
-        check.setEnabled(bool(updates.parse(updates.VERSION)))
-        line.addWidget(self.update_status)
-        line.addWidget(check)
-        self._row(rows, "Version", updates.version(), version, last=True)
+        self._row(rows, "Data folder", "Models, logs and settings", folder, last=True)
         self.advanced.setMaximumHeight(0)
         self.advanced.setVisible(False)
         layout.addWidget(self.advanced)
@@ -383,6 +403,18 @@ class SettingsPage(QScrollArea):
 
     def set_update_status(self, text: str):
         self.update_status.setText(text)
+
+    def set_last_check(self, when):
+        self._last_check = when
+        self._update_hint(self.updates.currentData())
+
+    def _update_hint(self, mode: str):
+        hint = {"auto": "Checks when Speak starts and every 24 hours. Installs when you quit or restart",
+                "notify": "Checks when Speak starts and every 24 hours, and shows a button. Nothing installs by itself",
+                "off": "Never checks. Use Check now below"}[mode]
+        if self._last_check and mode != "off":
+            hint += f". Last checked {self._last_check:%H:%M}"
+        self.updates_row.hint.setText(hint)
 
     def set_tidy_summary(self, summary: str):
         self.tidy_row.hint.setText(summary)
@@ -407,6 +439,8 @@ class SettingsPage(QScrollArea):
         self.history.blockSignals(True)
         self.history.setChecked(settings["history_enabled"])
         self.history.blockSignals(False)
+        self.enter.setEnabled(settings["auto_paste"])
+        self._update_hint(settings["updates"])
 
     def _on_shortcut(self, combo: str):
         self.shortcut_changed.emit(combo)

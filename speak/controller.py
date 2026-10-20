@@ -5,12 +5,14 @@ All listener callbacks fire on background threads; the UI must marshal them onto
 import threading
 from enum import Enum
 
-from . import cleanup, history, output, tidy
+from . import cleanup, history, output, platform_utils, tidy
 from .asr import AsrSession
 from .audio import Microphone
 from .config import CLEANUP_MODELS, MODELS_DIR
 from .platform_utils import exe_name
 from .runtimes import AsrServer, CleanupServer, llama_root
+
+FINISHING = "Finishing up"  # one word for transcribe + tidy: tidy-up may be off, and transcribing is brief
 
 
 class State(str, Enum):
@@ -42,6 +44,7 @@ class Dictation:
         self.latest = ""
         self._lock = threading.Lock()
         self._cancelled = False
+        self._target = None  # window focused when dictation started
         threading.Thread(target=tidy.probe, args=(llama_root() / exe_name("llama-server"),), daemon=True).start()
 
     @property
@@ -70,6 +73,7 @@ class Dictation:
 
     def _start_locked(self):
         self._cancelled = False
+        self._target = platform_utils.foreground_window()
         self._set_state(State.PREPARING)
         threading.Thread(target=self._prepare, daemon=True).start()
 
@@ -175,7 +179,7 @@ class Dictation:
             self._set_state(State.IDLE)
             self.listener.on_error("No audio captured")
             return
-        self.listener.on_progress("Transcribing", None)
+        self.listener.on_progress(FINISHING, None)
         text = session.finish()
         plan = tidy.plan(self.settings)
         port = None
@@ -183,7 +187,7 @@ class Dictation:
             try:
                 self._ensure_cleanup(plan, self.listener.on_progress)
                 port = self.cleanup_server.port
-                self.listener.on_progress("Tidying up", None)
+                self.listener.on_progress(FINISHING, None)
             except Exception:
                 pass
         text, note = cleanup.finalize(text, plan.level, plan.llm_mode, port)
@@ -195,8 +199,11 @@ class Dictation:
         if self.settings["history_enabled"]:
             history.add(text)
         if self.settings["auto_paste"]:
+            target = self._target
+            enter = lambda: (self.settings["press_enter"] and target is not None  # noqa: E731
+                             and platform_utils.foreground_window() == target)
             try:
-                output.paste(text)
+                output.paste(text, enter)
             except Exception:
                 note = note or "Paste unavailable; copy it from Speak"
         self._set_state(State.IDLE)

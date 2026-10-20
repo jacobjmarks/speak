@@ -19,6 +19,8 @@ python -m pip install -r requirements.txt
 python main.py         # or run the built dist\Speak.exe
 ```
 
+The exe icon is rendered from `app_icon()` by `tools/make_icon.py` during the build.
+
 Use `./build.ps1 -OutputDirectory ./dist-next` to build beside an open app copy without replacing locked files.
 
 Headless pipeline check (real ASR + tidy, no UI), printing the plan and timing for each tidy level:

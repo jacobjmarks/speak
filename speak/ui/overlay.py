@@ -2,7 +2,7 @@
 
 position: "cursor" (under the mouse), "top" / "bottom" (centred on the screen with the mouse).
 preview:  "line" (one sliding line under the pill), "full" (wrapping card, last few lines), "off".
-While preparing/processing the pill shows a one-word phase ("Getting ready", "Tidying up") instead of bars.
+While preparing/processing the pill shows a short phase ("Getting ready", "Finishing up") over a soft travelling wave.
 
 Wayland cannot position or pin windows (protocol limit), so there it appears wherever the compositor puts it.
 """
@@ -10,19 +10,17 @@ import math
 from collections import deque
 
 from PySide6.QtCore import QEasingCurve, QPointF, QPropertyAnimation, QRect, QRectF, Qt, QTimer
-from PySide6.QtGui import (QBrush, QColor, QCursor, QFont, QFontMetrics, QGuiApplication, QLinearGradient,
+from PySide6.QtGui import (QColor, QCursor, QFont, QFontMetrics, QGuiApplication, QLinearGradient,
                            QPainter, QPen)
-from PySide6.QtWidgets import QWidget
 
 from . import theme
-from .widgets import _Animated, draw_check, draw_cross, draw_ring
+from .widgets import BARS, _Animated, draw_check, draw_cross, draw_ring, draw_shimmer_text, draw_wave
 
 PILL_W, PILL_H = 168, 46
 CARD_W = 380
 LINE_W, LINE_H = 280, 30
 EDGE = 24  # gap from the screen edge for top/bottom positions
 MAX_LINES = 3
-BARS = 22
 
 
 class Overlay(_Animated):
@@ -216,53 +214,11 @@ class Overlay(_Animated):
 
         left = icon_c.x() + 22
         right = pill.right() - 18
-        mid = pill.center().y()
+        area = QRectF(left, pill.top(), right - left, PILL_H)
+        draw_wave(p, area, self._levels, self.mode, self.phase, pal, bool(self.word))
         if self.mode in ("preparing", "processing") and self.word:
-            self._paint_word(p, QRectF(left, pill.top(), right - left, PILL_H))
-            self._paint_text(p, pill, bg, border)
-            return
-        step = (right - left) / BARS
-        bar_w = max(2.0, step * 0.5)
-        p.setPen(Qt.NoPen)
-        for i in range(BARS):
-            x = left + i * step + (step - bar_w) / 2
-            if self.mode == "listening":
-                lv = self._levels[i]
-                h = 3 + lv * (PILL_H - 20) * (0.7 + 0.3 * math.sin(i * 1.7 + self.phase * 6))
-                col = QColor(accent)
-            elif self.mode in ("preparing", "processing"):
-                # travelling shimmer while we wait
-                wave = 0.5 + 0.5 * math.sin(self.phase * 6 - i * 0.45)
-                h = 3 + wave * 8
-                col = QColor(pal.muted)
-                col.setAlphaF(0.35 + 0.5 * wave)
-            else:
-                h = 3
-                col = QColor(pal.muted)
-                col.setAlphaF(0.4)
-            p.setBrush(col)
-            p.drawRoundedRect(QRectF(x, mid - h / 2, bar_w, h), bar_w / 2, bar_w / 2)
-
+            draw_shimmer_text(p, area, self.word, self._font, self.phase, pal)
         self._paint_text(p, pill, bg, border)
-
-    def _paint_word(self, p: QPainter, rect: QRectF):
-        """Phase word with a light sweeping across it."""
-        pal = self.palette_
-        word = self.word  # the ring shows percent
-        f = QFont(self._font)
-        f.setPointSizeF(10)
-        f.setWeight(QFont.DemiBold)
-        p.setFont(f)
-        width = QFontMetrics(f).horizontalAdvance(word)
-        start = rect.center().x() - width / 2
-        sweep = start - 40 + ((self.phase * 0.9) % 1.6) * (width + 80) / 1.6
-        grad = QLinearGradient(sweep - 40, 0, sweep + 40, 0)
-        base, shine = QColor(pal.muted), QColor(pal.text)
-        grad.setColorAt(0, base)
-        grad.setColorAt(0.5, shine)
-        grad.setColorAt(1, base)
-        p.setPen(QPen(QBrush(grad), 1))
-        p.drawText(rect, Qt.AlignCenter, word)
 
     def _paint_text(self, p: QPainter, pill: QRectF, bg: QColor, border: QColor):
         if not self._card_text:

@@ -25,7 +25,7 @@
 
 ## How it works
 
-1. Hold **Right Alt** wherever you want to type and talk, then let go. Or *tap* it to start and stop. (You can change the shortcut.)
+1. Hold **Right Alt** wherever you want to type and talk, then let go. Prefer tapping once to start and again to stop? Turn off *Hold to talk* in Settings. You can change the shortcut too.
 2. Speak. A small indicator shows it's listening, with your words appearing underneath.
 3. Stop. Your text is tidied up and typed straight into the app you're using.
 

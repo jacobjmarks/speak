@@ -1,11 +1,12 @@
-"""Custom-painted widgets: spinner/progress ring, toggle switch, mic button, shortcut recorder, glyphs."""
+"""Custom-painted widgets: spinner/progress ring, toggle switch, mic button, level wave, shortcut recorder, glyphs."""
 import math
 import threading
 import time
+from collections import deque
 
 from PySide6.QtCore import (Property, QEasingCurve, QPointF, QPropertyAnimation, QRectF, QSize, Qt, QTimer,
                             Signal)
-from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen
+from PySide6.QtGui import QBrush, QColor, QFont, QFontMetrics, QLinearGradient, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QAbstractButton, QPushButton, QSizePolicy, QWidget
 
 from .. import hotkey
@@ -73,6 +74,56 @@ def draw_ring(p: QPainter, rect: QRectF, color: QColor, width: float, phase: flo
         p.drawArc(rect, int(start * 16), int(-span * 16))
     else:
         p.drawArc(rect, 90 * 16, int(-360 * 16 * max(0.0, min(1.0, percent / 100))))
+    p.restore()
+
+
+BARS = 22
+
+
+def draw_wave(p: QPainter, rect: QRectF, levels, mode: str, phase: float, pal, behind_text: bool = False) -> None:
+    """Bars: mic level while listening, a travelling shimmer while preparing/processing (fainter behind text),
+    flat otherwise. `levels` holds BARS values in 0..1."""
+    step = rect.width() / BARS
+    bar_w = max(2.0, step * 0.5)
+    mid = rect.center().y()
+    p.save()
+    p.setPen(Qt.NoPen)
+    for i in range(BARS):
+        x = rect.left() + i * step + (step - bar_w) / 2
+        if mode == "listening":
+            h = 3 + levels[i] * (rect.height() - 20) * (0.7 + 0.3 * math.sin(i * 1.7 + phase * 6))
+            col = QColor(pal.accent)
+        elif mode in ("preparing", "processing"):
+            wave = 0.5 + 0.5 * math.sin(phase * 6 - i * 0.45)
+            h = 3 + wave * (rect.height() * 0.35 if behind_text else 8)
+            col = QColor(pal.accent if behind_text else pal.muted)
+            col.setAlphaF((0.35 + 0.5 * wave) * (0.35 if behind_text else 1.0))
+        else:
+            h = 3
+            col = QColor(pal.muted)
+            col.setAlphaF(0.4)
+        p.setBrush(col)
+        p.drawRoundedRect(QRectF(x, mid - h / 2, bar_w, h), bar_w / 2, bar_w / 2)
+    p.restore()
+
+
+def draw_shimmer_text(p: QPainter, rect: QRectF, text: str, font: QFont, phase: float, pal) -> None:
+    """Centred text with a light sweeping across it."""
+    p.save()
+    f = QFont(font)
+    f.setPointSizeF(10)
+    f.setWeight(QFont.DemiBold)
+    p.setFont(f)
+    width = QFontMetrics(f).horizontalAdvance(text)
+    start = rect.center().x() - width / 2
+    sweep = start - 40 + ((phase * 0.9) % 1.6) * (width + 80) / 1.6
+    grad = QLinearGradient(sweep - 40, 0, sweep + 40, 0)
+    base, shine = QColor(pal.muted), QColor(pal.text)
+    grad.setColorAt(0, base)
+    grad.setColorAt(0.5, shine)
+    grad.setColorAt(1, base)
+    p.setPen(QPen(QBrush(grad), 1))
+    p.drawText(rect, Qt.AlignCenter, text)
     p.restore()
 
 
@@ -269,6 +320,51 @@ class MicButton(_Animated):
                 p.drawRoundedRect(QRectF(c.x() - s / 2, c.y() - s / 2, s, s), 7, 7)
             else:
                 draw_mic(p, c, 48, QColor(pal.accent_text))
+
+
+class WaveStrip(_Animated):
+    """Under the mic button: mic level while listening, the phase word over a wave while working,
+    plain hint text otherwise (same look as the overlay pill)."""
+
+    def __init__(self, level_source, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(240, 40)
+        self.level_source = level_source
+        self.palette_ = theme.LIGHT
+        self.mode, self.text = "idle", ""
+        self._levels = deque([0.0] * BARS, maxlen=BARS)
+        self._smooth = 0.0
+        self._sample = QTimer(self, interval=45, timeout=self._push_level)
+
+    def set_state(self, mode: str, text: str = "") -> None:
+        self.mode, self.text = mode, text
+        if mode == "listening":
+            self._levels.extend([0.0] * BARS)
+            self._sample.start()
+        else:
+            self._sample.stop()
+        self.set_animating(mode in ("listening", "preparing", "processing"))
+        self.update()
+
+    def _push_level(self):
+        target = min(1.0, (self.level_source() or 0.0) * 7)
+        self._smooth += (target - self._smooth) * 0.5
+        self._levels.append(self._smooth)
+
+    def paintEvent(self, e):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        pal = self.palette_
+        rect = QRectF(self.rect())
+        if self.mode == "listening":
+            draw_wave(p, rect, self._levels, self.mode, self.phase, pal)
+        elif self.mode in ("preparing", "processing"):
+            draw_wave(p, rect, self._levels, self.mode, self.phase, pal, bool(self.text))
+            if self.text:
+                draw_shimmer_text(p, rect, self.text, self.font(), self.phase, pal)
+        elif self.text:
+            p.setPen(QColor(pal.muted))
+            p.drawText(rect, Qt.AlignCenter, self.text)
 
 
 # ---------- shortcut recorder ----------

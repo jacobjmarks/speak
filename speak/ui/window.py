@@ -4,6 +4,7 @@ from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (QButtonGroup, QDialog, QHBoxLayout, QLabel, QMainWindow, QPushButton, QStackedWidget,
                                QVBoxLayout, QWidget)
 
+from .. import updates
 from .pages import DictatePage, HistoryPage, SettingsPage
 from .widgets import draw_mic
 
@@ -118,6 +119,9 @@ class MainWindow(QMainWindow):
         status.addWidget(self.status_dot)
         status.addWidget(self.status_text, 1)
         side.addLayout(status)
+        version = QLabel(f"Version {updates.VERSION}" if updates.VERSION else "Development build", objectName="hint")
+        version.setContentsMargins(2, 4, 0, 0)
+        side.addWidget(version)
 
         layout.addWidget(sidebar)
         layout.addWidget(self.stack, 1)

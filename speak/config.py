@@ -13,9 +13,11 @@ CLEANUP_LOG = APP_DIR / "cleanup-runtime.log"
 # close_action: "ask" until the user answers the first-close prompt, then "tray" or "exit".
 DEFAULTS = {
     "hotkey": "right alt",
+    "hold_to_talk": True,  # False: tap to start, tap again to stop
     "close_action": "ask",
     "history_enabled": False,
     "auto_paste": True,
+    "press_enter": False,  # experimental: Enter after pasting, only if the same app is still in front
     "mic_device": None,  # device name; None = system default
     "overlay_enabled": True,
     "overlay_position": "cursor",

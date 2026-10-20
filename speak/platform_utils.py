@@ -75,6 +75,33 @@ def tie_to_app(process: subprocess.Popen) -> None:
         pass
 
 
+_NOT_TEXT = {"Progman", "WorkerW", "Shell_TrayWnd", "Shell_SecondaryTrayWnd"}  # desktop, taskbar
+
+
+def foreground_window():
+    """Opaque id of the focused top-level window, or None if unknown, unsupported, or not a typing target
+    (desktop, taskbar, Speak itself). Windows only for now."""
+    if not IS_WINDOWS:
+        return None
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        user32 = ctypes.windll.user32
+        hwnd = user32.GetForegroundWindow()
+        if not hwnd:
+            return None
+        pid = wintypes.DWORD()
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        name = ctypes.create_unicode_buffer(64)
+        user32.GetClassNameW(hwnd, name, 64)
+        if pid.value == os.getpid() or name.value in _NOT_TEXT:
+            return None
+        return hwnd
+    except Exception:
+        return None
+
+
 def paste_shortcut() -> str:
     return "cmd+v" if IS_MAC else "ctrl+v"
 
