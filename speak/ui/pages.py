@@ -1,4 +1,4 @@
-"""Main-window pages: Dictate, History, Settings."""
+"""Main-window pages: Dictate, History, Settings, About."""
 from datetime import datetime
 
 from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt, QTimer, QUrl, Signal
@@ -400,28 +400,6 @@ class SettingsPage(QScrollArea):
         self.advanced.setMaximumHeight(0)
         self.advanced.setVisible(False)
         layout.addWidget(self.advanced)
-
-        # --- about ---
-        layout.addSpacing(6)
-        layout.addWidget(_label("About", "section"))
-        card, rows = _card()
-        support = QWidget()
-        line = QHBoxLayout(support)
-        line.setContentsMargins(0, 0, 0, 0)
-        coffee = QPushButton("☕  Buy me a coffee", objectName="primary", cursor=Qt.PointingHandCursor)
-        coffee.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(config.COFFEE_URL)))
-        sponsor = QPushButton("♥  Sponsor", cursor=Qt.PointingHandCursor)
-        sponsor.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(config.SPONSOR_URL)))
-        line.addWidget(coffee)
-        line.addWidget(sponsor)
-        self._row(rows, "Support Speak", "Speak is free. If it saves you time, you can chip in to keep it going",
-                  support)
-        licence = self._row(rows, "Free and open source",
-                            '<a href="source">Source code</a> · '
-                            '<a href="notices">Open-source notices</a>', QWidget(), last=True)
-        licence.hint.setTextFormat(Qt.RichText)
-        licence.hint.linkActivated.connect(self._open_about_link)
-        layout.addWidget(card)
         layout.addStretch(1)
         self._anim = QPropertyAnimation(self.advanced, b"maximumHeight", self, duration=220,
                                         easingCurve=QEasingCurve.OutCubic)
@@ -508,13 +486,6 @@ class SettingsPage(QScrollArea):
             self.login.setChecked(not on)
             self.login.blockSignals(False)
 
-    def _open_about_link(self, link: str):
-        notices = platform_utils.notices_file()
-        if link == "notices" and notices.is_file():
-            platform_utils.open_path(notices)
-        else:
-            QDesktopServices.openUrl(QUrl(config.REPO_URL + ("/blob/main/docs/DEVELOPMENT.md#licensing" if link == "notices" else "")))
-
     def _toggle_advanced(self, open_: bool):
         self.advanced_button.setText("Advanced  ⌄" if open_ else "Advanced  ›")
         self._anim.stop()
@@ -532,3 +503,62 @@ class SettingsPage(QScrollArea):
             self.advanced.setMaximumHeight(16_777_215)
         else:
             self.advanced.setVisible(False)
+
+
+# ---------- About ----------
+
+def _open_url(url: str):
+    QDesktopServices.openUrl(QUrl(url))
+
+
+class AboutPage(Page):
+    def __init__(self, logo: QWidget):
+        super().__init__()
+        head = QHBoxLayout()
+        head.setSpacing(14)
+        head.addWidget(logo, 0, Qt.AlignVCenter)
+        names = QVBoxLayout()
+        names.setSpacing(2)
+        names.addWidget(_label("Speak", "title"))
+        names.addWidget(_label(f"Version {updates.VERSION}" if updates.VERSION else "Development build", "muted"))
+        head.addLayout(names, 1)
+        self.layout_.addLayout(head)
+        self.layout_.addWidget(_label("Talk anywhere and Speak types it for you. Private, offline and free.", "muted"))
+        self.layout_.addSpacing(6)
+
+        self.layout_.addWidget(_label("Support Speak", "section"))
+        card, rows = _card()
+        rows.setContentsMargins(18, 16, 18, 16)
+        rows.setSpacing(12)
+        rows.addWidget(_label("Speak is free, with no ads, no account and no paid tier. "
+                              "If it saves you time, sponsoring keeps it going and growing."))
+        buttons = QHBoxLayout()
+        buttons.setSpacing(10)
+        sponsor = QPushButton("♥  Sponsor on GitHub", objectName="primary", cursor=Qt.PointingHandCursor)
+        sponsor.clicked.connect(lambda: _open_url(config.SPONSOR_URL))
+        coffee = QPushButton("Buy me a coffee", cursor=Qt.PointingHandCursor)
+        coffee.clicked.connect(lambda: _open_url(config.COFFEE_URL))
+        buttons.addWidget(sponsor)
+        buttons.addWidget(coffee)
+        buttons.addStretch(1)
+        rows.addLayout(buttons)
+        rows.addWidget(_label("GitHub takes no fee from sponsorships, monthly or one-off. "
+                              "Or buy a one-off coffee with a card, no account needed.", "hint"))
+        self.layout_.addWidget(card)
+        self.layout_.addSpacing(6)
+
+        self.layout_.addWidget(_label("Open source", "section"))
+        links = _label('Speak is built on open-source software and open models.<br>'
+                       '<a href="source">Source code</a> &nbsp;·&nbsp; <a href="notices">Open-source notices</a>'
+                       ' &nbsp;·&nbsp; <a href="issues">Report a problem</a>', "muted")
+        links.setTextFormat(Qt.RichText)
+        links.linkActivated.connect(self._open_link)
+        self.layout_.addWidget(links)
+        self.layout_.addStretch(1)
+
+    def _open_link(self, link: str):
+        notices = platform_utils.notices_file()
+        if link == "notices" and notices.is_file():
+            platform_utils.open_path(notices)
+            return
+        _open_url(config.REPO_URL + {"source": "", "issues": "/issues", "notices": "/blob/main/docs/DEVELOPMENT.md#licensing"}[link])

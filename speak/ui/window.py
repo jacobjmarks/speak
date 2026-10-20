@@ -5,7 +5,7 @@ from PySide6.QtWidgets import (QButtonGroup, QDialog, QHBoxLayout, QLabel, QMain
                                QVBoxLayout, QWidget)
 
 from .. import updates
-from .pages import DictatePage, HistoryPage, SettingsPage
+from .pages import AboutPage, DictatePage, HistoryPage, SettingsPage
 from .widgets import draw_mic
 
 BRAND = "#245b56"
@@ -34,10 +34,10 @@ def app_icon(dot: str = "") -> QIcon:
 
 
 class Logo(QWidget):
-    def __init__(self):
+    def __init__(self, size: int = 34):
         super().__init__()
-        self.setFixedSize(34, 34)
-        self._pm = app_icon().pixmap(68, 68)
+        self.setFixedSize(size, size)
+        self._pm = app_icon().pixmap(size * 2, size * 2)
         self._pm.setDevicePixelRatio(2)
 
     def paintEvent(self, e):
@@ -97,16 +97,21 @@ class MainWindow(QMainWindow):
         self.dictate = DictatePage(level_source)
         self.history = HistoryPage()
         self.settings = SettingsPage(settings, can_rescan_mics)
+        self.about = AboutPage(Logo(56))
         self.nav = QButtonGroup(self)
+        # About sits apart at the bottom of the sidebar, away from the main pages
         for i, (label, page) in enumerate((("Dictate", self.dictate), ("History", self.history),
-                                           ("Settings", self.settings))):
+                                           ("Settings", self.settings), (None, None), ("About", self.about))):
+            if page is None:
+                side.addStretch(1)
+                continue
             self.stack.addWidget(page)
             button = QPushButton(label, objectName="nav", checkable=True, cursor=Qt.PointingHandCursor)
-            self.nav.addButton(button, i)
+            self.nav.addButton(button, self.stack.indexOf(page))
             side.addWidget(button)
         self.nav.button(0).setChecked(True)
         self.nav.idClicked.connect(self.show_page)
-        side.addStretch(1)
+        side.addSpacing(10)
 
         self.update_button = QPushButton(objectName="update", cursor=Qt.PointingHandCursor)
         self.update_button.clicked.connect(self.update_clicked)

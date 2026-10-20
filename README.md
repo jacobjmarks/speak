@@ -63,14 +63,13 @@ Speak can start with your computer and wait quietly in the system tray. You choo
 
 ## Support Speak
 
-Speak is free, with no ads, no account and no paid tier. If it saves you time, you can help keep it going:
+Speak is free, with no ads, no account and no paid tier. If it saves you time, the best way to keep it going and growing is to **sponsor it on GitHub**. GitHub takes no fee, and it can be monthly or one-off.
 
 <p>
-  <a href="https://buymeacoffee.com/jacobjmarks"><img src="https://img.shields.io/badge/Buy_me_a_coffee-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black" alt="Buy me a coffee"></a>
   <a href="https://github.com/sponsors/jacobjmarks"><img src="https://img.shields.io/badge/Sponsor_on_GitHub-EA4AAA?style=for-the-badge&logo=githubsponsors&logoColor=white" alt="Sponsor on GitHub"></a>
 </p>
 
-Not able to chip in? A star on GitHub or telling a friend helps too.
+No GitHub account? You can also <a href="https://buymeacoffee.com/jacobjmarks">buy me a coffee</a> ☕ with a card. Not able to chip in? A star on GitHub or telling a friend helps too.
 
 ## Questions
 
@@ -82,4 +81,4 @@ Not able to chip in? A star on GitHub or telling a friend helps too.
 
 ---
 
-<p align="center"><sub>Built on open models: NVIDIA Nemotron speech recognition and Qwen for tidying up. Open-source notices are in the app under Settings → About. Developers: see <a href="docs/DEVELOPMENT.md">docs/DEVELOPMENT.md</a>.</sub></p>
+<p align="center"><sub>Built on open models: NVIDIA Nemotron speech recognition and Qwen for tidying up. Open-source notices are on the app's About page. Developers: see <a href="docs/DEVELOPMENT.md">docs/DEVELOPMENT.md</a>.</sub></p>
