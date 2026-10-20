@@ -61,6 +61,17 @@ Speak can start with your computer and wait quietly in the system tray. You choo
 - **Light or dark**, or follow your system.
 - **History** stays off unless you turn it on, and is only ever kept on your device.
 
+## Support Speak
+
+Speak is free, with no ads, no account and no paid tier. If it saves you time, you can help keep it going:
+
+<p>
+  <a href="https://buymeacoffee.com/jacobjmarks"><img src="https://img.shields.io/badge/Buy_me_a_coffee-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black" alt="Buy me a coffee"></a>
+  <a href="https://github.com/sponsors/jacobjmarks"><img src="https://img.shields.io/badge/Sponsor_on_GitHub-EA4AAA?style=for-the-badge&logo=githubsponsors&logoColor=white" alt="Sponsor on GitHub"></a>
+</p>
+
+Not able to chip in? A star on GitHub or telling a friend helps too.
+
 ## Questions
 
 **Does Speak send my voice anywhere?** No. Audio stays in memory on your computer and is discarded after each dictation. The only internet use is the one-time model download and an optional check for new versions.
@@ -71,4 +82,4 @@ Speak can start with your computer and wait quietly in the system tray. You choo
 
 ---
 
-<p align="center"><sub>Built on open models: NVIDIA Nemotron speech recognition and Qwen for tidying up. Developers: see <a href="docs/DEVELOPMENT.md">docs/DEVELOPMENT.md</a>.</sub></p>
+<p align="center"><sub>Built on open models: NVIDIA Nemotron speech recognition and Qwen for tidying up. Open-source notices are in the app under Settings → About. Developers: see <a href="docs/DEVELOPMENT.md">docs/DEVELOPMENT.md</a>.</sub></p>

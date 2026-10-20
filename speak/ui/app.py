@@ -9,7 +9,7 @@ import time
 from datetime import datetime
 
 from PySide6.QtCore import QLockFile, QObject, Qt, QTimer, QUrl, Signal
-from PySide6.QtGui import QDesktopServices, QGuiApplication
+from PySide6.QtGui import QColor, QDesktopServices, QGuiApplication, QPalette
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
@@ -202,6 +202,9 @@ class SpeakApp(QObject):
     def _apply_theme(self):
         self.palette = theme.resolve(self.settings["theme"])
         self.app.setStyleSheet(theme.stylesheet(self.palette))
+        links = self.app.palette()
+        links.setColor(QPalette.Link, QColor(self.palette.accent))
+        self.app.setPalette(links)
         self.window.dictate.set_palette(self.palette)
         self.window.settings.set_palette(self.palette)
         self.overlay.palette_ = self.palette

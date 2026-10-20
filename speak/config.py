@@ -10,6 +10,10 @@ MODELS_DIR = APP_DIR / "models"
 ASR_LOG = APP_DIR / "runtime.log"
 CLEANUP_LOG = APP_DIR / "cleanup-runtime.log"
 
+REPO_URL = "https://github.com/jacobjmarks/speak"
+COFFEE_URL = "https://buymeacoffee.com/jacobjmarks"
+SPONSOR_URL = "https://github.com/sponsors/jacobjmarks"
+
 # close_action: "ask" until the user answers the first-close prompt, then "tray" or "exit".
 DEFAULTS = {
     "hotkey": "right alt",

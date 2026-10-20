@@ -28,6 +28,12 @@ def bundle_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
+def notices_file() -> Path:
+    """Bundled third-party notices; in source runs, the copy build.ps1 generates under build/."""
+    root = bundle_root()
+    return root / "THIRD_PARTY_NOTICES.txt" if getattr(sys, "frozen", False) else root / "build" / "THIRD_PARTY_NOTICES.txt"
+
+
 def hidden_process_kwargs() -> dict:
     if IS_WINDOWS:
         return {"creationflags": subprocess.CREATE_NO_WINDOW}

@@ -1,7 +1,8 @@
 """Main-window pages: Dictate, History, Settings."""
 from datetime import datetime
 
-from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt, QTimer, Signal
+from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt, QTimer, QUrl, Signal
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (QComboBox, QFrame, QHBoxLayout, QLabel, QPlainTextEdit, QPushButton, QScrollArea,
                                QVBoxLayout, QWidget)
 
@@ -399,6 +400,28 @@ class SettingsPage(QScrollArea):
         self.advanced.setMaximumHeight(0)
         self.advanced.setVisible(False)
         layout.addWidget(self.advanced)
+
+        # --- about ---
+        layout.addSpacing(6)
+        layout.addWidget(_label("About", "section"))
+        card, rows = _card()
+        support = QWidget()
+        line = QHBoxLayout(support)
+        line.setContentsMargins(0, 0, 0, 0)
+        coffee = QPushButton("☕  Buy me a coffee", objectName="primary", cursor=Qt.PointingHandCursor)
+        coffee.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(config.COFFEE_URL)))
+        sponsor = QPushButton("♥  Sponsor", cursor=Qt.PointingHandCursor)
+        sponsor.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(config.SPONSOR_URL)))
+        line.addWidget(coffee)
+        line.addWidget(sponsor)
+        self._row(rows, "Support Speak", "Speak is free. If it saves you time, you can chip in to keep it going",
+                  support)
+        licence = self._row(rows, "Free and open source",
+                            '<a href="source">Source code</a> · '
+                            '<a href="notices">Open-source notices</a>', QWidget(), last=True)
+        licence.hint.setTextFormat(Qt.RichText)
+        licence.hint.linkActivated.connect(self._open_about_link)
+        layout.addWidget(card)
         layout.addStretch(1)
         self._anim = QPropertyAnimation(self.advanced, b"maximumHeight", self, duration=220,
                                         easingCurve=QEasingCurve.OutCubic)
@@ -484,6 +507,13 @@ class SettingsPage(QScrollArea):
             self.login.blockSignals(True)
             self.login.setChecked(not on)
             self.login.blockSignals(False)
+
+    def _open_about_link(self, link: str):
+        notices = platform_utils.notices_file()
+        if link == "notices" and notices.is_file():
+            platform_utils.open_path(notices)
+        else:
+            QDesktopServices.openUrl(QUrl(config.REPO_URL + ("/blob/main/docs/DEVELOPMENT.md#licensing" if link == "notices" else "")))
 
     def _toggle_advanced(self, open_: bool):
         self.advanced_button.setText("Advanced  ⌄" if open_ else "Advanced  ›")

@@ -68,12 +68,16 @@ if ($LASTEXITCODE -ne 0) { throw 'Could not install application build dependenci
 $icon = Join-Path $PSScriptRoot 'build\speak.ico'
 & (Join-Path $venv 'Scripts\python.exe') (Join-Path $PSScriptRoot 'tools\make_icon.py') $icon
 if ($LASTEXITCODE -ne 0) { throw 'Could not create the app icon.' }
+$notices = Join-Path $PSScriptRoot 'build\THIRD_PARTY_NOTICES.txt'
+& (Join-Path $venv 'Scripts\python.exe') (Join-Path $PSScriptRoot 'tools\make_notices.py') $notices
+if ($LASTEXITCODE -ne 0) { throw 'Could not create third-party notices.' }
 & (Join-Path $venv 'Scripts\python.exe') -m PyInstaller --noconfirm --clean --onefile --windowed --name Speak `
     --icon $icon `
     --distpath $OutputDirectory `
     --add-data "$vendor;vendor\nemo-speech" `
     --add-data "$llamaVendor;vendor\llama-cpp" `
-    --collect-all sounddevice `
+    --add-data "$notices;." `
+    --additional-hooks-dir (Join-Path $PSScriptRoot 'tools\hooks') `
     --exclude-module tkinter `
     (Join-Path $PSScriptRoot 'main.py')
 if ($LASTEXITCODE -ne 0) { throw 'PyInstaller packaging failed.' }
