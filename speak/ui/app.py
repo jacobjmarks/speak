@@ -2,13 +2,15 @@
 
 Controller callbacks arrive on worker threads; `Bridge` re-emits them as Qt signals (queued onto the UI thread).
 """
+import hashlib
 import sys
 import threading
 import time
 from datetime import datetime
 
-from PySide6.QtCore import QObject, Qt, QTimer, QUrl, Signal
+from PySide6.QtCore import QLockFile, QObject, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QDesktopServices, QGuiApplication
+from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
 from .. import config, hotkey, tidy, updates
@@ -354,12 +356,46 @@ class SpeakApp(QObject):
         self.app.quit()
 
 
+INSTANCE_NAME = "speak-" + hashlib.sha1(str(config.APP_DIR).encode()).hexdigest()[:12]  # per user
+
+
+def _single_instance(wait_ms: int):
+    """Return (lock, server) if this is the only Speak, else None after asking the running one to show itself.
+
+    Two instances would both hear the shortcut and paste every dictation twice.
+    """
+    config.APP_DIR.mkdir(parents=True, exist_ok=True)
+    lock = QLockFile(str(config.APP_DIR / "speak.lock"))
+    lock.setStaleLockTime(0)  # never by age; a crashed owner's lock is still detected (dead PID) and taken over
+    if not lock.tryLock(wait_ms):
+        if "--background" not in sys.argv:
+            socket = QLocalSocket()
+            socket.connectToServer(INSTANCE_NAME)
+            if socket.waitForConnected(1000):
+                socket.write(b"show")
+                socket.waitForBytesWritten(1000)
+                socket.disconnectFromServer()
+        return None
+    QLocalServer.removeServer(INSTANCE_NAME)
+    server = QLocalServer()
+    server.listen(INSTANCE_NAME)
+    return lock, server
+
+
 def main():
     QApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
     app = QApplication(sys.argv)
     app.setApplicationName("Speak")
+    claimed = _single_instance(15000 if "--restarted" in sys.argv else 0)
+    if claimed is None:
+        sys.exit(0)
+    lock, server = claimed
     app.setQuitOnLastWindowClosed(False)
     app.setWindowIcon(app_icon())
     speak = SpeakApp(app, background="--background" in sys.argv)
+    server.newConnection.connect(lambda: (server.nextPendingConnection().deleteLater(), speak.show_window()))
     app.aboutToQuit.connect(lambda: speak.dictation.shutdown())
-    sys.exit(app.exec())
+    code = app.exec()
+    server.close()
+    lock.unlock()
+    sys.exit(code)

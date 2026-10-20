@@ -121,7 +121,8 @@ def install(new: Path, exe: Path) -> None:
 def restart(exe: Path) -> None:
     env = {**os.environ, "PYINSTALLER_RESET_ENVIRONMENT": "1"}  # new onefile process unpacks its own copy
     flags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
-    subprocess.Popen([str(exe)], env=env, creationflags=flags, close_fds=True)
+    # --restarted: wait for this instance's single-instance lock instead of deferring to it
+    subprocess.Popen([str(exe), "--restarted"], env=env, creationflags=flags, close_fds=True)
 
 
 def cleanup() -> None:

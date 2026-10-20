@@ -53,6 +53,8 @@ python -m tools.dictate_wav path\to\16bit-mono.wav --tidy fast,auto,best [--cpu]
 
 The Large model handles self-corrections ("three, no wait, four"); Small only punctuates (literal mode). The *Fix changes of mind* setting (`corrections`) runs Large in literal mode when off. A correction *reach* ("only the last sentence") was tried via prompting; Qwen3 4B ignored it, so it's on/off only.
 
+Single instance: `QLockFile` (`speak.lock` in the data folder; a dead owner's lock is taken over) plus a `QLocalServer` so a second launch shows the running window and exits. Two instances would each hear the shortcut and paste twice. An update relaunch passes `--restarted` and waits up to 15 s for the old lock.
+
 Both runtimes unload after `unload_after` idle minutes (default 5; Advanced → *Free up memory when idle*): speech ~1 GB RAM, large tidy ~3 GB VRAM. Reload costs ~2-4 s on the next dictation. Launch preloads them unless started at login (background) or set to unload right away.
 
 ASR runs with `--asr.streaming.rnnt_right_context=-1` (max lookahead, ~0.25 s): better words and punctuation on clean speech, same finish time, live text every 320 ms. A full offline re-pass (`POST /v1/audio/transcriptions`) was tested: ~1.6 s per 20 s of audio and worse on noisy audio, so not used. Context-dependent word fixes ("pair" → "pear") are left to the tidy model.
