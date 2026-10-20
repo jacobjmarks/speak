@@ -1,7 +1,9 @@
 """Checks GitHub for a newer release and, on Windows builds, installs it (issue #3).
 
-Releases are tagged vX.Y.Z by the manual Release workflow, which also writes VERSION to speak/_build.py.
-Builds without a version (source runs, CI artifacts) never update. Only the public GitHub API is contacted.
+Releases are tagged v<semver> (e.g. v1.0.0, v1.0.0-rc.1) by the manual Release workflow, which also writes VERSION
+to speak/_build.py. Builds without a version (source runs, CI artifacts) never update. Stable builds only move to
+stable releases; pre-release builds also move to newer pre-releases (alpha.1 -> rc.1 -> 1.0.0).
+Only the public GitHub API is contacted.
 
 Install: the new exe downloads beside the running one as "<exe>.new" (sha256 checked against GitHub's
 asset digest); `install` renames the running exe to ".old" (Windows allows renaming a running exe) and moves
@@ -36,9 +38,25 @@ class Release:
     digest: str = ""  # "sha256:<hex>" or ""
 
 
+SEMVER = re.compile(r"v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)"
+                    r"(?:-((?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*))?"
+                    r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?")
+
+
 def parse(tag: str) -> Optional[tuple]:
-    match = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)", tag or "")
-    return tuple(int(n) for n in match.groups()) if match else None
+    """Sortable semver precedence key, or None. 1.0.0-alpha.1 < 1.0.0-rc.1 < 1.0.0; build metadata is ignored."""
+    match = SEMVER.fullmatch(tag or "")
+    if not match:
+        return None
+    major, minor, patch, pre = match.groups()
+    if pre is None:
+        return int(major), int(minor), int(patch), (1,)
+    ids = tuple((0, int(p), "") if p.isdigit() else (1, 0, p) for p in pre.split("."))
+    return int(major), int(minor), int(patch), (0, ids)
+
+
+def is_prerelease(key: tuple) -> bool:
+    return key[3][0] == 0
 
 
 def version() -> str:
@@ -51,15 +69,19 @@ def _get(url: str, timeout: float = 10):
 
 
 def pick(releases: list, current: tuple) -> Optional[Release]:
-    """Newest stable release newer than `current`."""
+    """Newest release newer than `current`; pre-releases only if `current` is one."""
     best, found = current, None
+    allow_pre = is_prerelease(current)
     for release in releases:
-        number = parse(release.get("tag_name", ""))
-        if not number or release.get("draft") or release.get("prerelease") or number <= best:
+        tag = release.get("tag_name", "")
+        number = parse(tag)
+        if not number or release.get("draft") or number <= best:
+            continue
+        if (is_prerelease(number) or release.get("prerelease")) and not allow_pre:
             continue
         asset = next((a for a in release.get("assets", []) if a.get("name") == ASSET), {})
         best = number
-        found = Release(".".join(map(str, number)), release.get("html_url") or RELEASES_PAGE,
+        found = Release(tag.removeprefix("v"), release.get("html_url") or RELEASES_PAGE,
                         asset.get("browser_download_url", ""), asset.get("digest") or "")
     return found
 

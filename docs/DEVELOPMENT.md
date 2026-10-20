@@ -39,7 +39,7 @@ python -m tools.dictate_wav path\to\16bit-mono.wav --tidy fast,auto,best [--cpu]
 | `speak/runtimes.py` | Starts/stops the bundled ASR and llama.cpp servers; model downloads |
 | `speak/asr.py`, `speak/audio.py` | Streaming ASR session, microphone capture |
 | `speak/hotkey.py` | Global shortcut (press/release for hold-to-talk), capture, key sending |
-| `speak/updates.py` | Update check against `vX.Y.Z` release tags; download, sha256 check, exe swap |
+| `speak/updates.py` | Update check against `v<semver>` release tags; download, sha256 check, exe swap |
 | `speak/ui/` | Window, pages, overlay, widgets, theme |
 
 ## Tidy levels
@@ -65,7 +65,7 @@ Advanced settings can pin the Small or Large model.
 ## Releases
 
 - `.github/workflows/build.yml` builds `Speak.exe` on every push and pull request (downloadable artifact). These builds have no version and never update themselves.
-- `.github/workflows/release.yml` is run by hand (Actions → Release → Run workflow) with a version like `1.2.0`. It writes `VERSION` to `speak/_build.py`, builds, and publishes release `v1.2.0` with `Speak.exe`. Tick *pre-release* to publish without offering it to installed apps. Optional *ref* (commit SHA, branch or tag; default `main`) releases an earlier commit. It refuses a version whose tag exists, lists issues closed since the previous tag (`Closes #N` in commit messages) in the notes, and comments the release on each. The version only comes from this input, never from source.
+- `.github/workflows/release.yml` is run by hand (Actions → Release → Run workflow) with a semver version like `1.0.0-alpha.1`, `1.0.0-rc.1` or `1.0.0`. It writes `VERSION` to `speak/_build.py`, builds, and publishes release `v<version>` with `Speak.exe`. A `-suffix` marks it a GitHub pre-release: stable installs never get offered it, pre-release installs update to newer pre-releases and stable versions by semver order (`alpha.1` < `rc.1` < `1.0.0`). Optional *ref* (commit SHA, branch or tag; default `main`) releases an earlier commit. It refuses a version whose tag exists, lists issues closed since the previous tag (`Closes #N` in commit messages) in the notes, and comments the release on each. The version only comes from this input, never from source.
 
 Installed apps check the GitHub releases API at start and daily. Depending on the Updates setting they download the new `Speak.exe` beside the running one (verified against GitHub's sha256 digest) and swap it in on quit or via "Restart to update", or just show the button. Source runs and non-Windows builds open the release page instead.
 

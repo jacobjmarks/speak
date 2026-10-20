@@ -4,16 +4,12 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to release, e.g. 1.2.0 (tagged v1.2.0)'
+        description: 'Semver to release, e.g. 1.0.0-alpha.1, 1.0.0-rc.1 or 1.0.0 (tagged v<version>). A -suffix makes it a pre-release'
         required: true
       ref:
         description: 'Commit SHA, branch or tag to build (default: latest main)'
         required: false
         default: 'main'
-      prerelease:
-        description: 'Pre-release (installed apps will not auto-update to it)'
-        type: boolean
-        default: false
 
 permissions:
   contents: write
@@ -24,9 +20,14 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Validate version
+        id: version
         shell: pwsh
         run: |
-          if ('${{ inputs.version }}' -notmatch '^\d+\.\d+\.\d+$') { throw "Version must look like 1.2.3" }
+          # Same pattern as speak/updates.py SEMVER (https://semver.org), without a leading v
+          $id = '(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)'
+          $semver = "^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-($id(?:\.$id)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$"
+          if ('${{ inputs.version }}' -cnotmatch $semver) { throw "Version must be semver without a v, e.g. 1.0.0, 1.0.0-alpha.1, 1.0.0-rc.1" }
+          "prerelease=$(if ($Matches[4]) { 'true' } else { 'false' })" >> $env:GITHUB_OUTPUT
 
       - uses: actions/checkout@v4
         with:
@@ -73,8 +74,8 @@ jobs:
           tag_name: v${{ inputs.version }}
           name: Speak ${{ inputs.version }}
           target_commitish: ${{ steps.commit.outputs.sha }}
-          prerelease: ${{ inputs.prerelease }}
-          make_latest: ${{ !inputs.prerelease }}
+          prerelease: ${{ steps.version.outputs.prerelease == 'true' }}
+          make_latest: ${{ steps.version.outputs.prerelease != 'true' }}
           generate_release_notes: true
           body: |
             Windows x64 build. Speech and tidy-up models download on first use.
