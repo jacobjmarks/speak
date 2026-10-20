@@ -10,6 +10,11 @@ on:
         description: 'Commit SHA, branch or tag to build (default: latest main)'
         required: false
         default: 'main'
+      latest:
+        description: 'Mark as the Latest release. auto = only if stable and higher than every existing stable release'
+        type: choice
+        options: [auto, 'yes', 'no']
+        default: auto
 
 permissions:
   contents: write
@@ -40,6 +45,26 @@ jobs:
         run: |
           if (git tag -l "v${{ inputs.version }}") { throw "Tag v${{ inputs.version }} already exists" }
           "sha=$(git rev-parse HEAD)" >> $env:GITHUB_OUTPUT
+
+      - name: Decide Latest
+        id: latest
+        shell: pwsh
+        run: |
+          $pre = '${{ steps.version.outputs.prerelease }}' -eq 'true'
+          $choice = '${{ inputs.latest }}'
+          if ($choice -eq 'yes' -and $pre) { throw "A pre-release can't be marked Latest" }
+          $latest = switch ($choice) {
+            'yes' { $true }
+            'no' { $false }
+            default {
+              # Stable tags only (vX.Y.Z or vX.Y.Z+build); semver order matches [version] for these
+              $stable = git tag -l 'v*' | Where-Object { $_ -match '^v(\d+\.\d+\.\d+)(\+.*)?$' } | ForEach-Object { [version]$Matches[1] }
+              $new = [version]('${{ inputs.version }}' -replace '[-+].*$')
+              -not $pre -and -not ($stable | Where-Object { $_ -ge $new })
+            }
+          }
+          Write-Host "Latest: $latest"
+          "value=$($latest.ToString().ToLower())" >> $env:GITHUB_OUTPUT
 
       - uses: actions/setup-python@v5
         with:
@@ -75,7 +100,7 @@ jobs:
           name: Speak ${{ inputs.version }}
           target_commitish: ${{ steps.commit.outputs.sha }}
           prerelease: ${{ steps.version.outputs.prerelease == 'true' }}
-          make_latest: ${{ steps.version.outputs.prerelease != 'true' }}
+          make_latest: ${{ steps.latest.outputs.value }}
           generate_release_notes: true
           body: |
             Windows x64 build. Speech and tidy-up models download on first use.
