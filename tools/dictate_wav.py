@@ -1,6 +1,6 @@
 """Dev tool: run a 16-bit mono WAV through the real ASR + tidy pipeline without the UI.
 
-    python -m tools.dictate_wav path/to/file.wav [--tidy fast,balanced,best] [--cpu]
+    python -m tools.dictate_wav path/to/file.wav [--tidy fast,auto,best] [--cpu]
 
 Prints the plan per level (model, device) and warm timings (the model is warmed before timing).
 """
@@ -19,7 +19,7 @@ from speak.runtimes import AsrServer, CleanupServer, llama_root
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("wav")
-    parser.add_argument("--tidy", default="off,fast,balanced,best", help="tidy level(s), comma separated")
+    parser.add_argument("--tidy", default="off,fast,auto,best", help="tidy level(s), comma separated")
     parser.add_argument("--cpu", action="store_true", help="ignore the GPU")
     args = parser.parse_args()
     settings = load_settings()

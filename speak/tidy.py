@@ -3,9 +3,10 @@
 Levels (settings["tidy"]):
   off       spoken commands only ("new paragraph"), verbatim otherwise. No model.
   fast      rules only: spoken commands, drop ums/stutters, pauses after sentences -> paragraphs. Instant.
-  balanced  smartest model that stays under ~1 s here: Large on a capable GPU, else Small on CPU.
+  auto      smartest model that stays under ~1 s here: Large on a capable GPU, else Small on CPU.
+            (Was "balanced"; renamed because on a GPU it is Best, and on CPU it's the Small model.)
   best      always Large (self-corrections, paragraphs): GPU if possible, else CPU (a few seconds).
-            On a capable GPU, balanced and best are identical; the summary says so.
+            On a capable GPU, auto and best are identical; the summary says so.
 settings["corrections"] False runs Large in literal mode (no words dropped). Prompting for a correction *reach*
 ("only the last sentence") was tried with Qwen3 4B and ignored, so it's on/off only.
 Warm timings that informed this (Ryzen 9800X3D / RTX 3080): Large GPU ~0.45 s, Large CPU ~4 s, Small CPU ~0.6 s.
@@ -88,7 +89,7 @@ def plan(settings: dict) -> Plan:
     pinned = settings.get("cleanup_model")
     if pinned in CLEANUP_MODELS:
         model = pinned
-    elif level == "balanced":
+    elif level == "auto":
         model = LARGE_MODEL if g else SMALL_MODEL
     else:
         model = LARGE_MODEL if g or platform_utils.available_memory_mb() >= CPU_LARGE_MIN_RAM_MB else SMALL_MODEL
@@ -111,7 +112,7 @@ def plan(settings: dict) -> Plan:
     if pinned in CLEANUP_MODELS:
         note = " Model chosen in Advanced."
     elif g:
-        note = " Same as Best here." if level == "balanced" else " Same as Balanced here."
+        note = " Same as Best here." if level == "auto" else " Same as Automatic here."
     elif level == "best" and model != LARGE_MODEL:
         note = " Not enough free memory for the large model."
     else:

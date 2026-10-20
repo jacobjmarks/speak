@@ -24,7 +24,7 @@ DEFAULTS = {
     "live_preview": "line",
     "model": "nemotron-3.5",
     "language": "auto",
-    "tidy": "balanced",
+    "tidy": "auto",
     "corrections": True,  # large model drops "no wait, ..." originals; False keeps every word
     "cleanup_model": "auto",
     "theme": "System",
@@ -51,7 +51,7 @@ CLEANUP_MODELS = {
 SMALL_MODEL, LARGE_MODEL = "qwen25-q4km", "qwen3-4b-2507"
 
 SHORTCUT_MODES = {"auto": "Hold or tap", "hold": "Hold to talk", "toggle": "Tap to start and stop"}
-TIDY_LEVELS = {"off": "Off", "fast": "Fast · no AI", "balanced": "Balanced · AI when quick", "best": "Best · always AI"}
+TIDY_LEVELS = {"off": "Off", "fast": "Fast · no AI", "auto": "Automatic · recommended", "best": "Best · always AI"}
 CLOSE_ACTIONS = {"ask": "Ask me", "tray": "Keep running in the tray", "exit": "Quit Speak"}
 OVERLAY_POSITIONS = {"cursor": "Near my cursor", "top": "Top of screen", "bottom": "Bottom of screen"}
 LIVE_PREVIEWS = {"line": "One sliding line", "full": "Full text", "off": "Off"}
@@ -66,8 +66,10 @@ def load_settings() -> dict:
         stored = {}
     settings = {**DEFAULTS, **stored}
     if stored and "tidy" not in stored:  # pre-tidy settings used cleanup_enabled + cleanup_mode
-        settings["tidy"] = "balanced" if stored.get("cleanup_enabled", True) else "off"
+        settings["tidy"] = "auto" if stored.get("cleanup_enabled", True) else "off"
         settings["cleanup_model"] = "auto"
+    if settings["tidy"] == "balanced":
+        settings["tidy"] = "auto"
     if isinstance(settings["live_preview"], bool):
         settings["live_preview"] = "line" if settings["live_preview"] else "off"
     if "hold_to_talk" in stored and "shortcut_mode" not in stored:

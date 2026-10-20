@@ -163,7 +163,7 @@ def warm(port: int, mode: str) -> None:
 
 
 def finalize(raw: str, level: str, llm_mode: str = "literal", port=None):
-    """Full post-processing for a tidy level ("off" | "fast" | "balanced" | "best").
+    """Full post-processing for a tidy level ("off" | "fast" | "auto" | "best").
 
     Rules first, then the model (when `port` is given), then marker removal.
     Returns (text, note). On model failure or guardrail rejection the rule-based text is kept.

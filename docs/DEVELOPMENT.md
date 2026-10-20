@@ -26,7 +26,7 @@ Use `./build.ps1 -OutputDirectory ./dist-next` to build beside an open app copy 
 Headless pipeline check (real ASR + tidy, no UI), printing the plan and timing for each tidy level:
 
 ```powershell
-python -m tools.dictate_wav path\to\16bit-mono.wav --tidy fast,balanced,best [--cpu]
+python -m tools.dictate_wav path\to\16bit-mono.wav --tidy fast,auto,best [--cpu]
 ```
 
 ## Code map
@@ -48,7 +48,7 @@ python -m tools.dictate_wav path\to\16bit-mono.wav --tidy fast,balanced,best [--
 |---|---|---|
 | Off | Spoken commands only ("new paragraph") | instant |
 | Fast | Rules: drop fillers/stutters, pauses after sentences → paragraphs | instant |
-| Balanced | Large model (Qwen3 4B) on a GPU with ≥4 GB free, else Small (Qwen 2.5 0.5B) on CPU | ~0.5 s |
+| Automatic | Large model (Qwen3 4B) on a GPU with ≥4 GB free, else Small (Qwen 2.5 0.5B) on CPU | ~0.5 s |
 | Best | Large model on GPU, or CPU if there's RAM | 0.5 s GPU, a few s CPU |
 
 The Large model handles self-corrections ("three, no wait, four"); Small only punctuates (literal mode). The *Fix changes of mind* setting (`corrections`) runs Large in literal mode when off. A correction *reach* ("only the last sentence") was tried via prompting; Qwen3 4B ignored it, so it's on/off only.

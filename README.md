@@ -4,11 +4,10 @@
 
 <h3 align="center">Talk anywhere. Speak types it for you, neatly, without your voice ever leaving your computer.</h3>
 
-<p align="center"><b>Private · Offline · Fast · Open source · Multilingual</b></p>
 
 <p align="center">
   <a href="https://github.com/jacobjmarks/speak/releases"><b>Download for Windows</b></a>
-  &nbsp;·&nbsp; macOS and Linux coming soon
+  &nbsp;·&nbsp; Free and open source &nbsp;·&nbsp; macOS and Linux coming soon
 </p>
 
 ---
@@ -57,7 +56,7 @@ Speak can start with your computer and wait quietly in the system tray. You choo
 ## Make it yours
 
 - **Your shortcut**: any key combination you like.
-- **Tidy up**: *Fast* (instant), *Balanced* (recommended) or *Best*. Speak checks what your computer can handle and tells you how quick each one will be. Rather keep every word, even "no wait"? Turn off *Fix changes of mind*.
+- **Tidy up**: *Fast* (instant), *Automatic* (recommended) or *Best*. Speak checks what your computer can handle and tells you how quick each one will be. Rather keep every word, even "no wait"? Turn off *Fix changes of mind*.
 - **The indicator**: near your cursor, or at the top or bottom of the screen, with one sliding line of live text, the full text, or none.
 - **Light or dark**, or follow your system.
 - **History** stays off unless you turn it on, and is only ever kept on your device.

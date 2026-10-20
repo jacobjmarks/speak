@@ -427,7 +427,7 @@ class SettingsPage(QScrollArea):
         self.corrections.setEnabled(large_model)
         self.corrections_row.hint.setText(
             "“Tuesday, no, Wednesday” becomes “Wednesday”, even sentences later" if large_model else
-            "Needs the large AI: Best, or Balanced with a good graphics card")
+            "Needs the large AI: Best, or Automatic with a good graphics card")
 
     def _shortcut_mode_hint(self, mode: str):
         self.shortcut_mode_row.hint.setText({
