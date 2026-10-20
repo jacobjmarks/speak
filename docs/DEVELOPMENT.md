@@ -37,7 +37,7 @@ python -m tools.dictate_wav path\to\16bit-mono.wav --tidy fast,balanced,best [--
 | `speak/runtimes.py` | Starts/stops the bundled ASR and llama.cpp servers; model downloads |
 | `speak/asr.py`, `speak/audio.py` | Streaming ASR session, microphone capture |
 | `speak/hotkey.py` | Global shortcut (press/release for hold-to-talk), capture, key sending |
-| `speak/updates.py` | Update check against `main-<N>` release tags |
+| `speak/updates.py` | Update check against `vX.Y.Z` release tags; download, sha256 check, exe swap |
 | `speak/ui/` | Window, pages, overlay, widgets, theme |
 
 ## Tidy levels
@@ -56,8 +56,11 @@ Advanced settings can pin the Small or Large model.
 
 ## Releases
 
-Each push to `main` runs `.github/workflows/release.yml`: stamps `speak/_build.py` with the run number, builds the one-file executable and publishes it as release `main-<run number>`. The app compares its build number with those tags to show "Update available".
+- `.github/workflows/build.yml` builds `Speak.exe` on every push and pull request (downloadable artifact). These builds have no version and never update themselves.
+- `.github/workflows/release.yml` is run by hand (Actions → Release → Run workflow) with a version like `1.2.0`. It writes `VERSION` to `speak/_build.py`, builds, and publishes release `v1.2.0` with `Speak.exe`. Tick *pre-release* to publish without offering it to installed apps.
+
+Installed apps check the GitHub releases API at start and daily. Depending on the Updates setting they download the new `Speak.exe` beside the running one (verified against GitHub's sha256 digest) and swap it in on quit or via "Restart to update", or just show the button. Source runs and non-Windows builds open the release page instead.
 
 ## Privacy
 
-Microphone audio is held in memory only and sent to the app-owned local runtime on loopback. History stores transcript text only, and only when enabled. Network use: model downloads (Hugging Face) and the optional update check (GitHub releases API).
+Microphone audio is held in memory only and sent to the app-owned local runtime on loopback. History stores transcript text only, and only when enabled. Network use: model downloads (Hugging Face) and the update check/download (GitHub releases; can be turned off).

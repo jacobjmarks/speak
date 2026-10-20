@@ -1,6 +1,6 @@
 """Main window (sidebar + pages), app icon, and the first-close prompt."""
-from PySide6.QtCore import QPointF, QRectF, Qt, QUrl, Signal
-from PySide6.QtGui import QColor, QDesktopServices, QIcon, QPainter, QPixmap
+from PySide6.QtCore import QPointF, QRectF, Qt, Signal
+from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (QButtonGroup, QDialog, QHBoxLayout, QLabel, QMainWindow, QPushButton, QStackedWidget,
                                QVBoxLayout, QWidget)
 
@@ -63,6 +63,7 @@ class StatusDot(QWidget):
 
 class MainWindow(QMainWindow):
     close_requested = Signal()
+    update_clicked = Signal()
 
     def __init__(self, settings: dict, level_source, can_rescan_mics=lambda: False):
         super().__init__()
@@ -105,11 +106,9 @@ class MainWindow(QMainWindow):
         self.nav.idClicked.connect(self.show_page)
         side.addStretch(1)
 
-        self.update_button = QPushButton("Update available", objectName="update", cursor=Qt.PointingHandCursor)
-        self.update_button.setToolTip("Open the download page")
-        self.update_button.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(self._update_url)))
+        self.update_button = QPushButton(objectName="update", cursor=Qt.PointingHandCursor)
+        self.update_button.clicked.connect(self.update_clicked)
         self.update_button.hide()
-        self._update_url = ""
         side.addWidget(self.update_button)
         side.addSpacing(8)
 
@@ -130,9 +129,12 @@ class MainWindow(QMainWindow):
         if self.stack.currentWidget() is self.history:
             self.history.refresh(self.history.enabled)
 
-    def set_update(self, url: str):
-        self._update_url = url
-        self.update_button.setVisible(bool(url))
+    def set_update(self, text: str, tooltip: str = "", enabled: bool = True):
+        """Sidebar update button; hidden when `text` is empty."""
+        self.update_button.setText(text)
+        self.update_button.setToolTip(tooltip)
+        self.update_button.setEnabled(enabled)
+        self.update_button.setVisible(bool(text))
 
     def set_status(self, text: str, color: str):
         self.status_text.setText(text)

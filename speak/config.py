@@ -25,7 +25,7 @@ DEFAULTS = {
     "tidy": "balanced",
     "cleanup_model": "auto",
     "theme": "System",
-    "check_updates": True,
+    "updates": "auto",
 }
 
 ASR_MODELS = {"nemotron-3.5": "Nemotron 3.5 ASR (multilingual)"}
@@ -52,6 +52,7 @@ CLOSE_ACTIONS = {"ask": "Ask me", "tray": "Keep running in the tray", "exit": "Q
 OVERLAY_POSITIONS = {"cursor": "Near my cursor", "top": "Top of screen", "bottom": "Bottom of screen"}
 LIVE_PREVIEWS = {"line": "One sliding line", "full": "Full text", "off": "Off"}
 THEMES = ("System", "Light", "Dark")
+UPDATE_MODES = {"auto": "Install automatically", "notify": "Just tell me", "off": "Don't check"}
 
 
 def load_settings() -> dict:
@@ -65,14 +66,16 @@ def load_settings() -> dict:
         settings["cleanup_model"] = "auto"
     if isinstance(settings["live_preview"], bool):
         settings["live_preview"] = "line" if settings["live_preview"] else "off"
-    for key in ("cleanup_enabled", "cleanup_mode"):
+    if "check_updates" in stored and "updates" not in stored:
+        settings["updates"] = "auto" if stored["check_updates"] else "off"
+    for key in ("cleanup_enabled", "cleanup_mode", "check_updates"):
         settings.pop(key, None)
     if settings["model"] not in ASR_MODELS:
         settings["model"] = DEFAULTS["model"]
     if settings["cleanup_model"] not in CLEANUP_MODELS:
         settings["cleanup_model"] = "auto"
     for key, allowed in (("tidy", TIDY_LEVELS), ("close_action", CLOSE_ACTIONS),
-                         ("overlay_position", OVERLAY_POSITIONS), ("live_preview", LIVE_PREVIEWS)):
+                         ("overlay_position", OVERLAY_POSITIONS), ("live_preview", LIVE_PREVIEWS), ("updates", UPDATE_MODES)):
         if settings[key] not in allowed:
             settings[key] = DEFAULTS[key]
     return settings

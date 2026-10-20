@@ -6,8 +6,8 @@ import sys
 import threading
 import time
 
-from PySide6.QtCore import QObject, Qt, QTimer, Signal
-from PySide6.QtGui import QGuiApplication
+from PySide6.QtCore import QObject, Qt, QTimer, QUrl, Signal
+from PySide6.QtGui import QDesktopServices, QGuiApplication
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
 from .. import config, hotkey, tidy, updates
@@ -26,7 +26,9 @@ class Bridge(QObject, Listener):
     hotkey_down = Signal()
     hotkey_up = Signal()
     probed = Signal()
-    update_found = Signal(str)
+    update_found = Signal(object, bool)   # Release or None, manual check
+    update_progress = Signal(int)
+    update_ready = Signal(object)        # Path of downloaded exe, or None on failure
 
     def on_state(self, state):
         self.state.emit(state.value)
@@ -65,6 +67,10 @@ class SpeakApp(QObject):
         self._capture_ended = 0.0
         self._pressed_at = None  # set when a hotkey press started (or will stop) dictation
         self._use_overlay = False  # decided per dictation: Speak's own window shows progress when focused
+        self._release = None       # newer release found
+        self._downloading = False
+        self._downloaded = None    # verified exe waiting beside ours; swapped in on quit
+        self._restart = False
 
         b = self.bridge
         b.state.connect(self._on_state)
@@ -75,10 +81,14 @@ class SpeakApp(QObject):
         b.hotkey_down.connect(self._on_hotkey_down)
         b.hotkey_up.connect(self._on_hotkey_up)
         b.probed.connect(self._refresh_tidy)
-        b.update_found.connect(self.window.set_update)
+        b.update_found.connect(self._on_update_found)
+        b.update_progress.connect(lambda p: self.window.set_update(f"Downloading {p}%", enabled=False))
+        b.update_ready.connect(self._on_update_ready)
 
         w = self.window
         w.close_requested.connect(self._on_close)
+        w.update_clicked.connect(self._on_update_clicked)
+        w.settings.check_updates.connect(lambda: self._check_updates(manual=True))
         w.dictate.toggle_requested.connect(self.dictation.toggle)
         w.history.enable_requested.connect(lambda: self._update({"history_enabled": True}))
         w.settings.changed.connect(self._update)
@@ -92,6 +102,7 @@ class SpeakApp(QObject):
         w.history.refresh(self.settings["history_enabled"])
         self._refresh_tidy()
         threading.Thread(target=lambda: (tidy._probed.wait(30), b.probed.emit()), daemon=True).start()
+        updates.cleanup()
         self.dictation.warm_up()
         self._update_timer = QTimer(self, interval=24 * 3600 * 1000, timeout=self._check_updates)
         self._update_timer.start()
@@ -114,16 +125,65 @@ class SpeakApp(QObject):
             self.window.history.refresh(self.settings["history_enabled"])
         if {"tidy", "cleanup_model"} & changes.keys():
             self._refresh_tidy()
-        if "check_updates" in changes:
+        if "updates" in changes:
             self._check_updates()
         self.window.settings.sync(self.settings)
 
-    def _check_updates(self):
-        if not self.settings["check_updates"]:
+    # ----- updates -----
+
+    def _check_updates(self, manual: bool = False):
+        if self._downloading or self._downloaded:
+            return
+        if self.settings["updates"] == "off" and not manual:
             self.window.set_update("")
             return
-        threading.Thread(target=lambda: self.bridge.update_found.emit(updates.newer_release() or ""),
+        if manual:
+            self.window.settings.set_update_status("Checking…")
+        threading.Thread(target=lambda: self.bridge.update_found.emit(updates.newer_release(), manual),
                          daemon=True).start()
+
+    def _on_update_found(self, release, manual: bool):
+        self._release = release
+        if manual:
+            self.window.settings.set_update_status(f"{release.version} available" if release else "Up to date")
+        if not release:
+            self.window.set_update("")
+        elif self.settings["updates"] == "auto" and updates.can_install(release):
+            self._download()
+        else:
+            self.window.set_update(f"Update to {release.version}", "Download and install" if
+                                   updates.can_install(release) else "Open the download page")
+
+    def _download(self):
+        self._downloading = True
+        self.window.set_update("Downloading…", enabled=False)
+        release, bridge = self._release, self.bridge
+
+        def run():
+            try:
+                bridge.update_ready.emit(updates.download(release, bridge.update_progress.emit))
+            except Exception:
+                bridge.update_ready.emit(None)
+        threading.Thread(target=run, daemon=True).start()
+
+    def _on_update_ready(self, path):
+        self._downloading = False
+        self._downloaded = path
+        if path:
+            self.window.set_update("Restart to update", f"Installs {self._release.version}; also happens when Speak quits")
+        else:
+            self.window.set_update(f"Update to {self._release.version}", "Download failed. Click to try again")
+
+    def _on_update_clicked(self):
+        if self._downloaded:
+            if self.dictation.state != State.IDLE:
+                return
+            self._restart = True
+            self.quit()
+        elif updates.can_install(self._release):
+            self._download()
+        elif self._release:
+            QDesktopServices.openUrl(QUrl(self._release.page))
 
     def _refresh_tidy(self):
         summary = tidy.plan(self.settings).summary if tidy.probed() else "Checking what your computer can run…"
@@ -273,6 +333,14 @@ class SpeakApp(QObject):
         self.dictation.shutdown()
         if self.tray:
             self.tray.hide()
+        if self._downloaded:
+            try:
+                updates.install(self._downloaded, updates.exe_path())
+                if self._restart:
+                    updates.restart(updates.exe_path())
+            except OSError:
+                pass
+            self._downloaded = None
         self.app.quit()
 
 

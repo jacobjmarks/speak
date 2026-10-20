@@ -248,6 +248,7 @@ class SettingsPage(QScrollArea):
     changed = Signal(dict)  # partial settings to merge and save
     shortcut_changed = Signal(str)
     shortcut_recording = Signal(bool)
+    check_updates = Signal()
 
     def __init__(self, settings: dict, can_rescan_mics=lambda: False):
         super().__init__()
@@ -298,8 +299,9 @@ class SettingsPage(QScrollArea):
         self.theme.currentIndexChanged.connect(lambda: self.changed.emit({"theme": self.theme.currentData()}))
         self._row(rows, "Appearance", "", self.theme)
 
-        self.updates = self._toggle(settings["check_updates"], "check_updates")
-        self._row(rows, "Tell me about updates", "Checks GitHub for new versions. Nothing about you is sent",
+        self.updates = _combo(config.UPDATE_MODES, settings["updates"])
+        self.updates.currentIndexChanged.connect(lambda: self.changed.emit({"updates": self.updates.currentData()}))
+        self._row(rows, "Updates", "Checks GitHub for new versions. Nothing about you is sent",
                   self.updates, last=True)
         layout.addWidget(card)
 
@@ -352,7 +354,16 @@ class SettingsPage(QScrollArea):
         folder.clicked.connect(lambda: (config.APP_DIR.mkdir(parents=True, exist_ok=True),
                                         platform_utils.open_path(config.APP_DIR)))
         self._row(rows, "Data folder", "Models, logs and settings", folder)
-        self._row(rows, "Version", "", _label(updates.version(), "muted"), last=True)
+        version = QWidget()
+        line = QHBoxLayout(version)
+        line.setContentsMargins(0, 0, 0, 0)
+        self.update_status = _label("", "hint")
+        check = QPushButton("Check now", cursor=Qt.PointingHandCursor)
+        check.clicked.connect(self.check_updates)
+        check.setEnabled(bool(updates.parse(updates.VERSION)))
+        line.addWidget(self.update_status)
+        line.addWidget(check)
+        self._row(rows, "Version", updates.version(), version, last=True)
         self.advanced.setMaximumHeight(0)
         self.advanced.setVisible(False)
         layout.addWidget(self.advanced)
@@ -369,6 +380,9 @@ class SettingsPage(QScrollArea):
             divider.setFixedHeight(1)
             rows.addWidget(divider)
         return row
+
+    def set_update_status(self, text: str):
+        self.update_status.setText(text)
 
     def set_tidy_summary(self, summary: str):
         self.tidy_row.hint.setText(summary)

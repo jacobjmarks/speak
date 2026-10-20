@@ -25,7 +25,7 @@
 
 ## How it works
 
-1. Press **Ctrl + Shift + Space** wherever you want to type. *Tap* to start and stop, or *hold* while you talk.
+1. Hold **Right Alt** wherever you want to type and talk, then let go. Or *tap* it to start and stop. (You can change the shortcut.)
 2. Speak. A small indicator shows it's listening, with your words appearing underneath.
 3. Stop. Your text is tidied up and typed straight into the app you're using.
 
@@ -39,7 +39,7 @@
 2. Run it. If Windows SmartScreen appears, choose **More info → Run anyway**.
 3. Press the shortcut and start talking. The first dictation downloads the speech model (about 700 MB, once). Tidy-up models are 0.5 to 2.5 GB, chosen to suit your computer.
 
-Speak can start with your computer and wait quietly in the system tray. You choose the first time you close the window.
+Speak can start with your computer and wait quietly in the system tray. You choose the first time you close the window. It keeps itself up to date (or just tells you, or doesn't check: your choice).
 
 ## Screenshots
 
