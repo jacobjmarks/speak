@@ -69,7 +69,8 @@ if ($LASTEXITCODE -ne 0) { throw 'Could not install application build dependenci
     --add-data "$vendor;vendor\nemo-speech" `
     --add-data "$llamaVendor;vendor\llama-cpp" `
     --collect-all sounddevice `
-    (Join-Path $PSScriptRoot 'speak.py')
+    --exclude-module tkinter `
+    (Join-Path $PSScriptRoot 'main.py')
 if ($LASTEXITCODE -ne 0) { throw 'PyInstaller packaging failed.' }
 
 Write-Host "Built app: $(Join-Path $OutputDirectory 'Speak.exe')"

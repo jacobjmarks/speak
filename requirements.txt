@@ -1,7 +1,7 @@
-keyboard>=0.13.5
+PySide6-Essentials>=6.9
+keyboard>=0.13.5; sys_platform == "win32"
+pynput>=1.7; sys_platform != "win32"
 pyperclip>=1.9
-pystray>=0.19
 sounddevice>=0.5
 websocket-client>=1.8
-Pillow>=10
 pyinstaller>=6
