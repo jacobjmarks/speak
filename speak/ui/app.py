@@ -57,7 +57,7 @@ class SpeakApp(QObject):
         self.dictation = Dictation(self.settings, self.bridge)
         level = lambda: self.dictation.level  # noqa: E731
 
-        self.window = MainWindow(self.settings, level)
+        self.window = MainWindow(self.settings, level, lambda: self.dictation.state == State.IDLE)
         self.overlay = Overlay(level)
         self.tray = self._make_tray()
         self.palette = theme.LIGHT

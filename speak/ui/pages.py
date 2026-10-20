@@ -5,7 +5,7 @@ from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt, QTimer, Signal
 from PySide6.QtWidgets import (QComboBox, QFrame, QHBoxLayout, QLabel, QPlainTextEdit, QPushButton, QScrollArea,
                                QVBoxLayout, QWidget)
 
-from .. import config, history, hotkey, output, platform_utils, updates
+from .. import audio, config, history, hotkey, output, platform_utils, updates
 from .widgets import MicButton, ShortcutButton, Toggle
 
 
@@ -66,7 +66,7 @@ class DictatePage(Page):
         self.layout_.addWidget(self.card, 2)
         self.layout_.addStretch(1)
         self._revert = QTimer(self, singleShot=True, timeout=lambda: self.mic.set_mode("idle"))
-        self.set_shortcut("ctrl+shift+space")
+        self.set_shortcut(config.DEFAULTS["hotkey"])
 
     def set_shortcut(self, combo: str):
         self._shortcut = hotkey.display(combo)
@@ -216,12 +216,40 @@ LANGUAGES = {"auto": "Detect automatically", "en": "English", "es": "Spanish", "
              "it": "Italian", "pt": "Portuguese", "nl": "Dutch", "ja": "Japanese", "zh": "Chinese"}
 
 
+class MicCombo(QComboBox):
+    """Input devices, re-read from the OS each time the list is opened (when `can_rescan()`)."""
+
+    def __init__(self, current, can_rescan):
+        super().__init__(cursor=Qt.PointingHandCursor)
+        self.can_rescan = can_rescan
+        self._fill(current, rescan=False)
+
+    def _fill(self, current, rescan: bool):
+        try:
+            names = audio.input_devices(rescan)
+        except Exception:
+            names = []
+        self.blockSignals(True)
+        self.clear()
+        self.addItem("System default", None)
+        for name in names:
+            self.addItem(name, name)
+        if current and current not in names:
+            self.addItem(f"{current} (not connected)", current)
+        self.setCurrentIndex(max(0, self.findData(current)))
+        self.blockSignals(False)
+
+    def showPopup(self):
+        self._fill(self.currentData(), rescan=self.can_rescan())
+        super().showPopup()
+
+
 class SettingsPage(QScrollArea):
     changed = Signal(dict)  # partial settings to merge and save
     shortcut_changed = Signal(str)
     shortcut_recording = Signal(bool)
 
-    def __init__(self, settings: dict):
+    def __init__(self, settings: dict, can_rescan_mics=lambda: False):
         super().__init__()
         self.setWidgetResizable(True)
         self.setFrameShape(QFrame.NoFrame)
@@ -236,6 +264,11 @@ class SettingsPage(QScrollArea):
         self.shortcut.captured.connect(self._on_shortcut)
         self.shortcut.recording.connect(self.shortcut_recording)
         self._row(rows, "Shortcut", "Tap to start and stop, or hold while you talk", self.shortcut)
+
+        self.mic = MicCombo(settings["mic_device"], can_rescan_mics)
+        self.mic.setMaximumWidth(260)
+        self.mic.currentIndexChanged.connect(lambda: self.changed.emit({"mic_device": self.mic.currentData()}))
+        self._row(rows, "Microphone", "", self.mic)
 
         self.tidy = _combo(config.TIDY_LEVELS, settings["tidy"])
         self.tidy.currentIndexChanged.connect(lambda: self.changed.emit({"tidy": self.tidy.currentData()}))

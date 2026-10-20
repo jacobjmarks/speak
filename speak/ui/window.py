@@ -64,7 +64,7 @@ class StatusDot(QWidget):
 class MainWindow(QMainWindow):
     close_requested = Signal()
 
-    def __init__(self, settings: dict, level_source):
+    def __init__(self, settings: dict, level_source, can_rescan_mics=lambda: False):
         super().__init__()
         self.allow_close = False
         self.setWindowTitle("Speak")
@@ -93,7 +93,7 @@ class MainWindow(QMainWindow):
         self.stack = QStackedWidget()
         self.dictate = DictatePage(level_source)
         self.history = HistoryPage()
-        self.settings = SettingsPage(settings)
+        self.settings = SettingsPage(settings, can_rescan_mics)
         self.nav = QButtonGroup(self)
         for i, (label, page) in enumerate((("Dictate", self.dictate), ("History", self.history),
                                            ("Settings", self.settings))):

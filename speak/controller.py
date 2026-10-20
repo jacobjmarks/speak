@@ -125,7 +125,7 @@ class Dictation:
 
     def _prepare(self):
         try:
-            self.mic = Microphone(self._on_audio)
+            self.mic = Microphone(self._on_audio, self.settings["mic_device"])
             self._ensure_runtimes(self.listener.on_progress)
             self.session = AsrSession(
                 self.asr_server.port,

@@ -12,10 +12,11 @@ CLEANUP_LOG = APP_DIR / "cleanup-runtime.log"
 
 # close_action: "ask" until the user answers the first-close prompt, then "tray" or "exit".
 DEFAULTS = {
-    "hotkey": "ctrl+shift+space",
+    "hotkey": "right alt",
     "close_action": "ask",
     "history_enabled": False,
     "auto_paste": True,
+    "mic_device": None,  # device name; None = system default
     "overlay_enabled": True,
     "overlay_position": "cursor",
     "live_preview": "line",
