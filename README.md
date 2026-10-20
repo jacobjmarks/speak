@@ -1,40 +1,69 @@
-# Speak
+<p align="center">
+  <img src="docs/images/hero.png" alt="Speak: talk anywhere, it types" width="100%">
+</p>
 
-Local dictation. Press `Ctrl+Shift+Space` (configurable) to start or stop listening. Speak transcribes on-device with NVIDIA Nemotron 3.5 ASR. A small floating pill near your cursor shows a live waveform and your words as you speak, then turns into a spinner while Speak tidies the text and pastes it into the focused app. History is off by default.
+<h3 align="center">Talk anywhere. Speak types it for you, neatly, without your voice ever leaving your computer.</h3>
 
-Settings show only user-level choices: shortcut, tidy-up level, paste, close behaviour, start with computer, history, appearance. Model, language and indicator options live under **Advanced**. The first time you close the window Speak asks whether to keep running in the tray or quit.
+<p align="center">
+  <a href="https://github.com/jacobjmarks/speak/releases"><b>Download for Windows</b></a>
+  &nbsp;·&nbsp; macOS and Linux coming soon
+</p>
 
-The distributable includes the NeMo-Speech.cpp ASR runtime, llama.cpp text-cleanup runtime, and their dependencies. Model weights download from Hugging Face on first use. No Python install, separate model runner, or background service is required from the user.
+---
 
-## Run from source
+## Why Speak
 
-Requires Python 3.11+ (UI is PySide6). Windows is the supported build today; macOS/Linux support is in progress:
+**🔒 Private.** Your voice is turned into text on your own computer. No account, no cloud, nothing uploaded.
 
-```powershell
-py -3 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
-.\build.ps1
-	.\dist\Speak.exe
-```
+**✈️ Works offline.** After a one-time download of the speech models, Speak needs no internet at all.
 
-`build.ps1` downloads and checksum-verifies the pinned NeMo-Speech.cpp and llama.cpp Windows CPU releases, bundles both runtimes into one executable at `dist\Speak.exe`, and downloads model weights on first use into `%LOCALAPPDATA%\Speak\models`.
+**⚡ Fast.** Words appear as you talk, and tidy text lands in your app the moment you stop.
 
-Use `./build.ps1 -OutputDirectory ./dist-next` to build beside an open app copy without replacing locked files.
+**✍️ Writes like you meant it.** Punctuation, paragraphs and capitals are added for you. Ums, ahs and repeated words disappear. Change your mind mid-sentence ("Tuesday, no, Wednesday") and Speak writes what you meant.
 
-## Model selection
+**🖱️ Works in any app.** Email, chat, documents, browsers. If you can type there, you can speak there.
 
+## How it works
 
-ASR is Nemotron 3.5 (`nvidia/nemotron-3.5-asr-streaming-0.6b`). **Tidy up my words** has three levels: *Smart* (default; punctuation, paragraphs, removes fillers and applies spoken self-corrections such as "Tuesday, no, Wednesday"; uses Qwen3 4B Instruct 2507, about 2.5 GB), *Light* (punctuation only; Qwen 2.5 0.5B, about 491 MB) and *Off*. Advanced settings can pin a specific cleanup model. Both runtimes are CPU builds. Theme follows the OS by default, or can be forced Light/Dark.
+1. Press **Ctrl + Shift + Space** wherever you want to type. *Tap* to start and stop, or *hold* while you talk.
+2. Speak. A small indicator shows it's listening, with your words appearing underneath.
+3. Stop. Your text is tidied up and typed straight into the app you're using.
 
-Each push to `main` builds the one-file executable and publishes it as a GitHub Release.
+<p align="center">
+  <img src="docs/images/overlay-light.png" alt="The listening indicator with live text" width="340">
+</p>
 
-## How cleanup works
+## Install
 
-Nemotron streams provisional partial text into the app buffer while recording. On stop, Speak commits the audio stream and waits for the final ASR text, marks long pauses (from word timestamps) as paragraph hints, applies spoken commands ("new paragraph", "full stop", "question mark"), then sends the transcript to a locally bundled llama.cpp server. The prompt and few-shot examples ask for punctuation, paragraphs and (Smart) self-correction only, and forbid summarizing or adding content. Output is validated (length/similarity bounds, no invented numbers); if it fails, the rule-processed text is used instead. Audio and transcript requests stay on loopback; model weights are downloaded once and cached under `%LOCALAPPDATA%\Speak\models`.
+1. Download **Speak.exe** from the [latest release](https://github.com/jacobjmarks/speak/releases).
+2. Run it. If Windows SmartScreen appears, choose **More info → Run anyway**.
+3. Press the shortcut and start talking. The first dictation downloads the speech model (about 700 MB, once). Tidy-up models are 0.5 to 2.5 GB, chosen to suit your computer.
 
-If the cleanup model cannot download, start, or return text, Speak keeps the Nemotron transcript and reports that cleanup failed. Turning cleanup off skips the second-model pass and uses Nemotron's native punctuation/capitalization setting.
+Speak can start with your computer and wait quietly in the system tray. You choose the first time you close the window.
 
-## Privacy and storage
+## Screenshots
 
-Microphone audio is held in memory only and sent to the app-owned local runtime. History stores transcript text only, only when explicitly enabled. The runtime downloads model weights from Hugging Face on first use; transcription itself is local.
+<p align="center">
+  <img src="docs/images/dictate-light.png" alt="Dictate page" width="49%">
+  <img src="docs/images/settings-dark.png" alt="Settings page in dark mode" width="49%">
+</p>
+
+## Make it yours
+
+- **Your shortcut**: any key combination you like.
+- **Tidy up**: *Fast* (instant), *Balanced* (recommended) or *Best*. Speak checks what your computer can handle and tells you how quick each one will be.
+- **The indicator**: near your cursor, or at the top or bottom of the screen, with one sliding line of live text, the full text, or none.
+- **Light or dark**, or follow your system.
+- **History** stays off unless you turn it on, and is only ever kept on your device.
+
+## Questions
+
+**Does Speak send my voice anywhere?** No. Audio stays in memory on your computer and is discarded after each dictation. The only internet use is the one-time model download and an optional check for new versions.
+
+**Do I need a powerful computer?** No. Speak runs on ordinary laptops. With a graphics card it can use a larger model for smarter tidying at the same speed.
+
+**Which languages?** Speak detects the language you speak, or you can choose one in Settings → Advanced.
+
+---
+
+<p align="center"><sub>Built on open models: NVIDIA Nemotron speech recognition and Qwen for tidying up. Developers: see <a href="docs/DEVELOPMENT.md">docs/DEVELOPMENT.md</a>.</sub></p>
