@@ -4,7 +4,10 @@ Levels (settings["tidy"]):
   off       spoken commands only ("new paragraph"), verbatim otherwise. No model.
   fast      rules only: spoken commands, drop ums/stutters, pauses after sentences -> paragraphs. Instant.
   balanced  smartest model that stays under ~1 s here: Large on a capable GPU, else Small on CPU.
-  best      Large model (self-corrections, paragraphs) on GPU if possible, else CPU (a few seconds).
+  best      always Large (self-corrections, paragraphs): GPU if possible, else CPU (a few seconds).
+            On a capable GPU, balanced and best are identical; the summary says so.
+settings["corrections"] False runs Large in literal mode (no words dropped). Prompting for a correction *reach*
+("only the last sentence") was tried with Qwen3 4B and ignored, so it's on/off only.
 Warm timings that informed this (Ryzen 9800X3D / RTX 3080): Large GPU ~0.45 s, Large CPU ~4 s, Small CPU ~0.6 s.
 """
 import re
@@ -93,15 +96,24 @@ def plan(settings: dict) -> Plan:
     device = g.device if g else None
     downloaded = (MODELS_DIR / "cleanup" / CLEANUP_MODELS[model]["file"]).exists()
     size = "" if downloaded else f" {CLEANUP_MODELS[model]['size_mb'] / 1000:.1f} GB download on first use."
-    where = f"your GPU ({g.name})" if g else "your CPU"
+    where = "graphics card" if g else "processor"
     if model == LARGE_MODEL:
         speed = "about half a second" if g else "a few seconds"
-        what = "Also fixes self-corrections like “Tuesday, no, Wednesday”."
-        mode = "smart"
+        mode = "smart" if settings.get("corrections", True) else "literal"
+        what = ("Punctuation, paragraphs, changes of mind." if mode == "smart" else
+                "Punctuation and paragraphs, every word kept.")
+        name = "Large AI"
     else:
         speed = "under a second"
-        what = "Punctuation and capitals."
+        what = "Punctuation and capitals only."
         mode = "literal"
-    note = "" if level == "balanced" or model == LARGE_MODEL or pinned in CLEANUP_MODELS else \
-        " Not enough free memory for the large model."
-    return Plan(level, model, mode, device, f"{what} Runs on {where}, {speed}.{size}{note}")
+        name = "Small AI"
+    if pinned in CLEANUP_MODELS:
+        note = " Model chosen in Advanced."
+    elif g:
+        note = " Same as Best here." if level == "balanced" else " Same as Balanced here."
+    elif level == "best" and model != LARGE_MODEL:
+        note = " Not enough free memory for the large model."
+    else:
+        note = ""
+    return Plan(level, model, mode, device, f"{name} on your {where}, {speed}. {what}{size}{note}")

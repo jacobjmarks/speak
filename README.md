@@ -4,6 +4,8 @@
 
 <h3 align="center">Talk anywhere. Speak types it for you, neatly, without your voice ever leaving your computer.</h3>
 
+<p align="center"><b>Private · Offline · Fast · Open source · Multilingual</b></p>
+
 <p align="center">
   <a href="https://github.com/jacobjmarks/speak/releases"><b>Download for Windows</b></a>
   &nbsp;·&nbsp; macOS and Linux coming soon
@@ -19,13 +21,17 @@
 
 **⚡ Fast.** Words appear as you talk, and tidy text lands in your app the moment you stop.
 
+**🌍 Multilingual.** English, Spanish, French, German and 20+ more European languages. Speak works out which language you're using.
+
+**💚 Open source.** Free, and every line is public. Nothing hidden about what happens to your voice.
+
 **✍️ Writes like you meant it.** Punctuation, paragraphs and capitals are added for you. Ums, ahs and repeated words disappear. Change your mind mid-sentence ("Tuesday, no, Wednesday") and Speak writes what you meant.
 
 **🖱️ Works in any app.** Email, chat, documents, browsers. If you can type there, you can speak there.
 
 ## How it works
 
-1. Hold **Right Alt** wherever you want to type and talk, then let go. Prefer tapping once to start and again to stop? Turn off *Hold to talk* in Settings. You can change the shortcut too.
+1. Hold **Right Alt** wherever you want to type and talk, then let go. Or tap it once to start and again to stop. You can change the shortcut, or make it hold-only or tap-only, in Settings.
 2. Speak. A small indicator shows it's listening, with your words appearing underneath.
 3. Stop. Your text is tidied up and typed straight into the app you're using.
 
@@ -51,7 +57,7 @@ Speak can start with your computer and wait quietly in the system tray. You choo
 ## Make it yours
 
 - **Your shortcut**: any key combination you like.
-- **Tidy up**: *Fast* (instant), *Balanced* (recommended) or *Best*. Speak checks what your computer can handle and tells you how quick each one will be.
+- **Tidy up**: *Fast* (instant), *Balanced* (recommended) or *Best*. Speak checks what your computer can handle and tells you how quick each one will be. Rather keep every word, even "no wait"? Turn off *Fix changes of mind*.
 - **The indicator**: near your cursor, or at the top or bottom of the screen, with one sliding line of live text, the full text, or none.
 - **Light or dark**, or follow your system.
 - **History** stays off unless you turn it on, and is only ever kept on your device.

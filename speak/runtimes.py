@@ -123,7 +123,9 @@ class AsrServer(ManagedServer):
         self.start(
             model,
             executable,
-            ["serve", "--asr-model", model, "--no-ui"],
+            # Max lookahead: words judged with ~0.25 s of what follows. Better accuracy on clean speech,
+            # same finish time; live text updates every 320 ms instead of 160 ms.
+            ["serve", "--asr-model", model, "--no-ui", "--asr.streaming.rnnt_right_context=-1"],
             cwd=root,
             env={"NEMO_SPEECH_MODEL_DIR": str(MODELS_DIR)},
         )

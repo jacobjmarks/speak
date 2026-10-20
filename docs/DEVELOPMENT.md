@@ -51,7 +51,9 @@ python -m tools.dictate_wav path\to\16bit-mono.wav --tidy fast,balanced,best [--
 | Balanced | Large model (Qwen3 4B) on a GPU with ≥4 GB free, else Small (Qwen 2.5 0.5B) on CPU | ~0.5 s |
 | Best | Large model on GPU, or CPU if there's RAM | 0.5 s GPU, a few s CPU |
 
-The Large model handles self-corrections ("three, no wait, four"); Small only punctuates (literal mode).
+The Large model handles self-corrections ("three, no wait, four"); Small only punctuates (literal mode). The *Fix changes of mind* setting (`corrections`) runs Large in literal mode when off. A correction *reach* ("only the last sentence") was tried via prompting; Qwen3 4B ignored it, so it's on/off only.
+
+ASR runs with `--asr.streaming.rnnt_right_context=-1` (max lookahead, ~0.25 s): better words and punctuation on clean speech, same finish time, live text every 320 ms. A full offline re-pass (`POST /v1/audio/transcriptions`) was tested: ~1.6 s per 20 s of audio and worse on noisy audio, so not used. Context-dependent word fixes ("pair" → "pear") are left to the tidy model.
 Model output is validated (length/similarity bounds, no invented numbers, no dropped words in literal mode); on failure the rule-processed text is used.
 The llama.cpp server runs with `--parallel 1`, a pinned `--device` (integrated GPUs are skipped), and a warm-up request so the first dictation hits a warm prompt cache.
 Advanced settings can pin the Small or Large model.

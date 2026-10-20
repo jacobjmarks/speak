@@ -64,6 +64,7 @@ _SPOKEN_PUNCTUATION = [
 ]
 _FILLERS = r"\b(?:u+m+|u+h+|e+r+m+|a+h+|hmm+)\b[,.]?\s*"
 _STUTTER = r"\b(\w+)(?:[\s,]+\1\b)+"
+_SPOKEN_MARKS = {"comma", "period", "colon", "semicolon"}  # the rest are converted by the rules above
 
 
 def apply_rules(text: str, mode: str) -> str:
@@ -94,6 +95,8 @@ def validate(raw: str, cleaned: str, mode: str):
     """Return a rejection reason, or None if `cleaned` is a plausible edit of `raw`."""
     raw_words = _words(strip_markers(raw))
     new_words = _words(cleaned)
+    if mode == "literal":  # spoken punctuation ("comma") legitimately becomes a symbol
+        raw_words = [w for w in raw_words if w not in _SPOKEN_MARKS or w in new_words]
     if not new_words:
         return "empty output"
     if not raw_words:
