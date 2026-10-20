@@ -1,18 +1,28 @@
-name: Build and release Windows app
+name: Release
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release, e.g. 1.2.0 (tagged v1.2.0)'
+        required: true
+      prerelease:
+        description: 'Pre-release (installed apps will not auto-update to it)'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
 
 jobs:
   release:
-    if: github.ref == 'refs/heads/main'
     runs-on: windows-latest
     steps:
+      - name: Validate version
+        shell: pwsh
+        run: |
+          if ('${{ inputs.version }}' -notmatch '^\d+\.\d+\.\d+$') { throw "Version must look like 1.2.3" }
+
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
@@ -20,9 +30,9 @@ jobs:
           python-version: '3.14'
           cache: pip
 
-      - name: Stamp build number (used by the in-app update check)
+      - name: Stamp version (used by the in-app updater)
         shell: pwsh
-        run: Set-Content speak/_build.py "BUILD = ${{ github.run_number }}"
+        run: Set-Content speak/_build.py 'VERSION = "${{ inputs.version }}"'
 
       - name: Build single-file executable
         shell: pwsh
@@ -31,14 +41,12 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: main-${{ github.run_number }}
-          name: Speak build ${{ github.run_number }}
+          tag_name: v${{ inputs.version }}
+          name: Speak ${{ inputs.version }}
           target_commitish: ${{ github.sha }}
-          make_latest: true
+          prerelease: ${{ inputs.prerelease }}
+          make_latest: ${{ !inputs.prerelease }}
+          generate_release_notes: true
           body: |
-            Windows x64 CPU build.
-
-            The executable includes Python and both inference runtimes. Nemotron and cleanup model weights download on first use.
-
-            Source commit: ${{ github.sha }}
+            Windows x64 build. Speech and tidy-up models download on first use.
           files: release/Speak.exe
