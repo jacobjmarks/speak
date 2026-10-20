@@ -13,7 +13,7 @@ CLEANUP_LOG = APP_DIR / "cleanup-runtime.log"
 # close_action: "ask" until the user answers the first-close prompt, then "tray" or "exit".
 DEFAULTS = {
     "hotkey": "right alt",
-    "hold_to_talk": True,  # False: tap to start, tap again to stop
+    "shortcut_mode": "auto",
     "close_action": "ask",
     "history_enabled": False,
     "auto_paste": True,
@@ -25,6 +25,7 @@ DEFAULTS = {
     "model": "nemotron-3.5",
     "language": "auto",
     "tidy": "balanced",
+    "corrections": True,  # large model drops "no wait, ..." originals; False keeps every word
     "cleanup_model": "auto",
     "theme": "System",
     "updates": "auto",
@@ -49,7 +50,8 @@ CLEANUP_MODELS = {
 }
 SMALL_MODEL, LARGE_MODEL = "qwen25-q4km", "qwen3-4b-2507"
 
-TIDY_LEVELS = {"off": "Off", "fast": "Fast", "balanced": "Balanced", "best": "Best"}
+SHORTCUT_MODES = {"auto": "Hold or tap", "hold": "Hold to talk", "toggle": "Tap to start and stop"}
+TIDY_LEVELS = {"off": "Off", "fast": "Fast · no AI", "balanced": "Balanced · AI when quick", "best": "Best · always AI"}
 CLOSE_ACTIONS = {"ask": "Ask me", "tray": "Keep running in the tray", "exit": "Quit Speak"}
 OVERLAY_POSITIONS = {"cursor": "Near my cursor", "top": "Top of screen", "bottom": "Bottom of screen"}
 LIVE_PREVIEWS = {"line": "One sliding line", "full": "Full text", "off": "Off"}
@@ -68,16 +70,19 @@ def load_settings() -> dict:
         settings["cleanup_model"] = "auto"
     if isinstance(settings["live_preview"], bool):
         settings["live_preview"] = "line" if settings["live_preview"] else "off"
+    if "hold_to_talk" in stored and "shortcut_mode" not in stored:
+        settings["shortcut_mode"] = "auto" if stored["hold_to_talk"] else "toggle"
     if "check_updates" in stored and "updates" not in stored:
         settings["updates"] = "auto" if stored["check_updates"] else "off"
-    for key in ("cleanup_enabled", "cleanup_mode", "check_updates"):
+    for key in ("cleanup_enabled", "cleanup_mode", "check_updates", "hold_to_talk"):
         settings.pop(key, None)
     if settings["model"] not in ASR_MODELS:
         settings["model"] = DEFAULTS["model"]
     if settings["cleanup_model"] not in CLEANUP_MODELS:
         settings["cleanup_model"] = "auto"
     for key, allowed in (("tidy", TIDY_LEVELS), ("close_action", CLOSE_ACTIONS),
-                         ("overlay_position", OVERLAY_POSITIONS), ("live_preview", LIVE_PREVIEWS), ("updates", UPDATE_MODES)):
+                         ("overlay_position", OVERLAY_POSITIONS), ("live_preview", LIVE_PREVIEWS), ("updates", UPDATE_MODES),
+                         ("shortcut_mode", SHORTCUT_MODES)):
         if settings[key] not in allowed:
             settings[key] = DEFAULTS[key]
     return settings

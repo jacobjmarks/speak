@@ -47,6 +47,7 @@ class Bridge(QObject, Listener):
         self.error.emit(message)
 
 
+HOLD_SECONDS = 0.4      # auto mode: a press held longer than this is push-to-talk
 CAPTURE_GRACE = 0.6     # ignore the hotkey this long after recording a new shortcut
 
 
@@ -90,7 +91,7 @@ class SpeakApp(QObject):
         w.update_clicked.connect(self._on_update_clicked)
         w.settings.check_updates.connect(lambda: self._check_updates(manual=True))
         w.dictate.toggle_requested.connect(self.dictation.toggle)
-        w.history.enable_requested.connect(lambda: self._update({"history_enabled": True}))
+        w.history.open_settings.connect(lambda: w.show_page(2))
         w.settings.changed.connect(self._update)
         w.settings.shortcut_changed.connect(lambda combo: self._update({"hotkey": combo}))
         w.settings.shortcut_recording.connect(self._on_shortcut_recording)
@@ -98,7 +99,7 @@ class SpeakApp(QObject):
 
         self._apply_theme()
         self._register_hotkey()
-        w.dictate.set_shortcut(self.settings["hotkey"], self.settings["hold_to_talk"])
+        w.dictate.set_shortcut(self.settings["hotkey"], self.settings["shortcut_mode"])
         w.history.refresh(self.settings["history_enabled"])
         self._refresh_tidy()
         threading.Thread(target=lambda: (tidy._probed.wait(30), b.probed.emit()), daemon=True).start()
@@ -120,11 +121,11 @@ class SpeakApp(QObject):
             self._apply_theme()
         if "hotkey" in changes:
             self._register_hotkey()
-        if {"hotkey", "hold_to_talk"} & changes.keys():
-            self.window.dictate.set_shortcut(self.settings["hotkey"], self.settings["hold_to_talk"])
+        if {"hotkey", "shortcut_mode"} & changes.keys():
+            self.window.dictate.set_shortcut(self.settings["hotkey"], self.settings["shortcut_mode"])
         if "history_enabled" in changes:
             self.window.history.refresh(self.settings["history_enabled"])
-        if {"tidy", "cleanup_model"} & changes.keys():
+        if {"tidy", "cleanup_model", "corrections"} & changes.keys():
             self._refresh_tidy()
         if "updates" in changes:
             self._check_updates()
@@ -189,8 +190,11 @@ class SpeakApp(QObject):
             QDesktopServices.openUrl(QUrl(self._release.page))
 
     def _refresh_tidy(self):
-        summary = tidy.plan(self.settings).summary if tidy.probed() else "Checking what your computer can run…"
-        self.window.settings.set_tidy_summary(summary)
+        if tidy.probed():
+            plan = tidy.plan(self.settings)
+            self.window.settings.set_tidy_summary(plan.summary, plan.model_id == config.LARGE_MODEL)
+        else:
+            self.window.settings.set_tidy_summary("Checking what your computer can run…", True)
 
     def _apply_theme(self):
         self.palette = theme.resolve(self.settings["theme"])
@@ -212,7 +216,7 @@ class SpeakApp(QObject):
         self._capture_ended = time.monotonic()
         self._pressed_at = None
 
-    # ----- hotkey: hold-to-talk (release stops) or tap to toggle -----
+    # ----- hotkey: "hold" (release stops), "toggle" (tap again stops), "auto" (held > HOLD_SECONDS = hold) -----
 
     def _hotkey_blocked(self) -> bool:
         return self._capturing or time.monotonic() - self._capture_ended < CAPTURE_GRACE
@@ -230,7 +234,10 @@ class SpeakApp(QObject):
 
     def _on_hotkey_up(self):
         pressed_at, self._pressed_at = self._pressed_at, None
-        if pressed_at is not None and self.settings["hold_to_talk"] and not self._hotkey_blocked():
+        if pressed_at is None or self._hotkey_blocked():
+            return
+        mode = self.settings["shortcut_mode"]
+        if mode == "hold" or (mode == "auto" and time.monotonic() - pressed_at >= HOLD_SECONDS):
             self.dictation.stop()
 
     # ----- dictation events -----

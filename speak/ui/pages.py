@@ -65,10 +65,11 @@ class DictatePage(Page):
         self.layout_.addWidget(self.card, 2)
         self.layout_.addStretch(1)
         self._revert = QTimer(self, singleShot=True, timeout=lambda: self.mic.set_mode("idle"))
-        self.set_shortcut(config.DEFAULTS["hotkey"], config.DEFAULTS["hold_to_talk"])
+        self.set_shortcut(config.DEFAULTS["hotkey"], config.DEFAULTS["shortcut_mode"])
 
-    def set_shortcut(self, combo: str, hold: bool):
-        self._shortcut = ("Hold " if hold else "Press ") + hotkey.display(combo)
+    def set_shortcut(self, combo: str, mode: str):
+        verb = {"auto": "Hold or tap ", "hold": "Hold "}.get(mode, "Press ")
+        self._shortcut = verb + hotkey.display(combo)
         if self.mic.mode == "idle":
             self.wave.set_state("idle", self._shortcut)
 
@@ -131,7 +132,7 @@ class HistoryEntry(QFrame):
 
 
 class HistoryPage(Page):
-    enable_requested = Signal()
+    open_settings = Signal()
 
     def __init__(self):
         super().__init__()
@@ -156,10 +157,9 @@ class HistoryPage(Page):
         empty_layout.addStretch(1)
         self.empty_label = _label("", "muted")
         self.empty_label.setAlignment(Qt.AlignCenter)
+        self.empty_label.setTextFormat(Qt.RichText)
+        self.empty_label.linkActivated.connect(lambda _: self.open_settings.emit())
         empty_layout.addWidget(self.empty_label)
-        self.enable_button = QPushButton("Turn on history", objectName="primary", cursor=Qt.PointingHandCursor)
-        self.enable_button.clicked.connect(self.enable_requested)
-        empty_layout.addWidget(self.enable_button, 0, Qt.AlignHCenter)
         empty_layout.addStretch(2)
         self.layout_.addWidget(self.empty, 1)
         self.enabled = False
@@ -182,8 +182,8 @@ class HistoryPage(Page):
         self.scroll.setVisible(has_rows)
         self.clear_button.setVisible(has_rows)
         self.empty.setVisible(not has_rows)
-        self.enable_button.setVisible(not enabled)
-        self.empty_label.setText("Nothing yet" if enabled else "History is off. Dictations are not saved.")
+        self.empty_label.setText("Nothing yet" if enabled else
+                                 'History is off. Turn on “Keep history” in <a href="settings">Settings</a>.')
 
     def _clear(self):
         history.clear()
@@ -271,9 +271,11 @@ class SettingsPage(QScrollArea):
         self.shortcut.recording.connect(self.shortcut_recording)
         self._row(rows, "Shortcut", "Works in any app", self.shortcut)
 
-        self.hold = self._toggle(settings["hold_to_talk"], "hold_to_talk")
-        self._row(rows, "Hold to talk", "Hold the shortcut while you speak. Off: press once to start, again to stop",
-                  self.hold)
+        self.shortcut_mode = _combo(config.SHORTCUT_MODES, settings["shortcut_mode"])
+        self.shortcut_mode.currentIndexChanged.connect(
+            lambda: self.changed.emit({"shortcut_mode": self.shortcut_mode.currentData()}))
+        self.shortcut_mode_row = self._row(rows, "How the shortcut works", " ", self.shortcut_mode)
+        self._shortcut_mode_hint(settings["shortcut_mode"])
 
         self.mic = MicCombo(settings["mic_device"], can_rescan_mics)
         self.mic.setMaximumWidth(260)
@@ -283,6 +285,10 @@ class SettingsPage(QScrollArea):
         self.tidy = _combo(config.TIDY_LEVELS, settings["tidy"])
         self.tidy.currentIndexChanged.connect(lambda: self.changed.emit({"tidy": self.tidy.currentData()}))
         self.tidy_row = self._row(rows, "Tidy up my words", " ", self.tidy)
+
+        self.corrections = self._toggle(settings["corrections"], "corrections")
+        self.corrections_row = self._row(rows, "Fix changes of mind",
+                                         "“Tuesday, no, Wednesday” becomes “Wednesday”, even sentences later", self.corrections)
 
         self.paste = self._toggle(settings["auto_paste"], "auto_paste")
         self._row(rows, "Type into the app I'm using", "Otherwise text is just shown here to copy", self.paste)
@@ -416,8 +422,18 @@ class SettingsPage(QScrollArea):
             hint += f". Last checked {self._last_check:%H:%M}"
         self.updates_row.hint.setText(hint)
 
-    def set_tidy_summary(self, summary: str):
+    def set_tidy_summary(self, summary: str, large_model: bool):
         self.tidy_row.hint.setText(summary)
+        self.corrections.setEnabled(large_model)
+        self.corrections_row.hint.setText(
+            "“Tuesday, no, Wednesday” becomes “Wednesday”, even sentences later" if large_model else
+            "Needs the large AI: Best, or Balanced with a good graphics card")
+
+    def _shortcut_mode_hint(self, mode: str):
+        self.shortcut_mode_row.hint.setText({
+            "auto": "Hold while you speak, or tap once to start and again to stop",
+            "hold": "Hold while you speak; let go to finish",
+            "toggle": "Tap once to start, again to stop"}[mode])
 
     def _toggle(self, value: bool, key: str) -> Toggle:
         toggle = Toggle()
@@ -441,6 +457,7 @@ class SettingsPage(QScrollArea):
         self.history.blockSignals(False)
         self.enter.setEnabled(settings["auto_paste"])
         self._update_hint(settings["updates"])
+        self._shortcut_mode_hint(settings["shortcut_mode"])
 
     def _on_shortcut(self, combo: str):
         self.shortcut_changed.emit(combo)
