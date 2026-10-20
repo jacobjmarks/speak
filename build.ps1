@@ -65,7 +65,11 @@ if (-not (Test-Path $venv)) {
 }
 & (Join-Path $venv 'Scripts\python.exe') -m pip install -r (Join-Path $PSScriptRoot 'requirements.txt')
 if ($LASTEXITCODE -ne 0) { throw 'Could not install application build dependencies.' }
+$icon = Join-Path $PSScriptRoot 'build\speak.ico'
+& (Join-Path $venv 'Scripts\python.exe') (Join-Path $PSScriptRoot 'tools\make_icon.py') $icon
+if ($LASTEXITCODE -ne 0) { throw 'Could not create the app icon.' }
 & (Join-Path $venv 'Scripts\python.exe') -m PyInstaller --noconfirm --clean --onefile --windowed --name Speak `
+    --icon $icon `
     --distpath $OutputDirectory `
     --add-data "$vendor;vendor\nemo-speech" `
     --add-data "$llamaVendor;vendor\llama-cpp" `
