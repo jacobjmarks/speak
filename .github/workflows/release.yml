@@ -13,6 +13,7 @@ on:
 
 permissions:
   contents: write
+  issues: write
 
 jobs:
   release:
@@ -24,6 +25,8 @@ jobs:
           if ('${{ inputs.version }}' -notmatch '^\d+\.\d+\.\d+$') { throw "Version must look like 1.2.3" }
 
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # tags + history, to find issues closed since the last release
 
       - uses: actions/setup-python@v5
         with:
@@ -33,6 +36,20 @@ jobs:
       - name: Stamp version (used by the in-app updater)
         shell: pwsh
         run: Set-Content speak/_build.py 'VERSION = "${{ inputs.version }}"'
+
+      - name: Find issues closed since the last release
+        id: issues
+        shell: pwsh
+        run: |
+          $previous = git describe --tags --abbrev=0 HEAD 2>$null
+          $range = if ($previous) { "$previous..HEAD" } else { "HEAD" }
+          $numbers = git log --format=%B $range |
+            Select-String -AllMatches '(?i)\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?):?\s+#(\d+)' |
+            ForEach-Object { $_.Matches } | ForEach-Object { [int]$_.Groups[1].Value } | Sort-Object -Unique
+          "numbers=$($numbers -join ' ')" >> $env:GITHUB_OUTPUT
+          $lines = $numbers | ForEach-Object { "- #$_" }
+          $notes = if ($lines) { "### Issues resolved`n" + ($lines -join "`n") } else { "" }
+          "notes<<EOF`n$notes`nEOF" >> $env:GITHUB_OUTPUT
 
       - name: Build single-file executable
         shell: pwsh
@@ -49,4 +66,18 @@ jobs:
           generate_release_notes: true
           body: |
             Windows x64 build. Speech and tidy-up models download on first use.
+
+            ${{ steps.issues.outputs.notes }}
           files: release/Speak.exe
+
+      - name: Comment the release on resolved issues
+        if: steps.issues.outputs.numbers != ''
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $url = "${{ github.server_url }}/${{ github.repository }}/releases/tag/v${{ inputs.version }}"
+          foreach ($n in '${{ steps.issues.outputs.numbers }}'.Split(' ')) {
+            gh issue comment $n --repo ${{ github.repository }} --body "Released in [Speak ${{ inputs.version }}]($url)."
+            if (-not $?) { Write-Warning "Couldn't comment on #$n" }
+          }
