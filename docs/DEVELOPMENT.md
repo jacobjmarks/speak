@@ -5,23 +5,31 @@ Speak is a Python (PySide6) desktop app that bundles two local inference runtime
 - **NeMo-Speech.cpp** for streaming ASR with NVIDIA Nemotron 3.5 (`nvidia/nemotron-3.5-asr-streaming-0.6b`).
 - **llama.cpp** (Vulkan build, which falls back to CPU) for the optional tidy-up pass with Qwen models.
 
-Model weights download from Hugging Face on first use into `%LOCALAPPDATA%\Speak\models` (or the platform equivalent).
+Model weights download from Hugging Face on first use into the OS-specific Speak data directory.
 
 ## Run from source
 
-Requires Python 3.11+. Windows is the supported build today; macOS/Linux support is in progress.
+Requires Python 3.11+ and PowerShell Core (`pwsh`). CI releases Windows x64, macOS arm64, and Linux x64 packages. Running the script on an Intel Mac builds the macOS x64 package locally.
 
 ```powershell
 py -3 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
-.\build.ps1            # fetches + verifies the pinned runtimes into vendor/, builds dist\Speak.exe
-python main.py         # or run the built dist\Speak.exe
+pwsh -File ./build.ps1   # fetches + verifies pinned runtimes and builds the host OS package
+python main.py           # or launch the package under dist/
 ```
 
-The exe icon is rendered from `app_icon()` by `tools/make_icon.py` during the build.
+The Windows exe icon is rendered from `app_icon()` by `tools/make_icon.py` during the build.
 
-Use `./build.ps1 -OutputDirectory ./dist-next` to build beside an open app copy without replacing locked files.
+Use `pwsh -File ./build.ps1 -OutputDirectory ./dist-next` to build beside an open app copy without replacing locked files.
+
+On macOS or Linux, create and activate `.venv` with the platform's usual commands first, then run the same `pwsh` command:
+
+```powershell
+pwsh -File ./build.ps1
+```
+
+macOS emits a `.app` plus a zip archive and declares microphone access, but builds are unsigned; Gatekeeper requires manually approving the app. Linux emits an X11-oriented tarball for x86-64 systems with glibc 2.31 or newer. `pynput` does not provide reliable global hotkeys on native Wayland, and the overlay cannot control its placement there.
 
 Headless pipeline check (real ASR + tidy, no UI), printing the plan and timing for each tidy level:
 
@@ -64,8 +72,8 @@ Advanced settings can pin the Small or Large model.
 
 ## Releases
 
-- `.github/workflows/build.yml` builds `Speak.exe` on every push and pull request (downloadable artifact). These builds have no version and never update themselves.
-- `.github/workflows/release.yml` is run by hand (Actions → Release → Run workflow) with a semver version like `1.0.0-alpha.1`, `1.0.0-rc.1` or `1.0.0`. It writes `VERSION` to `speak/_build.py`, builds, and publishes release `v<version>` with `Speak.exe`. A `-suffix` marks it a GitHub pre-release: stable installs never get offered it, pre-release installs update to newer pre-releases and stable versions by semver order (`alpha.1` < `rc.1` < `1.0.0`). *Latest* (`auto` by default) is only set for a stable version higher than every existing stable release, so a hotfix for an older line (e.g. `1.1.1` built from `ref: v1.1.0` after `1.2.0`) stays out of the way; choose `yes`/`no` to override. The in-app updater ignores the Latest flag and always picks the highest eligible version. Optional *ref* (commit SHA, branch or tag; default `main`) releases an earlier commit. It refuses a version whose tag exists, lists issues closed since the previous tag (`Closes #N` in commit messages) in the notes, and comments the release on each. The version only comes from this input, never from source.
+- `.github/workflows/build.yml` builds Windows, macOS, and Linux artifacts on every push and pull request. These builds have no version and never update themselves.
+- `.github/workflows/release.yml` is run by hand (Actions → Release → Run workflow) with a semver version like `1.0.0-alpha.1`, `1.0.0-rc.1` or `1.0.0`. It builds all supported desktop packages and publishes release `v<version>`. A `-suffix` marks it a GitHub pre-release: stable installs never get offered it, pre-release installs update to newer pre-releases and stable versions by semver order (`alpha.1` < `rc.1` < `1.0.0`). *Latest* (`auto` by default) is only set for a stable version higher than every existing stable release, so a hotfix for an older line (e.g. `1.1.1` built from `ref: v1.1.0` after `1.2.0`) stays out of the way; choose `yes`/`no` to override. The in-app updater ignores the Latest flag and always picks the highest eligible version. Optional *ref* (commit SHA, branch or tag; default `main`) releases an earlier commit. It refuses a version whose tag exists, lists issues closed since the previous tag (`Closes #N` in commit messages) in the notes, and comments the release on each. The version only comes from this input, never from source.
 
 Installed apps check the GitHub releases API at start and daily. Depending on the Updates setting they download the new `Speak.exe` beside the running one (verified against GitHub's sha256 digest) and swap it in on quit or via "Restart to update", or just show the button. Source runs and non-Windows builds open the release page instead.
 

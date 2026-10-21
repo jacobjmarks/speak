@@ -8,7 +8,20 @@ on:
 
 jobs:
   build:
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows-x64
+            package: Speak.exe
+          - os: macos-15
+            platform: macos-arm64
+            package: Speak-macos-arm64.zip
+          - os: ubuntu-22.04
+            platform: linux-x86_64
+            package: Speak-linux-x86_64.tar.gz
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
@@ -17,12 +30,12 @@ jobs:
           python-version: '3.14'
           cache: pip
 
-      - name: Build single-file executable
+      - name: Build package
         shell: pwsh
-        run: .\build.ps1 -OutputDirectory .\dist
+        run: ./build.ps1 -OutputDirectory ./dist
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Speak-windows-${{ github.sha }}
-          path: dist/Speak.exe
+          name: Speak-${{ matrix.platform }}-${{ github.sha }}
+          path: dist/${{ matrix.package }}
           retention-days: 14

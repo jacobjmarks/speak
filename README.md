@@ -6,8 +6,8 @@
 
 
 <p align="center">
-  <a href="https://github.com/jacobjmarks/speak/releases"><b>Download for Windows</b></a>
-  &nbsp;·&nbsp; Free and open source &nbsp;·&nbsp; macOS and Linux coming soon
+  <a href="https://github.com/jacobjmarks/speak/releases"><b>Desktop builds</b></a>
+  &nbsp;·&nbsp; Windows, macOS and Linux x64 &nbsp;·&nbsp; Free and open source
 </p>
 
 ---
@@ -40,9 +40,10 @@
 
 ## Install
 
-1. Download **Speak.exe** from the [latest release](https://github.com/jacobjmarks/speak/releases).
-2. Run it. If Windows SmartScreen appears, choose **More info → Run anyway**.
-3. Press the shortcut and start talking. The first dictation downloads the speech model (about 700 MB, once). Tidy-up models are 0.5 to 2.5 GB, chosen to suit your computer.
+1. Download the package for your OS from the [latest release](https://github.com/jacobjmarks/speak/releases): `Speak.exe` on Windows, the `.app` zip on macOS, or the tarball on Linux.
+2. On macOS, open the app from Finder and approve it in **Privacy & Security** if Gatekeeper blocks it. Builds are unsigned and require this manual approval. Allow microphone and Accessibility access when macOS prompts; Accessibility is needed for global hotkeys and typing.
+3. On Linux, extract the tarball and run `Speak/Speak` from an X11 desktop session. Native Wayland global hotkeys are not supported yet.
+4. Press the shortcut and start talking. The first dictation downloads the speech model (about 700 MB, once). Tidy-up models are 0.5 to 2.5 GB, chosen to suit your computer.
 
 Speak can start with your computer and wait quietly in the system tray. You choose the first time you close the window. It keeps itself up to date (or just tells you, or doesn't check: your choice).
 

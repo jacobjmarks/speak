@@ -62,7 +62,7 @@ Entry point: `main.py` (repo root) or `python -m speak`; both call `speak.ui.app
 ## Run / test
 
 ```powershell
-.\build.ps1                      # fetch pinned runtimes into vendor/, build dist\Speak.exe
+pwsh -File ./build.ps1            # native package for Windows x64, macOS arm64/x64, or Linux x64
 .\.venv\Scripts\python.exe main.py
 # Headless pipeline check (ASR + each tidy level) on a 16-bit mono WAV:
 .\.venv\Scripts\python.exe -m tools.dictate_wav sample.wav --tidy fast,auto,best

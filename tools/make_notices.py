@@ -6,6 +6,7 @@ import importlib.metadata as metadata
 import re
 import sys
 from pathlib import Path
+from sysconfig import get_path
 
 from packaging.requirements import Requirement
 
@@ -27,6 +28,26 @@ def section(title: str, *parts: str) -> str:
 
 def read(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="replace")
+
+
+def python_license() -> str:
+    prefix = Path(sys.base_prefix)
+    version = f"{sys.version_info.major}.{sys.version_info.minor}"
+    candidates = (
+        prefix / "LICENSE.txt",
+        prefix / "LICENSE",
+        prefix / "share" / "doc" / f"python{version}" / "LICENSE",
+        prefix / "share" / "doc" / f"python{version}" / "copyright",
+        prefix / "share" / "licenses" / "python" / "LICENSE",
+        prefix / "share" / "licenses" / "python" / "LICENSE.txt",
+        Path(get_path("stdlib")) / "LICENSE.txt",
+    )
+    for path in candidates:
+        if path.is_file():
+            text = read(path)
+            if "PYTHON SOFTWARE FOUNDATION LICENSE" in text.upper():
+                return text
+    raise FileNotFoundError(f"Could not find the Python {version} license under {prefix}.")
 
 
 def runtime_distributions() -> dict:
@@ -74,7 +95,7 @@ def main(output: Path):
         "The speech and tidy-up models are not",
         "included; they are downloaded on first use and are listed at the end for attribution.",
         "",
-        section(f"Python {sys.version.split()[0]}", read(Path(sys.base_prefix) / "LICENSE.txt")),
+        section(f"Python {sys.version.split()[0]}", python_license()),
         section("Qt for Python (PySide6, Shiboken6) and Qt",
                 "Licence: GNU LGPL v3 (full text under 'GNU Lesser General Public License' below).\n"
                 "Copyright (C) The Qt Company Ltd. and other contributors.\n"

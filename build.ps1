@@ -3,84 +3,135 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$version = '0.2.0'
-$archiveName = "nemo-speech-$version-windows-x86_64-cpu.zip"
-$archiveUrl = "https://github.com/NVIDIA/NeMo-Speech.cpp/releases/download/v$version/$archiveName"
-$archiveHash = '82c80451086e86194aba9af19f800da77cd66d1c28d993d0efceffd6cdb49bb8'
-$work = Join-Path $env:TEMP "speak-runtime-$version"
-$archive = Join-Path $work $archiveName
-$extract = Join-Path $work 'extract'
-$vendor = Join-Path $PSScriptRoot 'vendor\nemo-speech'
+$nemoVersion = '0.2.0'
 $llamaVersion = 'b11669'
-# Vulkan build: GPU offload on any vendor, and includes the CPU backends as fallback.
-$llamaArchiveName = "llama-$llamaVersion-bin-win-vulkan-x64.zip"
-$llamaArchiveUrl = "https://github.com/ggml-org/llama.cpp/releases/download/$llamaVersion/$llamaArchiveName"
-$llamaArchiveHash = '2c07574e7bde71321cb785282b20cc821e951132149eeceeea32ddebdbf0598e'
-$llamaWork = Join-Path $env:TEMP "speak-llama-$llamaVersion-vulkan"
-$llamaArchive = Join-Path $llamaWork $llamaArchiveName
-$llamaExtract = Join-Path $llamaWork 'extract'
-$llamaVendor = Join-Path $PSScriptRoot 'vendor\llama-cpp'
+$architecture = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLowerInvariant()
 
-New-Item -ItemType Directory -Force $work | Out-Null
-if (-not (Test-Path $archive)) {
-    Invoke-WebRequest $archiveUrl -OutFile $archive
-}
-$actualHash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
-if ($actualHash -ne $archiveHash) {
-    Remove-Item $archive -Force
-    throw "NeMo-Speech.cpp checksum mismatch: $actualHash"
+if ($IsWindows -and $architecture -eq 'x64') {
+    $platform = 'windows-x64'
+    $nemoAsset = "nemo-speech-$nemoVersion-windows-x86_64-cpu.zip"
+    $nemoHash = '82c80451086e86194aba9af19f800da77cd66d1c28d993d0efceffd6cdb49bb8'
+    $llamaAsset = "llama-$llamaVersion-bin-win-vulkan-x64.zip"
+    $llamaHash = '2c07574e7bde71321cb785282b20cc821e951132149eeceeea32ddebdbf0598e'
+} elseif ($IsMacOS -and $architecture -eq 'arm64') {
+    $platform = 'macos-arm64'
+    $nemoAsset = "nemo-speech-$nemoVersion-macos-aarch64-metal.tar.gz"
+    $nemoHash = '5cb02ba7c04f0b5585ce5cde9c830be5f0b7dfb4c83083c500109c381b4f2da9'
+    $llamaAsset = "llama-$llamaVersion-bin-macos-arm64.tar.gz"
+    $llamaHash = 'dbed55493d72bc1ba2babc8770d669c2289b5bc4ee9fb2a4dfc158d45b7d13fd'
+} elseif ($IsMacOS -and $architecture -eq 'x64') {
+    $platform = 'macos-x64'
+    $nemoAsset = "nemo-speech-$nemoVersion-macos-x86_64-cpu.tar.gz"
+    $nemoHash = 'd52c318d8197511d4f7eee02bcf05511f7e91b300555a130b562e571695a0f39'
+    $llamaAsset = "llama-$llamaVersion-bin-macos-x64.tar.gz"
+    $llamaHash = 'cab28238d78158109b48deb27b05d50e0dcef56275d2e76da9ca8281526c7532'
+} elseif ($IsLinux -and $architecture -eq 'x64') {
+    $platform = 'linux-x86_64'
+    $nemoAsset = "nemo-speech-$nemoVersion-linux-x86_64-cpu.tar.gz"
+    $nemoHash = 'f396057150f1b774935c7414fd32ebc04195a795a34120d78d8c9ecefa1b7507'
+    $llamaAsset = "llama-$llamaVersion-bin-ubuntu-x64.tar.gz"
+    $llamaHash = 'cf07c1c112d709bd67e522017471de57ed0ec8bea031d732c5422351c07f65ac'
+} else {
+    throw "Unsupported build platform: $([System.Runtime.InteropServices.RuntimeInformation]::OSDescription) $architecture"
 }
 
-Remove-Item $extract -Recurse -Force -ErrorAction SilentlyContinue
-Expand-Archive $archive $extract -Force
-$runtime = Get-ChildItem $extract -Directory | Select-Object -First 1
-if (-not $runtime -or -not (Test-Path (Join-Path $runtime.FullName 'bin\nemo-speech.exe'))) {
-    throw 'Could not find nemo-speech.exe in the verified runtime archive.'
-}
-Remove-Item $vendor -Recurse -Force -ErrorAction SilentlyContinue
-New-Item -ItemType Directory -Force (Split-Path $vendor) | Out-Null
-Copy-Item $runtime.FullName $vendor -Recurse
+$outputPath = if ([System.IO.Path]::IsPathRooted($OutputDirectory)) { $OutputDirectory } else { Join-Path $PSScriptRoot $OutputDirectory }
+$outputPath = [System.IO.Path]::GetFullPath($outputPath)
+$tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) "speak-build-$PID"
+$vendor = Join-Path $PSScriptRoot 'vendor'
+$nemoVendor = Join-Path $vendor 'nemo-speech'
+$llamaVendor = Join-Path $vendor 'llama-cpp'
+$archiveRoot = "https://github.com/NVIDIA/NeMo-Speech.cpp/releases/download/v$nemoVersion"
+$llamaRoot = "https://github.com/ggml-org/llama.cpp/releases/download/$llamaVersion"
+$nemoArchive = Join-Path $tempRoot $nemoAsset
+$llamaArchive = Join-Path $tempRoot $llamaAsset
 
-New-Item -ItemType Directory -Force $llamaWork | Out-Null
-if (-not (Test-Path $llamaArchive)) {
-    Invoke-WebRequest $llamaArchiveUrl -OutFile $llamaArchive
-}
-$actualLlamaHash = (Get-FileHash $llamaArchive -Algorithm SHA256).Hash.ToLowerInvariant()
-if ($actualLlamaHash -ne $llamaArchiveHash) {
-    Remove-Item $llamaArchive -Force
-    throw "llama.cpp checksum mismatch: $actualLlamaHash"
-}
-Remove-Item $llamaExtract -Recurse -Force -ErrorAction SilentlyContinue
-Expand-Archive $llamaArchive $llamaExtract -Force
-if (-not (Test-Path (Join-Path $llamaExtract 'llama-server.exe'))) {
-    throw 'Could not find llama-server.exe in the verified llama.cpp archive.'
-}
-Remove-Item $llamaVendor -Recurse -Force -ErrorAction SilentlyContinue
-Copy-Item $llamaExtract $llamaVendor -Recurse
+New-Item -ItemType Directory -Force $tempRoot, $outputPath | Out-Null
+try {
+    Invoke-WebRequest "$archiveRoot/$nemoAsset" -OutFile $nemoArchive
+    Invoke-WebRequest "$llamaRoot/$llamaAsset" -OutFile $llamaArchive
+    foreach ($asset in @(@{ Path = $nemoArchive; Hash = $nemoHash; Name = 'NeMo-Speech.cpp' },
+                         @{ Path = $llamaArchive; Hash = $llamaHash; Name = 'llama.cpp' })) {
+        $actualHash = (Get-FileHash $asset.Path -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($actualHash -ne $asset.Hash) { throw "$($asset.Name) checksum mismatch: $actualHash" }
+    }
 
-$venv = Join-Path $PSScriptRoot '.venv'
-if (-not (Test-Path $venv)) {
-    py -3 -m venv $venv
-    if ($LASTEXITCODE -ne 0) { throw 'Could not create Python environment.' }
-}
-& (Join-Path $venv 'Scripts\python.exe') -m pip install -r (Join-Path $PSScriptRoot 'requirements.txt')
-if ($LASTEXITCODE -ne 0) { throw 'Could not install application build dependencies.' }
-$icon = Join-Path $PSScriptRoot 'build\speak.ico'
-& (Join-Path $venv 'Scripts\python.exe') (Join-Path $PSScriptRoot 'tools\make_icon.py') $icon
-if ($LASTEXITCODE -ne 0) { throw 'Could not create the app icon.' }
-$notices = Join-Path $PSScriptRoot 'build\THIRD_PARTY_NOTICES.txt'
-& (Join-Path $venv 'Scripts\python.exe') (Join-Path $PSScriptRoot 'tools\make_notices.py') $notices
-if ($LASTEXITCODE -ne 0) { throw 'Could not create third-party notices.' }
-& (Join-Path $venv 'Scripts\python.exe') -m PyInstaller --noconfirm --clean --onefile --windowed --name Speak `
-    --icon $icon `
-    --distpath $OutputDirectory `
-    --add-data "$vendor;vendor\nemo-speech" `
-    --add-data "$llamaVendor;vendor\llama-cpp" `
-    --add-data "$notices;." `
-    --additional-hooks-dir (Join-Path $PSScriptRoot 'tools\hooks') `
-    --exclude-module tkinter `
-    (Join-Path $PSScriptRoot 'main.py')
-if ($LASTEXITCODE -ne 0) { throw 'PyInstaller packaging failed.' }
+    $nemoExtract = Join-Path $tempRoot 'nemo'
+    $llamaExtract = Join-Path $tempRoot 'llama'
+    New-Item -ItemType Directory -Force $nemoExtract, $llamaExtract | Out-Null
+    if ($nemoAsset.EndsWith('.zip')) { Expand-Archive $nemoArchive $nemoExtract -Force }
+    else { & tar -xzf $nemoArchive -C $nemoExtract; if ($LASTEXITCODE -ne 0) { throw 'NeMo archive extraction failed.' } }
+    if ($llamaAsset.EndsWith('.zip')) { Expand-Archive $llamaArchive $llamaExtract -Force }
+    else { & tar -xzf $llamaArchive -C $llamaExtract; if ($LASTEXITCODE -ne 0) { throw 'llama archive extraction failed.' } }
 
-Write-Host "Built app: $(Join-Path $OutputDirectory 'Speak.exe')"
-Write-Host 'Distribute this executable. ASR and cleanup weights download on first use.'
+    $nemoExecutableName = if ($IsWindows) { 'nemo-speech.exe' } else { 'nemo-speech' }
+    $llamaExecutableName = if ($IsWindows) { 'llama-server.exe' } else { 'llama-server' }
+    $nemoExecutable = Get-ChildItem $nemoExtract -Recurse -File | Where-Object {
+        $_.Name -eq $nemoExecutableName -and (Split-Path $_.DirectoryName -Leaf) -eq 'bin'
+    } | Select-Object -First 1
+    $llamaExecutable = Get-ChildItem $llamaExtract -Recurse -File | Where-Object { $_.Name -eq $llamaExecutableName } | Select-Object -First 1
+    if (-not $nemoExecutable -or -not $llamaExecutable) { throw 'Expected runtime executables were not found in the verified archives.' }
+
+    Remove-Item $nemoVendor, $llamaVendor -Recurse -Force -ErrorAction SilentlyContinue
+    New-Item -ItemType Directory -Force $vendor, $nemoVendor, $llamaVendor | Out-Null
+    $nemoRuntime = Split-Path (Split-Path $nemoExecutable.FullName -Parent) -Parent
+    Get-ChildItem $nemoRuntime -Force | Copy-Item -Destination $nemoVendor -Recurse -Force
+    $llamaRuntime = Split-Path $llamaExecutable.FullName -Parent
+    if ((Split-Path $llamaRuntime -Leaf) -eq 'bin') { $llamaRuntime = Split-Path $llamaRuntime -Parent }
+    $llamaRelativeExecutable = $llamaExecutable.FullName.Substring($llamaRuntime.Length).TrimStart([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+    Get-ChildItem $llamaRuntime -Force | Copy-Item -Destination $llamaVendor -Recurse -Force
+    if (-not $IsWindows) {
+        & chmod +x (Join-Path $nemoVendor 'bin/nemo-speech') (Join-Path $llamaVendor $llamaRelativeExecutable)
+        if ($LASTEXITCODE -ne 0) { throw 'Could not mark runtime executables as executable.' }
+    }
+
+    $venv = Join-Path $PSScriptRoot '.venv'
+    $python = if ($IsWindows) { Join-Path $venv 'Scripts/python.exe' } else { Join-Path $venv 'bin/python' }
+    if (-not (Test-Path $python)) {
+        & python -m venv $venv
+        if ($LASTEXITCODE -ne 0) { throw 'Could not create Python environment.' }
+    }
+    & $python -m pip install -r (Join-Path $PSScriptRoot 'requirements.txt')
+    if ($LASTEXITCODE -ne 0) { throw 'Could not install application build dependencies.' }
+    $notices = Join-Path $PSScriptRoot 'build/THIRD_PARTY_NOTICES.txt'
+    & $python (Join-Path $PSScriptRoot 'tools/make_notices.py') $notices
+    if ($LASTEXITCODE -ne 0) { throw 'Could not create third-party notices.' }
+
+    $dataSeparator = if ($IsWindows) { ';' } else { ':' }
+    $pyinstallerArgs = @('--noconfirm', '--clean', '--windowed', '--name', 'Speak',
+        '--distpath', $outputPath,
+        '--add-data', "$nemoVendor${dataSeparator}vendor/nemo-speech",
+        '--add-data', "$llamaVendor${dataSeparator}vendor/llama-cpp",
+        '--add-data', "$notices${dataSeparator}.",
+        '--additional-hooks-dir', (Join-Path $PSScriptRoot 'tools/hooks'),
+        '--exclude-module', 'tkinter')
+    if ($IsWindows) {
+        $icon = Join-Path $PSScriptRoot 'build/speak.ico'
+        & $python (Join-Path $PSScriptRoot 'tools/make_icon.py') $icon
+        if ($LASTEXITCODE -ne 0) { throw 'Could not create the app icon.' }
+        $pyinstallerArgs += @('--onefile', '--icon', $icon)
+    } elseif ($IsMacOS) {
+        $pyinstallerArgs += @('--onedir', '--osx-bundle-identifier', 'com.speak.app')
+    } else {
+        $pyinstallerArgs += '--onedir'
+    }
+    $pyinstallerArgs += (Join-Path $PSScriptRoot 'main.py')
+    & $python -m PyInstaller @pyinstallerArgs
+    if ($LASTEXITCODE -ne 0) { throw 'PyInstaller packaging failed.' }
+
+    if ($IsMacOS) {
+        $app = Join-Path $outputPath 'Speak.app'
+        $plist = Join-Path $app 'Contents/Info.plist'
+        & /usr/libexec/PlistBuddy -c 'Add :NSMicrophoneUsageDescription string "Speak uses the microphone to transcribe your speech locally."' $plist
+        if ($LASTEXITCODE -ne 0) { throw 'Could not add the macOS microphone usage description.' }
+        & ditto -c -k --sequesterRsrc --keepParent $app (Join-Path $outputPath "Speak-$platform.zip")
+        if ($LASTEXITCODE -ne 0) { throw 'Could not archive the macOS app.' }
+    } elseif ($IsLinux) {
+        & tar -czf (Join-Path $outputPath "Speak-$platform.tar.gz") -C $outputPath Speak
+        if ($LASTEXITCODE -ne 0) { throw 'Could not archive the Linux app.' }
+    }
+} finally {
+    Remove-Item $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+Write-Host "Built $platform package in $outputPath"
