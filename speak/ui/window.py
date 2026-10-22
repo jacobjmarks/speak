@@ -159,7 +159,7 @@ class MainWindow(QMainWindow):
         status.addWidget(self.status_dot)
         status.addWidget(self.status_text, 1)
         side.addLayout(status)
-        version = QLabel(f"Version {updates.VERSION}" if updates.VERSION else "Development build", objectName="hint")
+        version = QLabel(updates.display(), objectName="hint")
         version.setContentsMargins(2, 4, 0, 0)
         side.addWidget(version)
 

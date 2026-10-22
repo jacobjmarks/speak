@@ -157,7 +157,7 @@ class SpeakApp(QObject):
             return
         if manual:
             self.window.settings.set_update_status("Checking…")
-        if updates.VERSION:
+        if updates.updatable():
             self.window.settings.set_last_check(datetime.now())
         threading.Thread(target=lambda: self.bridge.update_found.emit(
             updates.newer_release(self.settings["prereleases"]), manual), daemon=True).start()

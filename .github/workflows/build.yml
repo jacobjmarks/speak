@@ -25,6 +25,12 @@ jobs:
           python-version: '3.14'
           cache: pip
 
+      - name: Stamp build id
+        shell: pwsh
+        env:
+          SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: 'Set-Content speak/_build.py "VERSION = `"dev-$($env:SHA.Substring(0, 7))`""'
+
       - name: Build package
         shell: pwsh
         run: ./build.ps1 -OutputDirectory ./dist

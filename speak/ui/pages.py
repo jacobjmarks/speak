@@ -333,10 +333,10 @@ class SettingsPage(QScrollArea):
         self.update_status = _label("", "hint")
         check = QPushButton("Check now", cursor=Qt.PointingHandCursor)
         check.clicked.connect(self.check_updates)
-        check.setEnabled(bool(updates.parse(updates.VERSION)))
+        check.setEnabled(updates.updatable())
         line.addWidget(self.update_status)
         line.addWidget(check)
-        self._row(rows, "Version", updates.version() if updates.VERSION else "Development build (doesn't update)",
+        self._row(rows, "Version", updates.display() + ("" if updates.updatable() else " (doesn't update)"),
                   version, last=True)
         self._update_hint(settings["updates"])
         layout.addWidget(card)
@@ -581,7 +581,7 @@ class AboutPage(Page):
         names = QVBoxLayout()
         names.setSpacing(2)
         names.addWidget(_label("Speak", "title"))
-        names.addWidget(_label(f"Version {updates.VERSION}" if updates.VERSION else "Development build", "muted"))
+        names.addWidget(_label(updates.display(), "muted"))
         head.addLayout(names, 1)
         self.layout_.addLayout(head)
         self.layout_.addWidget(_label("Talk anywhere and Speak types it for you. Private, offline and free.", "muted"))

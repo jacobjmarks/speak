@@ -1,7 +1,8 @@
 """Checks GitHub for a newer release and, on Windows builds, installs it (issue #3).
 
 Releases are tagged v<semver> (e.g. v1.0.0, v1.0.0-rc.1) by the manual Release workflow, which also writes VERSION
-to speak/_build.py. Builds without a version (source runs, CI artifacts) never update. Stable builds only move to
+to speak/_build.py. Builds without a release version (source runs, and CI builds stamped "dev-<short commit>")
+never update. Stable builds only move to
 stable releases unless the user opts in to pre-releases; pre-release builds also move to newer pre-releases
 (alpha.1 -> rc.1 -> 1.0.0). Each OS only considers releases that carry its own package (`package_suffix`); a release
 without one is not an update for that OS. Only the public GitHub API is contacted.
@@ -26,6 +27,7 @@ from .platform_utils import IS_MAC, IS_WINDOWS
 
 API = "https://api.github.com/repos/jacobjmarks/speak/releases?per_page=30"
 RELEASES_PAGE = "https://github.com/jacobjmarks/speak/releases"
+DEV_PREFIX = "dev-"  # CI builds are stamped "dev-<short commit>"; not semver, so they never update
 
 
 def package_suffix() -> Optional[str]:
@@ -76,8 +78,17 @@ def is_prerelease(key: tuple) -> bool:
     return key[3][0] == 0
 
 
-def version() -> str:
-    return VERSION or "Development"
+def updatable() -> bool:
+    """Only release builds (VERSION is semver) check for updates. CI builds are "dev-<hash>", never semver."""
+    return parse(VERSION) is not None
+
+
+def display() -> str:
+    if not VERSION:
+        return "Development build"
+    if VERSION.startswith(DEV_PREFIX):
+        return f"Development build {VERSION.removeprefix(DEV_PREFIX)}"
+    return f"Version {VERSION}"
 
 
 def _get(url: str, timeout: float = 10):
