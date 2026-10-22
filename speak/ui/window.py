@@ -118,6 +118,7 @@ class MainWindow(QMainWindow):
         self.setWindowIcon(app_icon())
         if IS_MAC:  # content runs under the title bar; only the traffic-light buttons remain
             self.setWindowFlags(self.windowFlags() | Qt.ExpandedClientAreaHint | Qt.NoTitleBarBackgroundHint)
+            self.setAttribute(Qt.WA_ContentsMarginsRespectsSafeArea, False)  # lay out under the title bar
         self.resize(760, 560)
         self.setMinimumSize(640, 480)
 
@@ -183,11 +184,7 @@ class MainWindow(QMainWindow):
         self.screens = QStackedWidget()  # [root app, first-run setup]
         self.screens.addWidget(root)
         self.screens.addWidget(self.setup)
-        if IS_MAC:  # not the central widget: QMainWindow would inset it by the title-bar safe area
-            self.screens.setParent(self)
-            self.screens.setGeometry(self.rect())
-        else:
-            self.setCentralWidget(self.screens)
+        self.setCentralWidget(self.screens)
 
     def show_setup(self, active: bool):
         self.screens.setCurrentIndex(1 if active else 0)
@@ -218,10 +215,6 @@ class MainWindow(QMainWindow):
             self.windowHandle().startSystemMove()  # the title bar is gone, so the top strip drags the window
         super().mousePressEvent(event)
 
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        if IS_MAC:
-            self.screens.setGeometry(self.rect())
 
     def closeEvent(self, event):
         if self.allow_close:
