@@ -18,6 +18,10 @@ _ALIASES = {"control": "ctrl", "option": "alt", "command": "cmd", "win": "cmd", 
             "return": "enter", "escape": "esc", "altgr": "right alt", "alt gr": "right alt",
             "right option": "right alt", "left option": "left alt"}
 _MODIFIERS = ("ctrl", "alt", "shift", "cmd")
+_WIN_NUMPAD = {106: "multiply", 107: "plus", 109: "minus", 110: "decimal", 111: "divide"}  # virtual-key codes
+_NUMPAD_SYMBOLS = {"decimal": ".", "multiply": "*", "plus": "+", "minus": "-", "divide": "/", "equals": "="}
+_MAC_LABELS = {"ctrl": "⌃", "alt": "⌥", "shift": "⇧", "cmd": "⌘", "enter": "Return", "backspace": "Delete",
+               "delete": "Forward Delete"}
 _CAPTURE_TIMEOUT = 15
 
 
@@ -55,6 +59,8 @@ def _names(key) -> set:
     if char and ord(char[0]) < 32:  # ctrl+letter arrives as a control character on some platforms
         char = chr(ord(char[0]) + 96)
     vk = getattr(key, "vk", None)
+    if IS_WINDOWS and vk is not None and 96 <= vk <= 111 and vk != 108:  # numpad (NumLock on)
+        return {f"num{vk - 96}" if vk <= 105 else f"num_{_WIN_NUMPAD[vk]}"}
     if not char and vk is not None and (48 <= vk <= 57 or 65 <= vk <= 90):
         char = chr(vk)  # Windows reports ctrl+letter as a bare virtual-key code
     return {(char or str(key)).lower()}
@@ -189,11 +195,14 @@ def send(combo: str) -> None:
 
 def display(combo: str) -> str:
     """Human-friendly label, e.g. "Ctrl + Shift + Space", "Right Alt" (⌘/⌥ names on macOS)."""
-    names = {"cmd": "⌘" if IS_MAC else "Win", "alt": "⌥" if IS_MAC else "Alt"}
+    names = _MAC_LABELS if IS_MAC else {"cmd": "Win"}
 
     def label(part):
         side, _, base = part.rpartition(" ")
         if base.startswith("key") and base[3:].isdigit():  # a key with no known name (macOS keycode)
             base = f"key {base[3:]}"
-        return " ".join(([side.capitalize()] if side else []) + [names.get(base, base.capitalize())])
+        elif base.startswith("num") and (base[3:].isdigit() or base[3:4] == "_" and base[4:] != "lock"):
+            rest = base[3:].lstrip("_")
+            return f"Num {_NUMPAD_SYMBOLS.get(rest, rest.capitalize())}"
+        return " ".join(([side.capitalize()] if side else []) + [names.get(base, base.replace("_", " ").title())])
     return " + ".join(label(p) for p in _parts(combo))

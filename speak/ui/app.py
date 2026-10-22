@@ -329,7 +329,7 @@ class SpeakApp(QObject):
             self.window.dictate.set_live("")
         if state == State.PREPARING:
             self._use_overlay = self.settings["overlay_enabled"] and not (
-                self.window.isVisible() and self.window.isActiveWindow())
+                self.window.dictate.isVisible() and self.window.isActiveWindow())
             self.overlay.preview = self.settings["live_preview"]
             self.overlay.position = self.settings["overlay_position"]
         if self._use_overlay:

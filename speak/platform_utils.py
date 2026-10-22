@@ -7,6 +7,7 @@ from pathlib import Path
 IS_WINDOWS = sys.platform == "win32"
 IS_MAC = sys.platform == "darwin"
 IS_LINUX = sys.platform.startswith("linux")
+TRAY_NAME = "menu bar" if IS_MAC else "system tray"  # what the OS calls the status-icon area
 
 
 def app_data_dir() -> Path:

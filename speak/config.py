@@ -1,7 +1,7 @@
 """Paths, defaults, model catalogs, and settings persistence."""
 import json
 
-from .platform_utils import app_data_dir
+from .platform_utils import TRAY_NAME, app_data_dir
 
 APP_DIR = app_data_dir()
 SETTINGS_FILE = APP_DIR / "settings.json"
@@ -58,7 +58,7 @@ SMALL_MODEL, LARGE_MODEL = "qwen25-q4km", "qwen3-4b-2507"
 
 SHORTCUT_MODES = {"auto": "Hold or tap", "hold": "Hold to talk", "toggle": "Tap to start and stop"}
 TIDY_LEVELS = {"off": "Off", "fast": "Fast · no AI", "auto": "Automatic · recommended", "best": "Best · always AI"}
-CLOSE_ACTIONS = {"ask": "Ask me", "tray": "Keep running in the tray", "exit": "Quit Speak"}
+CLOSE_ACTIONS = {"ask": "Ask me", "tray": f"Keep running in the {TRAY_NAME}", "exit": "Quit Speak"}
 OVERLAY_POSITIONS = {"cursor": "Near my cursor", "top": "Top of screen", "bottom": "Bottom of screen"}
 LIVE_PREVIEWS = {"line": "One sliding line", "full": "Full text", "off": "Off"}
 THEMES = ("System", "Light", "Dark")

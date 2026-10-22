@@ -293,7 +293,7 @@ class SettingsPage(QScrollArea):
 
         self.enter = self._toggle(settings["press_enter"], "press_enter")
         self.enter.setEnabled(settings["auto_paste"])
-        self.enter_row = self._row(rows, "Press Enter afterwards",
+        self.enter_row = self._row(rows, f"Press {'Return' if platform_utils.IS_MAC else 'Enter'} afterwards",
                                    "Experimental. Sends messages in chat apps. Skipped if you switched apps",
                                    self.enter)
         if not platform_utils.IS_WINDOWS:
@@ -311,7 +311,8 @@ class SettingsPage(QScrollArea):
         except Exception:
             self.login.setEnabled(False)
         self.login.toggled.connect(self._on_login)
-        self._row(rows, "Start with my computer", "Runs quietly in the tray", self.login)
+        self._row(rows, "Open at login" if platform_utils.IS_MAC else "Start with my computer",
+                  f"Runs quietly in the {platform_utils.TRAY_NAME}", self.login)
 
         self.history = self._toggle(settings["history_enabled"], "history_enabled")
         self._row(rows, "Keep history", "Saved only on this device", self.history)
@@ -345,7 +346,7 @@ class SettingsPage(QScrollArea):
         layout.addWidget(_label("While dictating", "section"))
         card, rows = _card()
         self.overlay = self._toggle(settings["overlay_enabled"], "overlay_enabled")
-        self._row(rows, "Show indicator", "Hidden when Speak's own window is in front", self.overlay)
+        self._row(rows, "Show indicator", "Hidden while Speak's Dictate page is in front", self.overlay)
         self.position = _combo(config.OVERLAY_POSITIONS, settings["overlay_position"])
         self.position.currentIndexChanged.connect(
             lambda: self.changed.emit({"overlay_position": self.position.currentData()}))

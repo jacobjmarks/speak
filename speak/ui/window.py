@@ -5,7 +5,7 @@ from PySide6.QtWidgets import (QButtonGroup, QDialog, QHBoxLayout, QLabel, QMain
                                QVBoxLayout, QWidget)
 
 from .. import updates
-from ..platform_utils import IS_MAC, hide_title_text
+from ..platform_utils import IS_MAC, TRAY_NAME, hide_title_text
 from .banner import Banner
 from .pages import AboutPage, DictatePage, HistoryPage, SetupPage, SettingsPage
 from .widgets import draw_mic
@@ -238,7 +238,7 @@ class CloseDialog(QDialog):
         title = QLabel("Keep Speak running?")
         title.setStyleSheet("font-size: 14pt; font-weight: 600;")
         layout.addWidget(title)
-        body = QLabel("Speak can stay in the tray so your shortcut keeps working after you close this window.")
+        body = QLabel(f"Speak can stay in the {TRAY_NAME} so your shortcut keeps working after you close this window.")
         body.setWordWrap(True)
         layout.addWidget(body)
         hint = QLabel("You can change this anytime in Settings.", objectName="hint")
@@ -247,7 +247,7 @@ class CloseDialog(QDialog):
         buttons = QHBoxLayout()
         buttons.addStretch(1)
         quit_button = QPushButton("Quit Speak", cursor=Qt.PointingHandCursor)
-        keep = QPushButton("Keep in tray", objectName="primary", cursor=Qt.PointingHandCursor)
+        keep = QPushButton(f"Keep in {TRAY_NAME}", objectName="primary", cursor=Qt.PointingHandCursor)
         keep.setDefault(True)
         quit_button.clicked.connect(lambda: self._pick("exit"))
         keep.clicked.connect(lambda: self._pick("tray"))
