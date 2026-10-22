@@ -5,6 +5,7 @@ from PySide6.QtWidgets import (QButtonGroup, QDialog, QHBoxLayout, QLabel, QMain
                                QVBoxLayout, QWidget)
 
 from .. import updates
+from ..platform_utils import IS_MAC, hide_title_text
 from .banner import Banner
 from .pages import AboutPage, DictatePage, HistoryPage, SetupPage, SettingsPage
 from .widgets import draw_mic
@@ -115,6 +116,8 @@ class MainWindow(QMainWindow):
         self.allow_close = False
         self.setWindowTitle("Speak")
         self.setWindowIcon(app_icon())
+        if IS_MAC:  # content runs under the title bar; only the traffic-light buttons remain
+            self.setWindowFlags(self.windowFlags() | Qt.ExpandedClientAreaHint | Qt.NoTitleBarBackgroundHint)
         self.resize(760, 560)
         self.setMinimumSize(640, 480)
 
@@ -126,7 +129,7 @@ class MainWindow(QMainWindow):
         sidebar = QWidget(objectName="sidebar")
         sidebar.setFixedWidth(180)
         side = QVBoxLayout(sidebar)
-        side.setContentsMargins(14, 22, 14, 16)
+        side.setContentsMargins(14, 22 + (24 if IS_MAC else 0), 14, 16)  # clear of the traffic-light buttons
         side.setSpacing(4)
         brand = QHBoxLayout()
         brand.setSpacing(10)
@@ -180,7 +183,11 @@ class MainWindow(QMainWindow):
         self.screens = QStackedWidget()  # [root app, first-run setup]
         self.screens.addWidget(root)
         self.screens.addWidget(self.setup)
-        self.setCentralWidget(self.screens)
+        if IS_MAC:  # not the central widget: QMainWindow would inset it by the title-bar safe area
+            self.screens.setParent(self)
+            self.screens.setGeometry(self.rect())
+        else:
+            self.setCentralWidget(self.screens)
 
     def show_setup(self, active: bool):
         self.screens.setCurrentIndex(1 if active else 0)
@@ -201,6 +208,20 @@ class MainWindow(QMainWindow):
     def set_status(self, text: str, color: str):
         self.status_text.setText(text)
         self.status_dot.set_color(color)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        hide_title_text(int(self.winId()))
+
+    def mousePressEvent(self, event):
+        if IS_MAC and event.button() == Qt.LeftButton and event.position().y() < 40:
+            self.windowHandle().startSystemMove()  # the title bar is gone, so the top strip drags the window
+        super().mousePressEvent(event)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if IS_MAC:
+            self.screens.setGeometry(self.rect())
 
     def closeEvent(self, event):
         if self.allow_close:

@@ -123,6 +123,18 @@ def keep_visible_when_inactive(window_id: int) -> None:
         pass
 
 
+def hide_title_text(window_id: int) -> None:
+    """macOS: keep the window's title (Dock, Window menu) but don't draw it in the title bar."""
+    if not IS_MAC:
+        return
+    try:
+        import objc
+
+        objc.objc_object(c_void_p=window_id).window().setTitleVisibility_(1)  # NSWindowTitleHidden
+    except Exception:
+        pass
+
+
 def paste_shortcut() -> str:
     return "cmd+v" if IS_MAC else "ctrl+v"
 
