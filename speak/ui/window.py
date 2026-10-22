@@ -5,6 +5,7 @@ from PySide6.QtWidgets import (QButtonGroup, QDialog, QHBoxLayout, QLabel, QMain
                                QVBoxLayout, QWidget)
 
 from .. import updates
+from .banner import Banner
 from .pages import AboutPage, DictatePage, HistoryPage, SetupPage, SettingsPage
 from .widgets import draw_mic
 
@@ -108,7 +109,6 @@ class StatusDot(QWidget):
 
 class MainWindow(QMainWindow):
     close_requested = Signal()
-    update_clicked = Signal()
 
     def __init__(self, settings: dict, level_source, can_rescan_mics=lambda: False):
         super().__init__()
@@ -153,12 +153,6 @@ class MainWindow(QMainWindow):
         self.nav.idClicked.connect(self.show_page)
         side.addStretch(1)
 
-        self.update_button = QPushButton(objectName="update", cursor=Qt.PointingHandCursor)
-        self.update_button.clicked.connect(self.update_clicked)
-        self.update_button.hide()
-        side.addWidget(self.update_button)
-        side.addSpacing(8)
-
         status = QHBoxLayout()
         self.status_dot = StatusDot()
         self.status_text = QLabel("Ready", objectName="hint")
@@ -170,7 +164,18 @@ class MainWindow(QMainWindow):
         side.addWidget(version)
 
         layout.addWidget(sidebar)
-        layout.addWidget(self.stack, 1)
+        content = QWidget()
+        column = QVBoxLayout(content)
+        column.setContentsMargins(0, 0, 0, 0)
+        column.setSpacing(0)
+        self.banner = Banner()
+        self.notice_action = self.banner.action_clicked
+        banner_row = QHBoxLayout()
+        banner_row.setContentsMargins(24, 16, 24, 0)
+        banner_row.addWidget(self.banner)
+        column.addLayout(banner_row)
+        column.addWidget(self.stack, 1)
+        layout.addWidget(content, 1)
         self.setup = SetupPage()
         self.screens = QStackedWidget()  # [root app, first-run setup]
         self.screens.addWidget(root)
@@ -186,12 +191,12 @@ class MainWindow(QMainWindow):
         if self.stack.currentWidget() is self.history:
             self.history.refresh(self.history.enabled)
 
-    def set_update(self, text: str, tooltip: str = "", enabled: bool = True):
-        """Sidebar update button; hidden when `text` is empty."""
-        self.update_button.setText(text)
-        self.update_button.setToolTip(tooltip)
-        self.update_button.setEnabled(enabled)
-        self.update_button.setVisible(bool(text))
+    def notify(self, key: str, text: str, level: str = "info", action: str = "", enabled: bool = True,
+               timeout: float = 0.0):
+        self.banner.show_notice(key, text, level, action, enabled, timeout)
+
+    def clear_notice(self, key: str):
+        self.banner.clear(key)
 
     def set_status(self, text: str, color: str):
         self.status_text.setText(text)

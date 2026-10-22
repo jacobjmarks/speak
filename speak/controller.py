@@ -2,6 +2,7 @@
 
 All listener callbacks fire on background threads; the UI must marshal them onto its own thread.
 """
+import logging
 import threading
 import time
 from enum import Enum
@@ -13,7 +14,17 @@ from .config import CLEANUP_MODELS, MODELS_DIR
 from .platform_utils import exe_name
 from .runtimes import AsrServer, CleanupServer, ModelDownloadError, llama_root
 
+log = logging.getLogger(__name__)
+
 FINISHING = "Finishing up"  # one word for transcribe + tidy: tidy-up may be off, and transcribing is brief
+
+
+def _explain(exc: Exception) -> str:
+    """User-facing text for a failure; technical detail goes to the log."""
+    if isinstance(exc, ModelDownloadError):
+        return str(exc)
+    log.error("Dictation failed", exc_info=exc)
+    return "Something went wrong. Please try again, or restart Speak."
 
 
 class State(str, Enum):
@@ -182,13 +193,13 @@ class Dictation:
             )
             with self._lock:
                 if self._cancelled:
-                    self._abort("Let go before Speak was ready. Hold the shortcut until the mic turns red.")
+                    self._abort("You let go too soon. Hold the shortcut until the mic turns red.")
                     return
                 self.mic.start()
                 self.listener.on_live_text("")
                 self._set_state(State.LISTENING)
         except Exception as exc:
-            self._abort(str(exc))
+            self._abort(_explain(exc))
 
     def _on_audio(self, chunk: bytes):
         session = self.session
@@ -209,7 +220,7 @@ class Dictation:
             self._process()
         except Exception as exc:
             self._set_state(State.IDLE)
-            self.listener.on_error(str(exc))
+            self.listener.on_error(_explain(exc))
 
     def _process(self):
         mic, session = self.mic, self.session
@@ -218,7 +229,7 @@ class Dictation:
         if mic.frames == 0:
             session.close()
             self._set_state(State.IDLE)
-            self.listener.on_error("No audio captured")
+            self.listener.on_error("Speak didn't hear anything. Check that your microphone is working.")
             return
         self.listener.on_progress(FINISHING, None)
         text = session.finish()
@@ -227,7 +238,7 @@ class Dictation:
         tidy_note = ""
         if text and plan.model_id:
             if time.monotonic() < self._cleanup_retry_at:
-                tidy_note = "Tidy-up model unavailable (download failed earlier); text left as recognised"
+                tidy_note = "Tidy-up is unavailable right now, so your text was left as spoken."
             else:
                 try:
                     self._ensure_cleanup(plan, self.listener.on_progress)
@@ -235,14 +246,14 @@ class Dictation:
                     self.listener.on_progress(FINISHING, None)
                 except ModelDownloadError:
                     self._cleanup_retry_at = time.monotonic() + 300
-                    tidy_note = "Couldn't download the tidy-up model; text left as recognised"
+                    tidy_note = "Tidy-up is unavailable right now, so your text was left as spoken."
                 except Exception:
                     pass
         text, note = cleanup.finalize(text, plan.level, plan.llm_mode, port)
         note = note or tidy_note
         if not text:
             self._set_state(State.IDLE)
-            self.listener.on_error("No speech recognized")
+            self.listener.on_error("Speak didn't catch any words. Please try again.")
             return
         self.latest = text
         if self.settings["history_enabled"]:

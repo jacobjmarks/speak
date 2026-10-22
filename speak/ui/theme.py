@@ -40,6 +40,11 @@ def color(hex_value: str, alpha: int = 255) -> QColor:
     return c
 
 
+def _tint(hex_value: str) -> str:
+    c = QColor(hex_value)
+    return f"rgba({c.red()}, {c.green()}, {c.blue()}, 0.14)"
+
+
 def stylesheet(p: Palette) -> str:
     return f"""
     * {{ font-size: 10pt; color: {p.text}; }}
@@ -52,6 +57,9 @@ def stylesheet(p: Palette) -> str:
     QLabel#hint {{ font-size: 9pt; }}
     QFrame#card {{ background: {p.surface}; border: 1px solid {p.border}; border-radius: 14px; }}
     QFrame#divider {{ background: {p.border}; max-height: 1px; border: none; }}
+    QFrame#banner {{ background: {_tint(p.accent)}; border: 1px solid {p.accent}; border-radius: 12px; }}
+    QFrame#banner[level="error"] {{ background: {_tint(p.danger)}; border-color: {p.danger}; }}
+    QFrame#banner QLabel {{ font-weight: 500; }}
 
     QWidget#sidebar {{ background: {p.surface}; border-right: 1px solid {p.border}; }}
     QPushButton#nav {{ text-align: left; padding: 9px 14px; border-radius: 10px; border: none;
@@ -67,9 +75,6 @@ def stylesheet(p: Palette) -> str:
     QPushButton#primary:hover {{ background: {QColor(p.accent).lighter(110).name()}; }}
     QPushButton#ghost {{ background: transparent; border: none; color: {p.muted}; padding: 6px 8px; }}
     QPushButton#ghost:hover {{ color: {p.text}; }}
-    QPushButton#update {{ background: {p.accent}; color: {p.accent_text}; border: none; border-radius: 14px;
-                          padding: 6px 12px; font-weight: 600; }}
-    QPushButton#update:hover {{ background: {QColor(p.accent).lighter(110).name()}; }}
     QPushButton#danger {{ background: transparent; border: 1px solid {p.border}; color: {p.danger}; }}
     QPushButton#shortcut {{ font-family: "Consolas", "Menlo", monospace; font-weight: 600;
                             padding: 7px 16px; min-width: 150px; }}

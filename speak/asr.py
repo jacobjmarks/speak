@@ -95,9 +95,9 @@ class AsrSession:
         try:
             while (chunk := self.audio.get()) is not None:
                 self.ws.send_binary(chunk)
-        except Exception as exc:
+        except Exception:
             if not self.stopping:
-                self.on_error(f"Audio stream failed: {exc}")
+                self.on_error("Speak lost the microphone. Please try again.")
 
     def _mark_pauses(self, text: str, words: list) -> str:
         """Insert PAUSE markers where the gap between words (including across segments) is long."""
@@ -132,13 +132,13 @@ class AsrSession:
                     if self.stopping:
                         self.done.set()
                 elif kind == "error":
-                    self.on_error("ASR error: " + event.get("error", {}).get("message", "unknown"))
+                    self.on_error("Speak couldn't understand that recording. Please try again.")
                 elif kind == "session.end":
                     break
         except websocket.WebSocketConnectionClosedException:
             pass
-        except Exception as exc:
+        except Exception:
             if not self.stopping:
-                self.on_error(f"ASR stream failed: {exc}")
+                self.on_error("Speak lost its connection to the speech engine. Please try again.")
         finally:
             self.done.set()

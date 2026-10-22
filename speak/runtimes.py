@@ -18,7 +18,7 @@ Progress = Callable[[str, Optional[int]], None]
 
 
 MODEL_HOST = "https://huggingface.co"
-DOWNLOAD_HINT = "Check your internet connection or proxy (the models come from huggingface.co), then try again."
+DOWNLOAD_HINT = "Check your internet connection and try again."
 
 
 class ModelDownloadError(RuntimeError):
@@ -36,8 +36,7 @@ def check_model_host() -> None:
         with urllib.request.urlopen(request, timeout=10):
             pass
     except Exception as exc:
-        raise ModelDownloadError(f"Couldn't reach huggingface.co to download the speech model ({exc}). "
-                                 f"{DOWNLOAD_HINT}") from exc
+        raise ModelDownloadError(f"Speak couldn't reach the internet to download its speech model. {DOWNLOAD_HINT}") from exc
 
 
 def free_port() -> int:
@@ -119,9 +118,7 @@ class ManagedServer:
         output = self._output_since(log_start)
         lowered = output.lower()
         if "downloading" in lowered and ("curl failed" in lowered or "download failed" in lowered):
-            reason = next((line.strip(" -") for line in output.splitlines() if "curl:" in line), "")
-            detail = f" ({reason.split('curl:', 1)[1].strip()})" if reason else ""
-            return ModelDownloadError(f"Couldn't download the speech model{detail}. {DOWNLOAD_HINT}")
+            return ModelDownloadError(f"Speak couldn't download its speech model. {DOWNLOAD_HINT}")
         return RuntimeError(f"{self.name} runtime exited. See {self.log_path}")
 
     def stop(self):
@@ -247,5 +244,5 @@ def download_cleanup_model(model_id: str, progress: Progress) -> Path:
         os.replace(partial, model_path)
     except Exception as exc:
         partial.unlink(missing_ok=True)
-        raise ModelDownloadError(f"Couldn't download the tidy-up model ({exc}). {DOWNLOAD_HINT}") from exc
+        raise ModelDownloadError(f"Speak couldn't download its tidy-up model. {DOWNLOAD_HINT}") from exc
     return model_path

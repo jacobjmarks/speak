@@ -21,7 +21,8 @@ Speak is a local desktop dictation app. A global hotkey (hold or tap) records th
 | `updates.py` | Updates: release-stamped `_build.VERSION` vs `v<semver>` tags (pre-release installs also take pre-releases); download + sha256 + exe swap (Windows frozen only) |
 | `ui/app.py` | PySide6 `SpeakApp`: `Bridge` (Listener → Qt signals), tray, hotkey, close behaviour, `main()` |
 | `ui/window.py` | `MainWindow` (sidebar + pages), `app_icon()`, first-close `CloseDialog` |
-| `ui/pages.py` | `DictatePage`, `HistoryPage`, `SettingsPage` (basic card + collapsible Advanced), `AboutPage` (version, sponsor links, licence/notices) |
+| `ui/banner.py` | `Banner`: keyed in-window notices (errors, permission warnings, updates); use `window.notify(key, text, level, action)`. User-facing text must be plain language |
+| `ui/pages.py` | `DictatePage`, `HistoryPage`, `SettingsPage` (basic card + collapsible Advanced), `AboutPage` (version, sponsor links, licence/notices), `SetupPage` (macOS first-run permissions) |
 | `ui/overlay.py` | Floating pill: waveform / phase word / check; position (cursor/top/bottom); live text (line/full/off) |
 | `ui/widgets.py` | Painted widgets: `MicButton`, `WaveStrip`, `Spinner`, `Toggle`, `ShortcutButton`; `draw_wave`/`draw_shimmer_text` shared with the overlay; glyph helpers |
 | `ui/theme.py` | Light/dark palettes + the app style sheet (all colours live here) |

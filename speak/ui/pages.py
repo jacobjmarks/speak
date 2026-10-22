@@ -57,8 +57,7 @@ class DictatePage(Page):
         self.text.setMinimumHeight(110)
         card_layout.addWidget(self.text)
         row = QHBoxLayout()
-        self.note = _label("", "hint")
-        row.addWidget(self.note, 1)
+        row.addStretch(1)
         self.copy_button = QPushButton("Copy", objectName="ghost", cursor=Qt.PointingHandCursor)
         self.copy_button.clicked.connect(self._copy)
         row.addWidget(self.copy_button)
@@ -95,11 +94,9 @@ class DictatePage(Page):
     def set_live(self, text: str):
         self.text.setPlainText(text)
         self.text.verticalScrollBar().setValue(self.text.verticalScrollBar().maximum())
-        self.note.setText("")
 
-    def set_result(self, text: str, note: str):
+    def set_result(self, text: str):
         self.text.setPlainText(text)
-        self.note.setText(note)
 
     def _copy(self):
         text = self.text.toPlainText()

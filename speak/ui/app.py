@@ -69,6 +69,7 @@ class SpeakApp(QObject):
         self._menu_bar = self._make_menu_bar() if IS_MAC else None
         self.palette = theme.LIGHT
         self._capturing = False
+        self._setup_timer = None
         self._closed_by_user = False
         self._capture_ended = 0.0
         self._pressed_at = None  # set when a hotkey press started (or will stop) dictation
@@ -88,12 +89,15 @@ class SpeakApp(QObject):
         b.hotkey_up.connect(self._on_hotkey_up)
         b.probed.connect(self._refresh_tidy)
         b.update_found.connect(self._on_update_found)
-        b.update_progress.connect(lambda p: self.window.set_update(f"Downloading {p}%", enabled=False))
+        b.update_progress.connect(lambda p: self._set_update(f"{p}%", "Downloading the update…", enabled=False))
         b.update_ready.connect(self._on_update_ready)
 
         w = self.window
         w.close_requested.connect(self._on_close)
-        w.update_clicked.connect(self._on_update_clicked)
+        w.notice_action.connect(self._on_notice_action)
+        w.setup.allow_clicked.connect(permissions.request)
+        w.setup.settings_clicked.connect(permissions.open_settings)
+        w.setup.restart_clicked.connect(self._relaunch)
         w.settings.check_updates.connect(lambda: self._check_updates(manual=True))
         w.dictate.toggle_requested.connect(self.dictation.toggle)
         w.history.open_settings.connect(lambda: w.show_page(2))
@@ -107,9 +111,6 @@ class SpeakApp(QObject):
         self._apply_theme()
         setup_needed = bool(permissions.missing())
         if setup_needed:
-            w.setup.allow_clicked.connect(permissions.request)
-            w.setup.settings_clicked.connect(permissions.open_settings)
-            w.setup.restart_clicked.connect(self._relaunch)
             self._start_setup()
         else:
             self._register_hotkey()
@@ -152,7 +153,7 @@ class SpeakApp(QObject):
         if self._downloading or self._downloaded:
             return
         if self.settings["updates"] == "off" and not manual:
-            self.window.set_update("")
+            self._set_update("")
             return
         if manual:
             self.window.settings.set_update_status("Checking…")
@@ -166,16 +167,30 @@ class SpeakApp(QObject):
         if manual:
             self.window.settings.set_update_status(f"{release.version} available" if release else "Up to date")
         if not release:
-            self.window.set_update("")
+            self._set_update("")
         elif self.settings["updates"] == "auto" and updates.can_install(release):
             self._download()
         else:
-            self.window.set_update(f"Update to {release.version}", "Download and install" if
-                                   updates.can_install(release) else "Open the download page")
+            self._set_update("Update" if updates.can_install(release) else "Download",
+                             f"Speak {release.version} is available.")
+
+    def _set_update(self, label: str, message: str = "", enabled: bool = True):
+        if label:
+            self.window.notify("update", message, "info", label, enabled)
+        else:
+            self.window.clear_notice("update")
+
+    def _on_notice_action(self, key: str):
+        if key == "update":
+            self._on_update_clicked()
+        elif key == "permissions":
+            self._start_setup()
+        elif key == "restart":
+            self._relaunch()
 
     def _download(self):
         self._downloading = True
-        self.window.set_update("Downloading…", enabled=False)
+        self._set_update("0%", "Downloading the update…", enabled=False)
         release, bridge = self._release, self.bridge
 
         def run():
@@ -189,9 +204,9 @@ class SpeakApp(QObject):
         self._downloading = False
         self._downloaded = path
         if path:
-            self.window.set_update("Restart to update", f"Installs {self._release.version}; also happens when Speak quits")
+            self._set_update("Restart to update", f"Speak {self._release.version} is ready to install.")
         else:
-            self.window.set_update(f"Update to {self._release.version}", "Download failed. Click to try again")
+            self._set_update("Try again", "The update didn't download.")
 
     def _on_update_clicked(self):
         if self._downloaded:
@@ -225,18 +240,19 @@ class SpeakApp(QObject):
     def _register_hotkey(self):
         try:
             hotkey.register(self.settings["hotkey"], self.bridge.hotkey_down.emit, self.bridge.hotkey_up.emit)
-        except PermissionError as exc:
-            self.window.set_status("Shortcut needs permission", self.palette.danger)
-            self.window.dictate.set_result("", str(exc))
-        except Exception as exc:
-            self.window.set_status("Shortcut unavailable", self.palette.danger)
-            self.window.dictate.set_result("", f"Couldn't use that shortcut: {exc}")
+            self.window.clear_notice("restart")
+        except PermissionError:
+            self.window.notify("restart", "Speak can't hear your shortcut yet. Restart Speak to finish setting up.",
+                               "error", "Restart Speak")
+        except Exception:
+            self.window.notify("restart", "That shortcut can't be used. Choose a different one in Settings.", "error")
 
-    # ----- first-run permissions -----
+    # ----- permissions -----
 
     def _start_setup(self):
         self.window.show_setup(True)
-        self._setup_timer = QTimer(self, interval=1000, timeout=self._check_setup)
+        if self._setup_timer is None:
+            self._setup_timer = QTimer(self, interval=1000, timeout=self._check_setup)
         self._setup_timer.start()
         self._check_setup()
 
@@ -246,8 +262,21 @@ class SpeakApp(QObject):
         if all(status.values()):
             self._setup_timer.stop()
             self.window.show_setup(False)
+            self.window.clear_notice("permissions")
             self._register_hotkey()
             self.show_window()
+
+    def _check_permissions(self):
+        """After setup: warn if the user has since switched a permission off."""
+        if self.window.screens.currentIndex() == 1:
+            return
+        missing = permissions.missing()
+        if missing:
+            names = " and ".join(p.title for p in missing)
+            self.window.notify("permissions", f"Speak no longer has access to {names}, so dictation won't work.",
+                               "error", "Fix")
+        else:
+            self.window.clear_notice("permissions")
 
     def _relaunch(self):
         platform_utils.relaunch()
@@ -319,7 +348,12 @@ class SpeakApp(QObject):
             self.overlay.set_text(text)
 
     def _on_result(self, text: str, note: str):
-        self.window.dictate.set_result(text, note)
+        self.window.dictate.set_result(text)
+        self.window.clear_notice("error")
+        if note:
+            self.window.notify("note", note, "info", timeout=8)
+        else:
+            self.window.clear_notice("note")
         self.window.dictate.set_mode("done")
         if self.overlay.isVisible():
             self.overlay.set_mode("done")
@@ -327,7 +361,8 @@ class SpeakApp(QObject):
             self.window.history.refresh(True)
 
     def _on_error(self, message: str):
-        self.window.dictate.set_result(self.window.dictate.text.toPlainText(), message)
+        self.window.dictate.set_result(self.window.dictate.text.toPlainText())
+        self.window.notify("error", message, "error", timeout=12)
         self.window.dictate.set_mode("error")
         self.window.set_status("Ready", self.palette.success)
         if self.overlay.isVisible():
@@ -389,8 +424,11 @@ class SpeakApp(QObject):
         self.window.show_page(index)
 
     def _on_app_state(self, state):
-        if state == Qt.ApplicationActive and self._closed_by_user:
+        if state != Qt.ApplicationActive:
+            return
+        if self._closed_by_user:
             self.show_window()
+        self._check_permissions()
 
     def show_window(self):
         self._closed_by_user = False
