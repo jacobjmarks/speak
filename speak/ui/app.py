@@ -9,15 +9,16 @@ import time
 from datetime import datetime
 
 from PySide6.QtCore import QLockFile, QObject, Qt, QTimer, QUrl, Signal
-from PySide6.QtGui import QColor, QDesktopServices, QGuiApplication, QPalette
+from PySide6.QtGui import QAction, QColor, QDesktopServices, QGuiApplication, QKeySequence, QPalette
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
-from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
+from PySide6.QtWidgets import QApplication, QMenu, QMenuBar, QSystemTrayIcon
 
-from .. import config, hotkey, tidy, updates
+from .. import config, hotkey, permissions, platform_utils, tidy, updates
 from ..controller import Dictation, Listener, State
+from ..platform_utils import IS_MAC
 from . import theme
 from .overlay import Overlay
-from .window import CloseDialog, MainWindow, app_icon
+from .window import CloseDialog, MainWindow, app_icon, menu_bar_icon
 
 
 class Bridge(QObject, Listener):
@@ -65,8 +66,10 @@ class SpeakApp(QObject):
         self.window = MainWindow(self.settings, level, lambda: self.dictation.state == State.IDLE)
         self.overlay = Overlay(level)
         self.tray = self._make_tray()
+        self._menu_bar = self._make_menu_bar() if IS_MAC else None
         self.palette = theme.LIGHT
         self._capturing = False
+        self._closed_by_user = False
         self._capture_ended = 0.0
         self._pressed_at = None  # set when a hotkey press started (or will stop) dictation
         self._use_overlay = False  # decided per dictation: Speak's own window shows progress when focused
@@ -98,9 +101,18 @@ class SpeakApp(QObject):
         w.settings.shortcut_changed.connect(lambda combo: self._update({"hotkey": combo}))
         w.settings.shortcut_recording.connect(self._on_shortcut_recording)
         QGuiApplication.styleHints().colorSchemeChanged.connect(lambda *_: self._apply_theme())
+        if IS_MAC:  # clicking the Dock icon reopens a hidden window
+            app.applicationStateChanged.connect(self._on_app_state)
 
         self._apply_theme()
-        self._register_hotkey()
+        setup_needed = bool(permissions.missing())
+        if setup_needed:
+            w.setup.allow_clicked.connect(permissions.request)
+            w.setup.settings_clicked.connect(permissions.open_settings)
+            w.setup.restart_clicked.connect(self._relaunch)
+            self._start_setup()
+        else:
+            self._register_hotkey()
         w.dictate.set_shortcut(self.settings["hotkey"], self.settings["shortcut_mode"])
         w.history.refresh(self.settings["history_enabled"])
         self._refresh_tidy()
@@ -111,7 +123,7 @@ class SpeakApp(QObject):
         self._update_timer = QTimer(self, interval=24 * 3600 * 1000, timeout=self._check_updates)
         self._update_timer.start()
         QTimer.singleShot(5000, self._check_updates)
-        if not (background and self.tray):
+        if not (background and self.tray) or setup_needed:
             w.show()
 
     # ----- settings -----
@@ -213,9 +225,33 @@ class SpeakApp(QObject):
     def _register_hotkey(self):
         try:
             hotkey.register(self.settings["hotkey"], self.bridge.hotkey_down.emit, self.bridge.hotkey_up.emit)
+        except PermissionError as exc:
+            self.window.set_status("Shortcut needs permission", self.palette.danger)
+            self.window.dictate.set_result("", str(exc))
         except Exception as exc:
             self.window.set_status("Shortcut unavailable", self.palette.danger)
             self.window.dictate.set_result("", f"Couldn't use that shortcut: {exc}")
+
+    # ----- first-run permissions -----
+
+    def _start_setup(self):
+        self.window.show_setup(True)
+        self._setup_timer = QTimer(self, interval=1000, timeout=self._check_setup)
+        self._setup_timer.start()
+        self._check_setup()
+
+    def _check_setup(self):
+        status = {p.id: permissions.granted(p.id) for p in permissions.REQUIRED}
+        self.window.setup.set_status(status, self.palette)
+        if all(status.values()):
+            self._setup_timer.stop()
+            self.window.show_setup(False)
+            self._register_hotkey()
+            self.show_window()
+
+    def _relaunch(self):
+        platform_utils.relaunch()
+        self.quit()
 
     def _on_shortcut_recording(self, active: bool):
         self._capturing = active
@@ -255,7 +291,7 @@ class SpeakApp(QObject):
         text, color = labels[State(state)]
         self.window.set_status(text, color)
         if self.tray:
-            self.tray.setIcon(app_icon(pal.danger if state == State.LISTENING else ""))
+            self.tray.setIcon(self._tray_icon(state == State.LISTENING.value))
             self.tray.setToolTip(f"Speak · {text}")
         if refresh_only or state == State.IDLE:
             return
@@ -301,10 +337,15 @@ class SpeakApp(QObject):
 
     # ----- window / tray -----
 
+    def _tray_icon(self, listening: bool = False):
+        if IS_MAC and not listening:
+            return menu_bar_icon()
+        return app_icon(self.palette.danger if listening else "")
+
     def _make_tray(self):
         if not QSystemTrayIcon.isSystemTrayAvailable():
             return None
-        tray = QSystemTrayIcon(app_icon(), self)
+        tray = QSystemTrayIcon(self._tray_icon(), self)
         tray.setToolTip("Speak")
         menu = QMenu()
         menu.addAction("Open Speak", self.show_window)
@@ -312,13 +353,47 @@ class SpeakApp(QObject):
         menu.addSeparator()
         menu.addAction("Quit", self.quit)
         tray.setContextMenu(menu)
-        tray.activated.connect(
-            lambda reason: self.show_window() if reason == QSystemTrayIcon.Trigger else None)
+        if not IS_MAC:  # on macOS a click already opens the menu
+            tray.activated.connect(
+                lambda reason: self.show_window() if reason == QSystemTrayIcon.Trigger else None)
         tray.show()
         self._tray_menu = menu
         return tray
 
+    def _make_menu_bar(self):
+        """Standard macOS menus; Qt moves the About/Preferences/Quit roles into the app menu."""
+        bar = QMenuBar()
+
+        def action(menu, text, slot, shortcut=None, role=None):
+            act = QAction(text, self)
+            act.triggered.connect(slot)
+            if shortcut:
+                act.setShortcut(QKeySequence(shortcut))
+            if role:
+                act.setMenuRole(role)
+            menu.addAction(act)
+
+        app_menu = bar.addMenu("Speak")
+        action(app_menu, "About Speak", lambda: self._show_page(3), role=QAction.AboutRole)
+        action(app_menu, "Settings…", lambda: self._show_page(2), QKeySequence.Preferences, QAction.PreferencesRole)
+        action(app_menu, "Quit Speak", self.quit, QKeySequence.Quit, QAction.QuitRole)
+        dictation_menu = bar.addMenu("Dictation")
+        action(dictation_menu, "Start / Stop Dictation", self.dictation.toggle)
+        window_menu = bar.addMenu("Window")
+        action(window_menu, "Minimize", self.window.showMinimized, "Ctrl+M")
+        action(window_menu, "Close", self.window.close, QKeySequence.Close)
+        return bar
+
+    def _show_page(self, index: int):
+        self.show_window()
+        self.window.show_page(index)
+
+    def _on_app_state(self, state):
+        if state == Qt.ApplicationActive and self._closed_by_user:
+            self.show_window()
+
     def show_window(self):
+        self._closed_by_user = False
         self.window.showNormal()
         self.window.raise_()
         self.window.activateWindow()
@@ -335,6 +410,7 @@ class SpeakApp(QObject):
             action = dialog.choice
             self._update({"close_action": action})
         if action == "tray":
+            self._closed_by_user = True
             self.window.hide()
             if self.dictation.state == State.IDLE:
                 self.overlay.hide_now()
@@ -394,7 +470,9 @@ def main():
         sys.exit(0)
     lock, server = claimed
     app.setQuitOnLastWindowClosed(False)
-    app.setWindowIcon(app_icon())
+    if not (IS_MAC and getattr(sys, "frozen", False)):  # the bundle's .icns is the sharper Dock icon
+        app.setWindowIcon(app_icon(inset=0.1 if IS_MAC else 0.0))
+    hotkey.prepare()
     speak = SpeakApp(app, background="--background" in sys.argv)
     server.newConnection.connect(lambda: (server.nextPendingConnection().deleteLater(), speak.show_window()))
     app.aboutToQuit.connect(lambda: speak.dictation.shutdown())

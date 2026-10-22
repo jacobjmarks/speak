@@ -11,6 +11,7 @@ from typing import Callable
 from .platform_utils import IS_MAC, IS_WINDOWS
 
 _listener = None
+_original_context = None
 _held = threading.Event()
 
 _ALIASES = {"control": "ctrl", "option": "alt", "command": "cmd", "win": "cmd", "windows": "cmd", "super": "cmd",
@@ -22,6 +23,33 @@ _CAPTURE_TIMEOUT = 15
 
 def _parts(combo: str) -> list:
     return [_ALIASES.get(p.strip(), p.strip()) for p in combo.lower().split("+") if p.strip()]
+
+
+def prepare() -> None:
+    """macOS only. Call on the main thread (again after a layout change).
+
+    pynput's listener asks the Text Services Manager for the keyboard layout from its own thread, which
+    macOS 14+ kills the process for (dispatch_assert_queue). Resolve it here, then hand listeners the cached copy.
+    """
+    if not IS_MAC:
+        return
+    import contextlib
+
+    from pynput._util import darwin
+    from pynput.keyboard import _darwin
+
+    global _original_context
+    if _original_context is None:
+        _original_context = darwin.keycode_context
+    with _original_context() as context:
+        cached = context
+
+    @contextlib.contextmanager
+    def cached_context():
+        yield cached
+
+    # The Controller (typing) resolves it via _util.darwin, the Listener via keyboard._darwin.
+    darwin.keycode_context = _darwin.keycode_context = cached_context
 
 
 def _names(key) -> set:
@@ -64,6 +92,7 @@ def register(combo: str, on_press: Callable[[], None], on_release: Callable[[], 
 
     unregister()
     global _listener
+    prepare()
     _held.clear()
     wanted, down = set(_parts(combo)), set()
     mask = IS_WINDOWS and all(_is_modifier(p) for p in wanted) and any(p.endswith(("alt", "cmd")) for p in wanted)
@@ -85,6 +114,13 @@ def register(combo: str, on_press: Callable[[], None], on_release: Callable[[], 
 
     _listener = kb.Listener(on_press=press, on_release=release)
     _listener.start()
+    if IS_MAC:  # without Input Monitoring the event tap is refused and the listener thread just ends
+        _listener.join(0.3)
+        if not _listener.is_alive():
+            _listener = None
+            raise PermissionError("macOS isn't letting Speak hear key presses. Under System Settings > Privacy & "
+                                  "Security > Input Monitoring, remove Speak and add it again (use the + button), "
+                                  "then restart Speak.")
 
 
 def unregister() -> None:

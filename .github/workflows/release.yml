@@ -106,9 +106,6 @@ jobs:
           - os: macos-15
             platform: macos-arm64
             package: Speak-macos-arm64.zip
-          - os: ubuntu-22.04
-            platform: linux-x86_64
-            package: Speak-linux-x86_64.tar.gz
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -157,15 +154,14 @@ jobs:
           make_latest: ${{ needs.prepare.outputs.latest }}
           generate_release_notes: true
           body: |
-            Windows x64, macOS arm64, and Linux x64 builds. Speech and tidy-up models download on first use.
+            Windows x64 and macOS arm64 builds. Speech and tidy-up models download on first use.
 
-            macOS packages are unsigned and require manual Gatekeeper approval. Linux global hotkeys require an X11 session; native Wayland global shortcuts are not supported yet.
+            macOS packages are unsigned and require manual Gatekeeper approval.
 
             ${{ needs.prepare.outputs.notes }}
           files: |
             release/Speak.exe
             release/Speak-macos-arm64.zip
-            release/Speak-linux-x86_64.tar.gz
 
       - name: Comment the release on resolved issues
         if: needs.prepare.outputs.numbers != ''

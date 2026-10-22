@@ -9,3 +9,5 @@ __pycache__/
 /docs/wayfinder/
 
 speak/_build.py
+.DS_Store
+.ruff_cache/

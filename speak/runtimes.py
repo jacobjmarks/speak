@@ -1,5 +1,6 @@
 """Lifecycle of the bundled local inference servers (NeMo-Speech ASR, llama.cpp cleanup)."""
 import os
+import re
 import socket
 import subprocess
 import threading
@@ -14,6 +15,29 @@ from .platform_utils import bundle_root, exe_name, hidden_process_kwargs, tie_to
 
 # progress(message, percent_or_None)
 Progress = Callable[[str, Optional[int]], None]
+
+
+MODEL_HOST = "https://huggingface.co"
+DOWNLOAD_HINT = "Check your internet connection or proxy (the models come from huggingface.co), then try again."
+
+
+class ModelDownloadError(RuntimeError):
+    """A model could not be downloaded; the message is meant for the user."""
+
+
+def _asr_model_cached() -> bool:
+    return any("cleanup" not in p.parts for p in MODELS_DIR.rglob("*.gguf"))
+
+
+def check_model_host() -> None:
+    """Fail fast, with a readable message, when the model host is unreachable (downloads otherwise retry for minutes)."""
+    try:
+        request = urllib.request.Request(MODEL_HOST, method="HEAD")
+        with urllib.request.urlopen(request, timeout=10):
+            pass
+    except Exception as exc:
+        raise ModelDownloadError(f"Couldn't reach huggingface.co to download the speech model ({exc}). "
+                                 f"{DOWNLOAD_HINT}") from exc
 
 
 def free_port() -> int:
@@ -38,8 +62,12 @@ class ManagedServer:
     def running(self, key) -> bool:
         return self.process is not None and self.process.poll() is None and self.key == key
 
-    def start(self, key, executable: Path, args: list, cwd: Path, env: dict, timeout: float = 300) -> bool:
-        """Start the server for `key` unless already running. Returns True if a new process was started."""
+    def start(self, key, executable: Path, args: list, cwd: Path, env: dict, timeout: float = 300,
+              on_wait: Optional[Callable[[str], None]] = None) -> bool:
+        """Start the server for `key` unless already running. Returns True if a new process was started.
+
+        `on_wait` gets the server's output so far on every readiness poll.
+        """
         with self.lock:
             if self.running(key):
                 return False
@@ -51,6 +79,7 @@ class ManagedServer:
             full_env["PATH"] = str(executable.parent) + os.pathsep + full_env.get("PATH", "")
             self.log_path.parent.mkdir(parents=True, exist_ok=True)
             self.log = self.log_path.open("ab")
+            log_start = self.log.tell()
             self.process = subprocess.Popen(
                 [str(executable), *args, "--host", "127.0.0.1", "--port", str(port)],
                 cwd=cwd,
@@ -64,7 +93,7 @@ class ManagedServer:
             deadline = time.monotonic() + timeout
             while time.monotonic() < deadline:
                 if self.process.poll() is not None:
-                    raise RuntimeError(f"{self.name} runtime exited. See {self.log_path}")
+                    raise self._exit_error(log_start)
                 try:
                     with urllib.request.urlopen(f"http://127.0.0.1:{port}{self.ready_path}", timeout=2) as response:
                         if response.status == 200:
@@ -72,9 +101,28 @@ class ManagedServer:
                             return True
                 except (OSError, urllib.error.URLError):
                     pass
+                if on_wait is not None:
+                    on_wait(self._output_since(log_start))
                 time.sleep(0.5)
             self._stop_locked()
             raise TimeoutError(f"{self.name} did not become ready within {int(timeout)} seconds.")
+
+    def _output_since(self, log_start: int) -> str:
+        try:
+            with self.log_path.open("rb") as log:
+                log.seek(log_start)
+                return log.read().decode("utf-8", "replace")
+        except OSError:
+            return ""
+
+    def _exit_error(self, log_start: int) -> RuntimeError:
+        output = self._output_since(log_start)
+        lowered = output.lower()
+        if "downloading" in lowered and ("curl failed" in lowered or "download failed" in lowered):
+            reason = next((line.strip(" -") for line in output.splitlines() if "curl:" in line), "")
+            detail = f" ({reason.split('curl:', 1)[1].strip()})" if reason else ""
+            return ModelDownloadError(f"Couldn't download the speech model{detail}. {DOWNLOAD_HINT}")
+        return RuntimeError(f"{self.name} runtime exited. See {self.log_path}")
 
     def stop(self):
         with self.lock:
@@ -118,8 +166,18 @@ class AsrServer(ManagedServer):
         if self.running(model):
             return
         progress("Getting ready", None)
+        if not _asr_model_cached():
+            check_model_host()
         root = asr_root()
         executable = root / "bin" / exe_name("nemo-speech")
+
+        def on_wait(output: str):
+            total = re.findall(r"\(asr, ([\d.]+) MiB\)", output)
+            partial = next((p for p in MODELS_DIR.rglob("*.partial") if "cleanup" not in p.parts), None)
+            if total and partial is not None:
+                done = partial.stat().st_size / 2**20
+                progress("Downloading", min(99, int(done * 100 / float(total[-1]))))
+
         self.start(
             model,
             executable,
@@ -128,6 +186,7 @@ class AsrServer(ManagedServer):
             ["serve", "--asr-model", model, "--no-ui", "--asr.streaming.rnnt_right_context=-1"],
             cwd=root,
             env={"NEMO_SPEECH_MODEL_DIR": str(MODELS_DIR)},
+            on_wait=on_wait,
         )
 
 
@@ -186,7 +245,7 @@ def download_cleanup_model(model_id: str, progress: Progress) -> Path:
         if downloaded < 100_000_000:
             raise IOError("Downloaded cleanup model is unexpectedly small.")
         os.replace(partial, model_path)
-    except Exception:
+    except Exception as exc:
         partial.unlink(missing_ok=True)
-        raise
+        raise ModelDownloadError(f"Couldn't download the tidy-up model ({exc}). {DOWNLOAD_HINT}") from exc
     return model_path

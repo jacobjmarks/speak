@@ -108,6 +108,21 @@ def foreground_window():
         return None
 
 
+def keep_visible_when_inactive(window_id: int) -> None:
+    """macOS: let a floating window stay up while another app is frontmost, on every Space and over full-screen apps."""
+    if not IS_MAC:
+        return
+    try:
+        import objc
+
+        window = objc.objc_object(c_void_p=window_id).window()
+        window.setHidesOnDeactivate_(False)
+        window.setHasShadow_(False)  # the overlay paints its own soft shadow; the native one shows as a hard frame
+        window.setCollectionBehavior_((1 << 0) | (1 << 8))  # canJoinAllSpaces | fullScreenAuxiliary
+    except Exception:
+        pass
+
+
 def paste_shortcut() -> str:
     return "cmd+v" if IS_MAC else "ctrl+v"
 
@@ -192,6 +207,16 @@ def set_launch_at_login(enabled: bool) -> None:
         )
     else:
         path.write_text(f"[Desktop Entry]\nType=Application\nName=Speak\nExec={' '.join(command)}\n", encoding="utf-8")
+
+
+def relaunch() -> None:
+    """Start a fresh copy of Speak (macOS permission changes only apply to a new process); the caller then quits."""
+    args = ["--restarted"]
+    if getattr(sys, "frozen", False) and IS_MAC:
+        bundle = Path(sys.executable).resolve().parents[2]
+        subprocess.Popen(["open", "-n", str(bundle), "--args", *args])
+    else:
+        subprocess.Popen([*_launch_command(), *args], start_new_session=True)
 
 
 def open_path(path: Path) -> None:

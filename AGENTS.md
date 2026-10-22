@@ -7,6 +7,7 @@ Speak is a local desktop dictation app. A global hotkey (hold or tap) records th
 | Module | Owns |
 |---|---|
 | `config.py` | App paths, `DEFAULTS` settings, model catalogs (`ASR_MODELS`, `CLEANUP_MODELS`), option labels, `load_settings`/`save_settings` |
+| `permissions.py` | macOS privacy permissions (Microphone, Input Monitoring, Accessibility): check, request, open Settings |
 | `platform_utils.py` | OS branching: app data dir, exe suffix, bundle root, hidden-subprocess flags, paste shortcut, open folder, launch at login |
 | `runtimes.py` | `ManagedServer` subprocess lifecycle; `AsrServer`, `CleanupServer`; cleanup model download |
 | `asr.py` | `AsrSession`: realtime websocket (send PCM, receive deltas/finals) |
@@ -62,7 +63,7 @@ Entry point: `main.py` (repo root) or `python -m speak`; both call `speak.ui.app
 ## Run / test
 
 ```powershell
-pwsh -File ./build.ps1            # native package for Windows x64, macOS arm64/x64, or Linux x64
+pwsh -File ./build.ps1            # native package for Windows x64 or macOS arm64/x64
 .\.venv\Scripts\python.exe main.py
 # Headless pipeline check (ASR + each tidy level) on a 16-bit mono WAV:
 .\.venv\Scripts\python.exe -m tools.dictate_wav sample.wav --tidy fast,auto,best

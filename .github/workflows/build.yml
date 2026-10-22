@@ -18,9 +18,6 @@ jobs:
           - os: macos-15
             platform: macos-arm64
             package: Speak-macos-arm64.zip
-          - os: ubuntu-22.04
-            platform: linux-x86_64
-            package: Speak-linux-x86_64.tar.gz
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4

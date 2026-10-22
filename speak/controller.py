@@ -3,6 +3,7 @@
 All listener callbacks fire on background threads; the UI must marshal them onto its own thread.
 """
 import threading
+import time
 from enum import Enum
 
 from . import cleanup, history, output, platform_utils, tidy
@@ -10,7 +11,7 @@ from .asr import AsrSession
 from .audio import Microphone
 from .config import CLEANUP_MODELS, MODELS_DIR
 from .platform_utils import exe_name
-from .runtimes import AsrServer, CleanupServer, llama_root
+from .runtimes import AsrServer, CleanupServer, ModelDownloadError, llama_root
 
 FINISHING = "Finishing up"  # one word for transcribe + tidy: tidy-up may be off, and transcribing is brief
 
@@ -46,6 +47,7 @@ class Dictation:
         self._cancelled = False
         self._target = None  # window focused when dictation started
         self._unload_timer = None
+        self._cleanup_retry_at = 0.0  # monotonic time before which a failed tidy-up download isn't retried
         threading.Thread(target=tidy.probe, args=(llama_root() / exe_name("llama-server"),), daemon=True).start()
 
     @property
@@ -222,14 +224,22 @@ class Dictation:
         text = session.finish()
         plan = tidy.plan(self.settings)
         port = None
+        tidy_note = ""
         if text and plan.model_id:
-            try:
-                self._ensure_cleanup(plan, self.listener.on_progress)
-                port = self.cleanup_server.port
-                self.listener.on_progress(FINISHING, None)
-            except Exception:
-                pass
+            if time.monotonic() < self._cleanup_retry_at:
+                tidy_note = "Tidy-up model unavailable (download failed earlier); text left as recognised"
+            else:
+                try:
+                    self._ensure_cleanup(plan, self.listener.on_progress)
+                    port = self.cleanup_server.port
+                    self.listener.on_progress(FINISHING, None)
+                except ModelDownloadError:
+                    self._cleanup_retry_at = time.monotonic() + 300
+                    tidy_note = "Couldn't download the tidy-up model; text left as recognised"
+                except Exception:
+                    pass
         text, note = cleanup.finalize(text, plan.level, plan.llm_mode, port)
+        note = note or tidy_note
         if not text:
             self._set_state(State.IDLE)
             self.listener.on_error("No speech recognized")

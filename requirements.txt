@@ -1,5 +1,6 @@
 PySide6-Essentials>=6.9
 pynput>=1.7
+pyobjc-framework-AVFoundation>=10; sys_platform == "darwin"
 pyperclip>=1.9
 sounddevice>=0.5
 websocket-client>=1.8

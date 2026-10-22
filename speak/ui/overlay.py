@@ -13,6 +13,7 @@ from PySide6.QtCore import QEasingCurve, QPointF, QPropertyAnimation, QRect, QRe
 from PySide6.QtGui import (QColor, QCursor, QFont, QFontMetrics, QGuiApplication, QLinearGradient,
                            QPainter, QPen)
 
+from .. import platform_utils
 from . import theme
 from .widgets import BARS, _Animated, draw_check, draw_cross, draw_ring, draw_shimmer_text, draw_wave
 
@@ -30,6 +31,7 @@ class Overlay(_Animated):
                             | Qt.WindowDoesNotAcceptFocus | Qt.WindowTransparentForInput)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setAttribute(Qt.WA_ShowWithoutActivating)
+        self.setAttribute(Qt.WA_MacAlwaysShowToolWindow)  # Qt hides Tool windows when the app deactivates
         self.level_source = level_source
         self.palette_ = theme.LIGHT
         self.preview = "line"
@@ -102,6 +104,7 @@ class Overlay(_Animated):
             self.setWindowOpacity(0.0)
             self._relayout()
             self.show()
+            platform_utils.keep_visible_when_inactive(int(self.winId()))
             self._fade.stop()
             self._fade.setStartValue(0.0)
             self._fade.setEndValue(1.0)

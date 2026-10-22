@@ -9,7 +9,7 @@ from PySide6.QtCore import (Property, QEasingCurve, QPointF, QPropertyAnimation,
 from PySide6.QtGui import QBrush, QColor, QFont, QFontMetrics, QLinearGradient, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QAbstractButton, QPushButton, QSizePolicy, QWidget
 
-from .. import hotkey
+from .. import hotkey, permissions
 from . import theme
 
 
@@ -393,6 +393,11 @@ class ShortcutButton(QPushButton):
         self.setText(hotkey.display(combo))
 
     def _record(self):
+        if permissions.missing():
+            self.setText("Finish setup first")
+            QTimer.singleShot(3000, lambda: self.setText(hotkey.display(self.combo)))
+            return
+        hotkey.prepare()
         self.setEnabled(False)
         self.setText("Press keys…")
         self.setProperty("recording", True)

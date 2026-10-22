@@ -25,12 +25,6 @@ if ($IsWindows -and $architecture -eq 'x64') {
     $nemoHash = 'd52c318d8197511d4f7eee02bcf05511f7e91b300555a130b562e571695a0f39'
     $llamaAsset = "llama-$llamaVersion-bin-macos-x64.tar.gz"
     $llamaHash = 'cab28238d78158109b48deb27b05d50e0dcef56275d2e76da9ca8281526c7532'
-} elseif ($IsLinux -and $architecture -eq 'x64') {
-    $platform = 'linux-x86_64'
-    $nemoAsset = "nemo-speech-$nemoVersion-linux-x86_64-cpu.tar.gz"
-    $nemoHash = 'f396057150f1b774935c7414fd32ebc04195a795a34120d78d8c9ecefa1b7507'
-    $llamaAsset = "llama-$llamaVersion-bin-ubuntu-x64.tar.gz"
-    $llamaHash = 'cf07c1c112d709bd67e522017471de57ed0ec8bea031d732c5422351c07f65ac'
 } else {
     throw "Unsupported build platform: $([System.Runtime.InteropServices.RuntimeInformation]::OSDescription) $architecture"
 }
@@ -88,7 +82,9 @@ try {
     $venv = Join-Path $PSScriptRoot '.venv'
     $python = if ($IsWindows) { Join-Path $venv 'Scripts/python.exe' } else { Join-Path $venv 'bin/python' }
     if (-not (Test-Path $python)) {
-        & python -m venv $venv
+        $bootstrap = if ($env:PYTHON) { $env:PYTHON } else { (Get-Command python, python3 -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1).Source }
+        if (-not $bootstrap) { throw 'Python 3 not found. Install it or set $env:PYTHON.' }
+        & $bootstrap -m venv $venv
         if ($LASTEXITCODE -ne 0) { throw 'Could not create Python environment.' }
     }
     & $python -m pip install -r (Join-Path $PSScriptRoot 'requirements.txt')
@@ -111,7 +107,10 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'Could not create the app icon.' }
         $pyinstallerArgs += @('--onefile', '--icon', $icon)
     } elseif ($IsMacOS) {
-        $pyinstallerArgs += @('--onedir', '--osx-bundle-identifier', 'com.speak.app')
+        $icon = Join-Path $PSScriptRoot 'build/speak.icns'
+        & $python (Join-Path $PSScriptRoot 'tools/make_icon.py') $icon
+        if ($LASTEXITCODE -ne 0) { throw 'Could not create the app icon.' }
+        $pyinstallerArgs += @('--onedir', '--icon', $icon, '--osx-bundle-identifier', 'com.speak.app')
     } else {
         $pyinstallerArgs += '--onedir'
     }
@@ -124,11 +123,14 @@ try {
         $plist = Join-Path $app 'Contents/Info.plist'
         & /usr/libexec/PlistBuddy -c 'Add :NSMicrophoneUsageDescription string "Speak uses the microphone to transcribe your speech locally."' $plist
         if ($LASTEXITCODE -ne 0) { throw 'Could not add the macOS microphone usage description.' }
+        # Editing Info.plist invalidates PyInstaller's ad-hoc signature; arm64 refuses to launch unsigned/broken bundles.
+        # Identifier-only requirement keeps macOS privacy grants (Input Monitoring, Accessibility) valid across rebuilds.
+        & codesign --force --sign - --identifier com.speak.app -r='designated => identifier "com.speak.app"' $app
+        if ($LASTEXITCODE -ne 0) { throw 'Could not re-sign the macOS app.' }
+        & codesign --verify --deep --strict $app
+        if ($LASTEXITCODE -ne 0) { throw 'macOS app signature verification failed.' }
         & ditto -c -k --sequesterRsrc --keepParent $app (Join-Path $outputPath "Speak-$platform.zip")
         if ($LASTEXITCODE -ne 0) { throw 'Could not archive the macOS app.' }
-    } elseif ($IsLinux) {
-        & tar -czf (Join-Path $outputPath "Speak-$platform.tar.gz") -C $outputPath Speak
-        if ($LASTEXITCODE -ne 0) { throw 'Could not archive the Linux app.' }
     }
 } finally {
     Remove-Item $tempRoot -Recurse -Force -ErrorAction SilentlyContinue

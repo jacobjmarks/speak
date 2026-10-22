@@ -1,35 +1,79 @@
 """Main window (sidebar + pages), app icon, and the first-close prompt."""
 from PySide6.QtCore import QPointF, QRectF, Qt, Signal
-from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
+from PySide6.QtGui import QBrush, QColor, QIcon, QLinearGradient, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (QButtonGroup, QDialog, QHBoxLayout, QLabel, QMainWindow, QPushButton, QStackedWidget,
                                QVBoxLayout, QWidget)
 
 from .. import updates
-from .pages import AboutPage, DictatePage, HistoryPage, SettingsPage
+from .pages import AboutPage, DictatePage, HistoryPage, SetupPage, SettingsPage
 from .widgets import draw_mic
 
 BRAND = "#245b56"
 CREAM = "#f4e7c8"
 
 
-def app_icon(dot: str = "") -> QIcon:
-    """Teal rounded square with a cream mic; optional status dot colour (e.g. red while listening)."""
+def render_icon(size: int, dot: str = "", inset: float = 0.0) -> QPixmap:
+    """Teal rounded square with a cream mic; optional status dot colour. `inset` leaves a transparent margin
+    (fraction of `size` per side), as macOS app icons expect."""
+    pm = QPixmap(size, size)
+    pm.fill(Qt.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.Antialiasing)
+    p.setPen(Qt.NoPen)
+    margin = size * inset
+    side = size - 2 * margin
+    rect = QRectF(margin, margin, side, side)
+    radius = side * 0.225
+    if inset:  # macOS style: soft drop shadow, top-lit gradient, thin highlight edge
+        for i in range(24):
+            spread = side * 0.0025 * i
+            p.setBrush(QColor(0, 0, 0, 3))
+            p.drawRoundedRect(rect.adjusted(-spread, -spread, spread, spread).translated(0, side * 0.015),
+                              radius + spread, radius + spread)
+        gradient = QLinearGradient(0, margin, 0, margin + side)
+        gradient.setColorAt(0, QColor(BRAND).lighter(125))
+        gradient.setColorAt(1, QColor(BRAND).darker(115))
+        p.setBrush(gradient)
+    else:
+        p.setBrush(QColor(BRAND))
+    p.drawRoundedRect(rect, radius, radius)
+    if inset:
+        edge = QLinearGradient(0, margin, 0, margin + side)
+        edge.setColorAt(0, QColor(255, 255, 255, 110))
+        edge.setColorAt(0.5, QColor(255, 255, 255, 0))
+        edge.setColorAt(1, QColor(0, 0, 0, 60))
+        p.setPen(QPen(QBrush(edge), max(1.0, side * 0.006)))
+        p.setBrush(Qt.NoBrush)
+        p.drawRoundedRect(rect.adjusted(side * 0.003, side * 0.003, -side * 0.003, -side * 0.003), radius, radius)
+        p.setPen(Qt.NoPen)
+    draw_mic(p, QPointF(size / 2, margin + side * 0.53), side * 0.62, QColor(CREAM))
+    if dot:
+        r = side * 0.2
+        p.setBrush(QColor(dot))
+        p.drawEllipse(QPointF(size - margin - r, margin + r), r, r)
+    p.end()
+    return pm
+
+
+def app_icon(dot: str = "", inset: float = 0.0) -> QIcon:
     icon = QIcon()
-    for size in (16, 24, 32, 48, 64, 128, 256):
+    for size in (16, 24, 32, 48, 64, 128, 256, 512):
+        icon.addPixmap(render_icon(size, dot, inset))
+    return icon
+
+
+def menu_bar_icon() -> QIcon:
+    """Monochrome mic that macOS tints for light/dark menu bars."""
+    icon = QIcon()
+    for size in (18, 36):
         pm = QPixmap(size, size)
         pm.fill(Qt.transparent)
         p = QPainter(pm)
         p.setRenderHint(QPainter.Antialiasing)
-        p.setPen(Qt.NoPen)
-        p.setBrush(QColor(BRAND))
-        p.drawRoundedRect(QRectF(0, 0, size, size), size * 0.24, size * 0.24)
-        draw_mic(p, QPointF(size / 2, size * 0.53), size * 0.62, QColor(CREAM))
-        if dot:
-            r = size * 0.2
-            p.setBrush(QColor(dot))
-            p.drawEllipse(QPointF(size - r, r), r, r)
+        draw_mic(p, QPointF(size / 2, size * 0.53), size * 0.8, QColor("black"))
         p.end()
         icon.addPixmap(pm)
+    icon.setIsMask(True)
     return icon
 
 
@@ -37,7 +81,7 @@ class Logo(QWidget):
     def __init__(self, size: int = 34):
         super().__init__()
         self.setFixedSize(size, size)
-        self._pm = app_icon().pixmap(size * 2, size * 2)
+        self._pm = render_icon(size * 2)
         self._pm.setDevicePixelRatio(2)
 
     def paintEvent(self, e):
@@ -127,7 +171,14 @@ class MainWindow(QMainWindow):
 
         layout.addWidget(sidebar)
         layout.addWidget(self.stack, 1)
-        self.setCentralWidget(root)
+        self.setup = SetupPage()
+        self.screens = QStackedWidget()  # [root app, first-run setup]
+        self.screens.addWidget(root)
+        self.screens.addWidget(self.setup)
+        self.setCentralWidget(self.screens)
+
+    def show_setup(self, active: bool):
+        self.screens.setCurrentIndex(1 if active else 0)
 
     def show_page(self, index: int):
         self.nav.button(index).setChecked(True)
