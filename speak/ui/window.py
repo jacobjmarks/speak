@@ -5,13 +5,14 @@ from PySide6.QtWidgets import (QButtonGroup, QDialog, QHBoxLayout, QLabel, QMain
                                QVBoxLayout, QWidget)
 
 from .. import updates
-from ..platform_utils import IS_MAC, TRAY_NAME, hide_title_text
+from ..platform_utils import IS_MAC, TRAY_NAME, hide_title_text, system_app_icon_png
 from .banner import Banner
 from .pages import AboutPage, DictatePage, HistoryPage, SetupPage, SettingsPage
 from .widgets import draw_mic
 
 BRAND = "#245b56"
 CREAM = "#f4e7c8"
+MAC_INSET = 0.1  # macOS icons keep a transparent margin around the rounded square
 
 
 def render_icon(size: int, dot: str = "", inset: float = 0.0) -> QPixmap:
@@ -82,8 +83,13 @@ def menu_bar_icon() -> QIcon:
 class Logo(QWidget):
     def __init__(self, size: int = 34):
         super().__init__()
+        if IS_MAC:  # mac icons carry a transparent margin; grow so the squircle keeps the requested size
+            size = round(size / (1 - 2 * MAC_INSET))
         self.setFixedSize(size, size)
-        self._pm = render_icon(size * 2)
+        png = system_app_icon_png(size * 2)
+        self._pm = QPixmap()
+        if not (png and self._pm.loadFromData(png)):
+            self._pm = render_icon(size * 2, inset=MAC_INSET if IS_MAC else 0.0)
         self._pm.setDevicePixelRatio(2)
 
     def paintEvent(self, e):

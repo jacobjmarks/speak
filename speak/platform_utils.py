@@ -136,6 +136,28 @@ def hide_title_text(window_id: int) -> None:
         pass
 
 
+def system_app_icon_png(px: int) -> bytes | None:
+    """macOS app bundle: our icon as the system draws it (Dock, Finder), `px` square PNG. None elsewhere."""
+    if not (IS_MAC and getattr(sys, "frozen", False)):
+        return None
+    try:
+        from AppKit import NSBitmapImageRep, NSCompositingOperationCopy, NSGraphicsContext, NSWorkspace
+
+        image = NSWorkspace.sharedWorkspace().iconForFile_(str(Path(sys.executable).resolve().parents[2]))
+        rep = NSBitmapImageRep.alloc().initWithBitmapDataPlanes_pixelsWide_pixelsHigh_bitsPerSample_samplesPerPixel_hasAlpha_isPlanar_colorSpaceName_bytesPerRow_bitsPerPixel_(  # noqa: E501
+            None, px, px, 8, 4, True, False, "NSDeviceRGBColorSpace", 0, 0)
+        NSGraphicsContext.saveGraphicsState()
+        try:
+            NSGraphicsContext.setCurrentContext_(NSGraphicsContext.graphicsContextWithBitmapImageRep_(rep))
+            image.drawInRect_fromRect_operation_fraction_(((0, 0), (px, px)), ((0, 0), (0, 0)),
+                                                          NSCompositingOperationCopy, 1.0)
+        finally:
+            NSGraphicsContext.restoreGraphicsState()
+        return bytes(rep.representationUsingType_properties_(4, None))  # 4: PNG
+    except Exception:
+        return None
+
+
 def paste_shortcut() -> str:
     return "cmd+v" if IS_MAC else "ctrl+v"
 

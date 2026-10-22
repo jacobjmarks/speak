@@ -15,10 +15,9 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6.QtCore import QBuffer, QIODevice  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
-from speak.ui.window import app_icon, render_icon  # noqa: E402
+from speak.ui.window import MAC_INSET, app_icon, render_icon  # noqa: E402
 
 SIZES = (16, 24, 32, 48, 64, 128, 256)
-MAC_INSET = 0.1  # macOS icons keep a transparent margin around the rounded square
 
 
 def write_icns(out: Path) -> None:
