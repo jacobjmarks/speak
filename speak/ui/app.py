@@ -143,7 +143,7 @@ class SpeakApp(QObject):
             self.window.history.refresh(self.settings["history_enabled"])
         if {"tidy", "cleanup_model", "corrections"} & changes.keys():
             self._refresh_tidy()
-        if "updates" in changes:
+        if {"updates", "prereleases"} & changes.keys():
             self._check_updates()
         self.window.settings.sync(self.settings)
 
@@ -159,8 +159,8 @@ class SpeakApp(QObject):
             self.window.settings.set_update_status("Checking…")
         if updates.VERSION:
             self.window.settings.set_last_check(datetime.now())
-        threading.Thread(target=lambda: self.bridge.update_found.emit(updates.newer_release(), manual),
-                         daemon=True).start()
+        threading.Thread(target=lambda: self.bridge.update_found.emit(
+            updates.newer_release(self.settings["prereleases"]), manual), daemon=True).start()
 
     def _on_update_found(self, release, manual: bool):
         self._release = release

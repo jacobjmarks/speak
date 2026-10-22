@@ -323,6 +323,8 @@ class SettingsPage(QScrollArea):
         self.updates = _combo(config.UPDATE_MODES, settings["updates"])
         self.updates.currentIndexChanged.connect(lambda: self.changed.emit({"updates": self.updates.currentData()}))
         self.updates_row = self._row(rows, "Updates", " ", self.updates)
+        self.prereleases = self._toggle(settings["prereleases"], "prereleases")
+        self._row(rows, "Pre-release versions", "Try new versions early; they may have bugs", self.prereleases)
         self._last_check = None
 
         version = QWidget()

@@ -2,8 +2,9 @@
 
 Releases are tagged v<semver> (e.g. v1.0.0, v1.0.0-rc.1) by the manual Release workflow, which also writes VERSION
 to speak/_build.py. Builds without a version (source runs, CI artifacts) never update. Stable builds only move to
-stable releases; pre-release builds also move to newer pre-releases (alpha.1 -> rc.1 -> 1.0.0).
-Only the public GitHub API is contacted.
+stable releases unless the user opts in to pre-releases; pre-release builds also move to newer pre-releases
+(alpha.1 -> rc.1 -> 1.0.0). Each OS only considers releases that carry its own package (`asset_name`); a release
+without one is not an update for that OS. Only the public GitHub API is contacted.
 
 Install: the new exe downloads beside the running one as "<exe>.new" (sha256 checked against GitHub's
 asset digest); `install` renames the running exe to ".old" (Windows allows renaming a running exe) and moves
@@ -12,6 +13,7 @@ the new one into place. The ".old" file is deleted on the next start.
 import hashlib
 import json
 import os
+import platform
 import re
 import subprocess
 import sys
@@ -20,9 +22,19 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
 
+from .platform_utils import IS_MAC, IS_WINDOWS
+
 API = "https://api.github.com/repos/jacobjmarks/speak/releases?per_page=30"
 RELEASES_PAGE = "https://github.com/jacobjmarks/speak/releases"
-ASSET = "Speak.exe"
+
+
+def asset_name() -> Optional[str]:
+    """File name of this OS's package in a release, or None where no package is published."""
+    if IS_WINDOWS:
+        return "Speak.exe"
+    if IS_MAC:
+        return "Speak-macos-arm64.zip" if platform.machine() == "arm64" else "Speak-macos-x64.zip"
+    return None
 
 try:
     from ._build import VERSION
@@ -68,10 +80,16 @@ def _get(url: str, timeout: float = 10):
     return urllib.request.urlopen(request, timeout=timeout)
 
 
-def pick(releases: list, current: tuple) -> Optional[Release]:
-    """Newest release newer than `current`; pre-releases only if `current` is one."""
+def pick(releases: list, current: tuple, allow_prerelease: bool = False,
+         asset_file: Optional[str] = None) -> Optional[Release]:
+    """Newest release newer than `current` that has this OS's package.
+
+    Pre-releases only if `allow_prerelease` or `current` is one.
+    """
+    if not asset_file:
+        return None
     best, found = current, None
-    allow_pre = is_prerelease(current)
+    allow_pre = allow_prerelease or is_prerelease(current)
     for release in releases:
         tag = release.get("tag_name", "")
         number = parse(tag)
@@ -79,21 +97,23 @@ def pick(releases: list, current: tuple) -> Optional[Release]:
             continue
         if (is_prerelease(number) or release.get("prerelease")) and not allow_pre:
             continue
-        asset = next((a for a in release.get("assets", []) if a.get("name") == ASSET), {})
+        asset = next((a for a in release.get("assets", []) if a.get("name") == asset_file), None)
+        if not asset:
+            continue
         best = number
         found = Release(tag.removeprefix("v"), release.get("html_url") or RELEASES_PAGE,
                         asset.get("browser_download_url", ""), asset.get("digest") or "")
     return found
 
 
-def newer_release() -> Optional[Release]:
-    """A newer release, or None (up to date, unversioned build, or offline)."""
+def newer_release(allow_prerelease: bool = False) -> Optional[Release]:
+    """A newer release for this OS, or None (up to date, unversioned build, no package for this OS, or offline)."""
     current = parse(VERSION)
     if not current:
         return None
     try:
         with _get(API) as response:
-            return pick(json.load(response), current)
+            return pick(json.load(response), current, allow_prerelease, asset_name())
     except Exception:
         return None
 
@@ -104,7 +124,7 @@ def exe_path() -> Optional[Path]:
 
 def can_install(release: Release) -> bool:
     exe = exe_path()
-    return bool(sys.platform == "win32" and exe and release.asset_url and os.access(exe.parent, os.W_OK))
+    return bool(IS_WINDOWS and exe and release.asset_url and os.access(exe.parent, os.W_OK))
 
 
 def download(release: Release, progress: Callable[[int], None] = lambda percent: None) -> Path:

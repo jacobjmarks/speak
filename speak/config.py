@@ -33,6 +33,7 @@ DEFAULTS = {
     "cleanup_model": "auto",
     "theme": "System",
     "updates": "auto",
+    "prereleases": False,
     "unload_after": "5",  # minutes idle before models leave RAM/VRAM; "never" keeps them
 }
 
