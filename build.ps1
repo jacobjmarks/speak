@@ -118,6 +118,11 @@ try {
     & $python -m PyInstaller @pyinstallerArgs
     if ($LASTEXITCODE -ne 0) { throw 'PyInstaller packaging failed.' }
 
+    # Release builds stamp speak/_build.py; the package is Speak-<version>-<os>-<arch>.<ext> (no version otherwise).
+    $buildFile = Join-Path $PSScriptRoot 'speak/_build.py'
+    $version = if (Test-Path $buildFile) { [regex]::Match((Get-Content $buildFile -Raw), 'VERSION\s*=\s*"([^"]+)"').Groups[1].Value } else { '' }
+    $stem = if ($version) { "Speak-$version-$platform" } else { "Speak-$platform" }
+
     if ($IsMacOS) {
         $app = Join-Path $outputPath 'Speak.app'
         $plist = Join-Path $app 'Contents/Info.plist'
@@ -129,8 +134,10 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'Could not re-sign the macOS app.' }
         & codesign --verify --deep --strict $app
         if ($LASTEXITCODE -ne 0) { throw 'macOS app signature verification failed.' }
-        & ditto -c -k --sequesterRsrc --keepParent $app (Join-Path $outputPath "Speak-$platform.zip")
+        & ditto -c -k --sequesterRsrc --keepParent $app (Join-Path $outputPath "$stem.zip")
         if ($LASTEXITCODE -ne 0) { throw 'Could not archive the macOS app.' }
+    } elseif ($IsWindows) {
+        Move-Item (Join-Path $outputPath 'Speak.exe') (Join-Path $outputPath "$stem.exe") -Force
     }
 } finally {
     Remove-Item $tempRoot -Recurse -Force -ErrorAction SilentlyContinue

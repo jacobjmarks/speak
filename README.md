@@ -40,7 +40,7 @@
 
 ## Install
 
-1. Download the package for your OS from the [latest release](https://github.com/jacobjmarks/speak/releases): `Speak.exe` on Windows or the `.app` zip on macOS.
+1. Download the package for your OS from the [latest release](https://github.com/jacobjmarks/speak/releases): `Speak-<version>-windows-x64.exe` on Windows or `Speak-<version>-macos-arm64.zip` on macOS.
 2. On macOS, open the app from Finder and approve it in **Privacy & Security** if Gatekeeper blocks it. Builds are unsigned and require this manual approval. On first launch, Speak shows a setup page for the three permissions it needs (Microphone, Input Monitoring, Accessibility); click Allow on each and it continues once all are granted.
 3. Press the shortcut and start talking. The first dictation downloads the speech model (about 700 MB, once). Tidy-up models are 0.5 to 2.5 GB, chosen to suit your computer.
 

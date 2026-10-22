@@ -102,10 +102,8 @@ jobs:
         include:
           - os: windows-latest
             platform: windows-x64
-            package: Speak.exe
           - os: macos-15
             platform: macos-arm64
-            package: Speak-macos-arm64.zip
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -130,7 +128,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: Speak-${{ matrix.platform }}
-          path: release/${{ matrix.package }}
+          path: release/Speak-*
           if-no-files-found: error
 
   publish:
@@ -160,8 +158,7 @@ jobs:
 
             ${{ needs.prepare.outputs.notes }}
           files: |
-            release/Speak.exe
-            release/Speak-macos-arm64.zip
+            release/Speak-*
 
       - name: Comment the release on resolved issues
         if: needs.prepare.outputs.numbers != ''

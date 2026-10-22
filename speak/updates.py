@@ -3,7 +3,7 @@
 Releases are tagged v<semver> (e.g. v1.0.0, v1.0.0-rc.1) by the manual Release workflow, which also writes VERSION
 to speak/_build.py. Builds without a version (source runs, CI artifacts) never update. Stable builds only move to
 stable releases unless the user opts in to pre-releases; pre-release builds also move to newer pre-releases
-(alpha.1 -> rc.1 -> 1.0.0). Each OS only considers releases that carry its own package (`asset_name`); a release
+(alpha.1 -> rc.1 -> 1.0.0). Each OS only considers releases that carry its own package (`package_suffix`); a release
 without one is not an update for that OS. Only the public GitHub API is contacted.
 
 Install: the new exe downloads beside the running one as "<exe>.new" (sha256 checked against GitHub's
@@ -28,13 +28,18 @@ API = "https://api.github.com/repos/jacobjmarks/speak/releases?per_page=30"
 RELEASES_PAGE = "https://github.com/jacobjmarks/speak/releases"
 
 
-def asset_name() -> Optional[str]:
-    """File name of this OS's package in a release, or None where no package is published."""
-    if IS_WINDOWS:
-        return "Speak.exe"
+def package_suffix() -> Optional[str]:
+    """Tail of this OS/arch's package name (Speak-<version>-<os>-<arch>.<ext>), or None where none is published."""
+    machine = platform.machine().lower()
+    if IS_WINDOWS and machine in ("amd64", "x86_64"):
+        return "-windows-x64.exe"
     if IS_MAC:
-        return "Speak-macos-arm64.zip" if platform.machine() == "arm64" else "Speak-macos-x64.zip"
+        return "-macos-arm64.zip" if machine == "arm64" else "-macos-x64.zip"
     return None
+
+
+def is_package(name: str, suffix: Optional[str]) -> bool:
+    return bool(suffix) and name.startswith("Speak-") and name.endswith(suffix)
 
 try:
     from ._build import VERSION
@@ -81,12 +86,12 @@ def _get(url: str, timeout: float = 10):
 
 
 def pick(releases: list, current: tuple, allow_prerelease: bool = False,
-         asset_file: Optional[str] = None) -> Optional[Release]:
-    """Newest release newer than `current` that has this OS's package.
+         suffix: Optional[str] = None) -> Optional[Release]:
+    """Newest release newer than `current` that has this OS's package (see `package_suffix`).
 
     Pre-releases only if `allow_prerelease` or `current` is one.
     """
-    if not asset_file:
+    if not suffix:
         return None
     best, found = current, None
     allow_pre = allow_prerelease or is_prerelease(current)
@@ -97,7 +102,7 @@ def pick(releases: list, current: tuple, allow_prerelease: bool = False,
             continue
         if (is_prerelease(number) or release.get("prerelease")) and not allow_pre:
             continue
-        asset = next((a for a in release.get("assets", []) if a.get("name") == asset_file), None)
+        asset = next((a for a in release.get("assets", []) if is_package(a.get("name", ""), suffix)), None)
         if not asset:
             continue
         best = number
@@ -113,7 +118,7 @@ def newer_release(allow_prerelease: bool = False) -> Optional[Release]:
         return None
     try:
         with _get(API) as response:
-            return pick(json.load(response), current, allow_prerelease, asset_name())
+            return pick(json.load(response), current, allow_prerelease, package_suffix())
     except Exception:
         return None
 

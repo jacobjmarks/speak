@@ -14,10 +14,8 @@ jobs:
         include:
           - os: windows-latest
             platform: windows-x64
-            package: Speak.exe
           - os: macos-15
             platform: macos-arm64
-            package: Speak-macos-arm64.zip
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -34,5 +32,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: Speak-${{ matrix.platform }}-${{ github.sha }}
-          path: dist/${{ matrix.package }}
+          path: dist/Speak-*
           retention-days: 14
