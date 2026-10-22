@@ -428,6 +428,7 @@ class SpeakApp(QObject):
             return
         if self._closed_by_user:
             self.show_window()
+        hotkey.prepare()  # pick up a changed keyboard layout
         self._check_permissions()
 
     def show_window(self):

@@ -17,7 +17,7 @@ Speak is a local desktop dictation app. A global hotkey (hold or tap) records th
 | `controller.py` | `Dictation` state machine (`State`: idle → preparing → listening → processing) and the `Listener` callbacks the UI implements |
 | `history.py` | Opt-in SQLite transcript history |
 | `output.py` | Clipboard copy, paste-into-focused-app |
-| `hotkey.py` | Global hotkey `register(combo, on_press, on_release)` (hold-to-talk), capture, send, display (pynput on all OSes; lone modifiers like `right alt` supported) |
+| `hotkey.py` | Global hotkey `register(combo, on_press, on_release)` (hold-to-talk), capture, send, display (pynput on Windows/Linux, `keytap_mac.py` Quartz tap on macOS; lone modifiers like `right alt` supported) |
 | `updates.py` | Updates: release-stamped `_build.VERSION` vs `v<semver>` tags (pre-release installs also take pre-releases); download + sha256 + exe swap (Windows frozen only) |
 | `ui/app.py` | PySide6 `SpeakApp`: `Bridge` (Listener → Qt signals), tray, hotkey, close behaviour, `main()` |
 | `ui/window.py` | `MainWindow` (sidebar + pages), `app_icon()`, first-close `CloseDialog` |

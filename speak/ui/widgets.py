@@ -397,7 +397,6 @@ class ShortcutButton(QPushButton):
             self.setText("Finish setup first")
             QTimer.singleShot(3000, lambda: self.setText(hotkey.display(self.combo)))
             return
-        hotkey.prepare()
         self.setEnabled(False)
         self.setText("Press keys…")
         self.setProperty("recording", True)
