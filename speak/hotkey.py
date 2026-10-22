@@ -36,6 +36,9 @@ def prepare() -> None:
     global _controller
     from pynput import keyboard as kb
 
+    from .keytap_mac import refresh_layout
+
+    refresh_layout()
     _controller = kb.Controller()
 
 
@@ -190,5 +193,7 @@ def display(combo: str) -> str:
 
     def label(part):
         side, _, base = part.rpartition(" ")
+        if base.startswith("key") and base[3:].isdigit():  # a key with no known name (macOS keycode)
+            base = f"key {base[3:]}"
         return " ".join(([side.capitalize()] if side else []) + [names.get(base, base.capitalize())])
     return " + ".join(label(p) for p in _parts(combo))

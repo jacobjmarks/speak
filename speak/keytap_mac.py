@@ -9,10 +9,10 @@ import threading
 from typing import Callable
 
 from Quartz import (CFMachPortCreateRunLoopSource, CFRunLoopAddSource, CFRunLoopGetCurrent, CFRunLoopRunInMode,
-                    CFRunLoopStop, CGEventGetFlags, CGEventGetIntegerValueField, CGEventKeyboardGetUnicodeString,
-                    CGEventMaskBit, CGEventTapCreate, CGEventTapEnable, kCFRunLoopDefaultMode, kCGEventFlagMaskAlternate,
-                    kCGEventFlagMaskCommand, kCGEventFlagMaskControl, kCGEventFlagMaskShift, kCGEventFlagsChanged,
-                    kCGEventKeyDown, kCGEventKeyUp, kCGEventTapDisabledByTimeout, kCGEventTapDisabledByUserInput,
+                    CFRunLoopStop, CGEventGetFlags, CGEventGetIntegerValueField, CGEventMaskBit, CGEventTapCreate,
+                    CGEventTapEnable, kCFRunLoopDefaultMode, kCGEventFlagMaskAlternate, kCGEventFlagMaskCommand,
+                    kCGEventFlagMaskControl, kCGEventFlagMaskShift, kCGEventFlagsChanged, kCGEventKeyDown,
+                    kCGEventKeyUp, kCGEventTapDisabledByTimeout, kCGEventTapDisabledByUserInput,
                     kCGEventTapOptionDefault, kCGEventTapOptionListenOnly, kCGHeadInsertEventTap,
                     kCGKeyboardEventKeycode, kCGSessionEventTap)
 
@@ -34,28 +34,66 @@ _MODIFIERS = {
 }
 _DEVICE_BITS = 0x1 | 0x2 | 0x4 | 0x8 | 0x10 | 0x20 | 0x40 | 0x2000
 
+# Keys that type nothing. Same keycodes on every keyboard (ANSI, ISO, JIS), unlike printable keys.
 _SPECIAL = {36: "enter", 48: "tab", 49: "space", 51: "backspace", 53: "esc", 57: "caps_lock", 117: "delete",
             123: "left", 124: "right", 125: "down", 126: "up", 115: "home", 119: "end", 116: "page_up",
             121: "page_down", 122: "f1", 120: "f2", 99: "f3", 118: "f4", 96: "f5", 97: "f6", 98: "f7", 100: "f8",
             101: "f9", 109: "f10", 103: "f11", 111: "f12", 105: "f13", 107: "f14", 113: "f15", 106: "f16",
             64: "f17", 79: "f18", 80: "f19", 90: "f20"}
 
-# US-layout fallback for when the typed character isn't usable (Option or Control held)
-_ANSI = {0: "a", 1: "s", 2: "d", 3: "f", 4: "h", 5: "g", 6: "z", 7: "x", 8: "c", 9: "v", 11: "b", 12: "q", 13: "w",
-         14: "e", 15: "r", 16: "y", 17: "t", 18: "1", 19: "2", 20: "3", 21: "4", 22: "6", 23: "5", 24: "=", 25: "9",
-         26: "7", 27: "-", 28: "8", 29: "0", 30: "]", 31: "o", 32: "u", 33: "[", 34: "i", 35: "p", 37: "l", 38: "j",
-         39: "'", 40: "k", 41: ";", 42: "\\", 43: ",", 44: "/", 45: "n", 46: "m", 47: ".", 50: "`"}
+
+_chars = {}  # keycode -> the character the current layout types for it (no modifiers); see refresh_layout()
 
 
-def _key_name(event, keycode: int, flags: int) -> str:
-    special = _SPECIAL.get(keycode)
-    if special:
-        return special
-    if not flags & kCGEventFlagMaskAlternate:
-        length, chars = CGEventKeyboardGetUnicodeString(event, 8, None, None)
-        if length and chars.isprintable() and chars.strip():
-            return chars.lower()
-    return _ANSI.get(keycode, f"key{keycode}")
+def refresh_layout() -> None:
+    """Read the active keyboard layout. Main thread only: macOS 14+ kills the process for asking from another."""
+    import ctypes
+    import ctypes.util
+
+    carbon = ctypes.cdll.LoadLibrary(ctypes.util.find_library("Carbon"))
+    core = ctypes.cdll.LoadLibrary(ctypes.util.find_library("CoreFoundation"))
+    for name in ("TISCopyCurrentKeyboardLayoutInputSource", "TISCopyCurrentASCIICapableKeyboardLayoutInputSource"):
+        getattr(carbon, name).restype = ctypes.c_void_p
+    carbon.TISGetInputSourceProperty.restype = ctypes.c_void_p
+    carbon.TISGetInputSourceProperty.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+    carbon.LMGetKbdType.restype = ctypes.c_uint8
+    core.CFDataGetBytePtr.restype = ctypes.c_void_p
+    core.CFDataGetBytePtr.argtypes = [ctypes.c_void_p]
+    core.CFRelease.argtypes = [ctypes.c_void_p]
+    carbon.UCKeyTranslate.argtypes = [ctypes.c_void_p, ctypes.c_uint16, ctypes.c_uint16, ctypes.c_uint32,
+                                      ctypes.c_uint32, ctypes.c_uint32, ctypes.POINTER(ctypes.c_uint32),
+                                      ctypes.c_ulong, ctypes.POINTER(ctypes.c_ulong), ctypes.POINTER(ctypes.c_uint16)]
+    property_key = ctypes.c_void_p.in_dll(carbon, "kTISPropertyUnicodeKeyLayoutData")
+
+    # Input methods such as Japanese Romaji carry no layout data; fall back to the ASCII-capable layout.
+    for name in ("TISCopyCurrentKeyboardLayoutInputSource", "TISCopyCurrentASCIICapableKeyboardLayoutInputSource"):
+        source = getattr(carbon, name)()
+        if not source:
+            continue
+        try:
+            data = carbon.TISGetInputSourceProperty(source, property_key)
+            layout = core.CFDataGetBytePtr(data) if data else None
+            if not layout:
+                continue
+            kbd_type, found = carbon.LMGetKbdType(), {}
+            for keycode in range(128):
+                dead, length = ctypes.c_uint32(), ctypes.c_ulong()
+                buffer = (ctypes.c_uint16 * 4)()
+                carbon.UCKeyTranslate(layout, keycode, 0, 0, kbd_type, 1, ctypes.byref(dead), 4,  # 1: no dead keys
+                                      ctypes.byref(length), buffer)
+                text = "".join(chr(c) for c in buffer[:length.value])
+                if text and text.isprintable() and text.strip():
+                    found[keycode] = text.lower()
+            global _chars
+            _chars = found
+            return
+        finally:
+            core.CFRelease(source)
+
+
+def _key_name(keycode: int) -> str:
+    """Special keys by name; any other key by the character the user's layout types for it, else \"key<code>\"."""
+    return _SPECIAL.get(keycode) or _chars.get(keycode) or f"key{keycode}"
 
 
 class KeyTap:
@@ -105,7 +143,7 @@ class KeyTap:
                 pressed = bool(flags & device_bit) if flags & _DEVICE_BITS else bool(flags & generic)
                 (self._on_press if pressed else self._on_release)(set(names))
             else:
-                names = {_key_name(event, keycode, flags)}
+                names = {_key_name(keycode)}
                 (self._on_press if event_type == kCGEventKeyDown else self._on_release)(names)
         except Exception:
             log.exception("key event handler failed")
