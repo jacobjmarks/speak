@@ -32,7 +32,7 @@ DEFAULTS = {
     "corrections": True,  # large model drops "no wait, ..." originals; False keeps every word
     "cleanup_model": "auto",
     "theme": "System",
-    "updates": "auto",
+    "updates": "notify",
     "prereleases": False,
     "unload_after": "5",  # minutes idle before models leave RAM/VRAM; "never" keeps them
 }
