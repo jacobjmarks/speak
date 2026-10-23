@@ -1,21 +1,20 @@
 name: Build
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 'Operating system to build'
+        type: choice
+        options: [all, windows, macos]
+        default: all
 
 jobs:
   build:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: windows-latest
-            platform: windows-x64
-          - os: macos-15
-            platform: macos-arm64
+        os: ${{ fromJSON(inputs.platform == 'windows' && '["windows-latest"]' || inputs.platform == 'macos' && '["macos-15"]' || '["windows-latest","macos-15"]') }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -28,7 +27,7 @@ jobs:
       - name: Stamp build id
         shell: pwsh
         env:
-          SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          SHA: ${{ github.sha }}
         run: 'Set-Content speak/_build.py "VERSION = `"dev-$($env:SHA.Substring(0, 7))`""'
 
       - name: Build package

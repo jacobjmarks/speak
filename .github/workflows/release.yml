@@ -10,6 +10,11 @@ on:
         description: 'Commit SHA, branch or tag to build (default: latest main)'
         required: false
         default: 'main'
+      platform:
+        description: 'Operating system to release'
+        type: choice
+        options: [all, windows, macos]
+        default: all
       latest:
         description: 'Mark as the Latest release. auto = only if stable and higher than every existing stable release'
         type: choice
@@ -99,11 +104,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: windows-latest
-            platform: windows-x64
-          - os: macos-15
-            platform: macos-arm64
+        os: ${{ fromJSON(inputs.platform == 'windows' && '["windows-latest"]' || inputs.platform == 'macos' && '["macos-15"]' || '["windows-latest","macos-15"]') }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -153,9 +154,9 @@ jobs:
           make_latest: ${{ needs.prepare.outputs.latest }}
           generate_release_notes: true
           body: |
-            Windows x64 and macOS arm64 builds. Speech and tidy-up models download on first use.
+            ${{ inputs.platform == 'windows' && 'Windows x64 build.' || inputs.platform == 'macos' && 'macOS arm64 build.' || 'Windows x64 and macOS arm64 builds.' }} Speech and tidy-up models download on first use.
 
-            macOS packages are unsigned and require manual Gatekeeper approval.
+            ${{ inputs.platform != 'windows' && 'macOS packages are unsigned and require manual Gatekeeper approval.' || '' }}
 
             ${{ needs.prepare.outputs.notes }}
           files: |
