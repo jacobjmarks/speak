@@ -70,9 +70,12 @@ def runtime_distributions() -> dict:
                 pass
 
     for line in (ROOT / "requirements.txt").read_text().splitlines():
-        name = re.split(r"[<>=!~;\s\[]", line.strip(), maxsplit=1)[0]
-        if name and not line.startswith("#") and name.lower() != "pyinstaller":
-            walk(name)
+        line = line.split("#", 1)[0].strip()
+        if not line:
+            continue
+        req = Requirement(line)
+        if req.name.lower() != "pyinstaller" and (not req.marker or req.marker.evaluate()):
+            walk(req.name)
     return dict(sorted(found.items()))
 
 
