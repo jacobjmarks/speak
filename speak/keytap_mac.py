@@ -101,10 +101,10 @@ def _key_name(keycode: int) -> str:
 
 
 class KeyTap:
-    def __init__(self, on_press: Callable[[set], None], on_release: Callable[[set], None], suppress: bool = False,
-                 suppress_escape: Callable[[], bool] | None = None):
+    def __init__(self, on_press: Callable[[set], bool | None], on_release: Callable[[set], bool | None], suppress: bool = False,
+                 suppress_keys: bool = False):
         self._on_press, self._on_release, self._suppress = on_press, on_release, suppress
-        self._suppress_escape = suppress_escape
+        self._suppress_keys = suppress_keys
         self._tap = None
         self._loop = None
         self._running = False
@@ -112,7 +112,7 @@ class KeyTap:
     def start(self) -> None:
         """Raises PermissionError if macOS refuses the tap (no Input Monitoring, or no Accessibility to suppress)."""
         mask = CGEventMaskBit(kCGEventKeyDown) | CGEventMaskBit(kCGEventKeyUp) | CGEventMaskBit(kCGEventFlagsChanged)
-        options = kCGEventTapOptionDefault if self._suppress or self._suppress_escape else kCGEventTapOptionListenOnly
+        options = kCGEventTapOptionDefault if self._suppress or self._suppress_keys else kCGEventTapOptionListenOnly
         self._tap = CGEventTapCreate(kCGSessionEventTap, kCGHeadInsertEventTap, options, mask, self._handle, None)
         if self._tap is None:
             raise PermissionError(NOT_ALLOWED)
@@ -138,6 +138,7 @@ class KeyTap:
         if event_type in (kCGEventTapDisabledByTimeout, kCGEventTapDisabledByUserInput):
             CGEventTapEnable(self._tap, True)  # macOS pauses a tap that stalls; turn it back on
             return event
+        consumed = False
         try:
             keycode = CGEventGetIntegerValueField(event, kCGKeyboardEventKeycode)
             flags = CGEventGetFlags(event)
@@ -147,13 +148,10 @@ class KeyTap:
                     return event
                 names, device_bit, generic = modifier
                 pressed = bool(flags & device_bit) if flags & _DEVICE_BITS else bool(flags & generic)
-                (self._on_press if pressed else self._on_release)(set(names))
+                consumed = (self._on_press if pressed else self._on_release)(set(names))
             else:
                 names = {_key_name(keycode)}
-                (self._on_press if event_type == kCGEventKeyDown else self._on_release)(names)
-                if event_type == kCGEventKeyDown and names == {"esc"} \
-                        and self._suppress_escape and self._suppress_escape():
-                    return None
+                consumed = (self._on_press if event_type == kCGEventKeyDown else self._on_release)(names)
         except Exception:
             log.exception("key event handler failed")
-        return None if self._suppress else event
+        return None if self._suppress or (self._suppress_keys and consumed) else event

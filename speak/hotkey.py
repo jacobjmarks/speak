@@ -1,8 +1,9 @@
 """Global hotkey: press + release callbacks (tap or hold-to-talk), shortcut capture, key sending, display names.
 
-Windows and Linux use `pynput`; macOS uses its own Quartz event tap (`keytap_mac`) for listening and a pynput
-Controller for typing. Combos are "+"-joined lowercase names, e.g. "ctrl+shift+space" or "right alt". Modifiers
-may be sided ("right alt", "left ctrl"); unsided "alt" matches either side.
+Windows uses a selectively suppressing `pynput` event filter; Linux uses `pynput` without selective suppression.
+macOS uses its own suppressible Quartz event tap (`keytap_mac`) and a pynput Controller for typing. Combos are
+"+"-joined lowercase names, e.g. "ctrl+shift+space" or "right alt". Modifiers may be sided ("right alt",
+"left ctrl"); unsided "alt" matches either side.
 Wayland has no global key grabs; see docs/wayfinder/research/cross-platform.md (GlobalShortcuts portal).
 """
 import threading
@@ -79,8 +80,8 @@ def _mask_menu() -> None:
     user32.keybd_event(0xE8, 0, 2, 0)
 
 
-def _listen(on_press: Callable[[set], None], on_release: Callable[[set], None], suppress: bool = False,
-            suppress_escape: Callable[[], bool] | None = None):
+def _listen(on_press: Callable[[set], bool | None], on_release: Callable[[set], bool | None], suppress: bool = False,
+            suppress_keys: bool = False):
     """Start a global key listener whose callbacks get the set of names each key answers to; returns it (`.stop()`).
 
     Raises PermissionError on macOS when Input Monitoring (or, to suppress keys, Accessibility) is missing.
@@ -88,25 +89,35 @@ def _listen(on_press: Callable[[set], None], on_release: Callable[[set], None], 
     if IS_MAC:
         from .keytap_mac import KeyTap
 
-        tap = KeyTap(on_press, on_release, suppress, suppress_escape)
+        tap = KeyTap(on_press, on_release, suppress, suppress_keys)
         tap.start()
         return tap
     from pynput import keyboard as kb
 
     options = {}
-    if IS_WINDOWS and suppress_escape:
-        def filter_escape(msg, data):
-            if data.vkCode == 0x1B and msg in (0x100, 0x104):
-                if suppress_escape():
-                    on_press({"esc"})
-                    listener.suppress_event()
-                return False
+    if IS_WINDOWS and suppress_keys:
+        def filter_key(msg, data):
+            if msg not in (0x100, 0x101, 0x104, 0x105):
+                return True
+            try:
+                key = listener._event_to_key(msg, data.vkCode)
+            except OSError:
+                return True
+            names = _names(key)
+            consumed = on_press(names) if msg in (0x100, 0x104) else on_release(names)
+            if consumed:
+                listener.suppress_event()
+            return False
 
-            return True
+        options["win32_event_filter"] = filter_key
 
-        options["win32_event_filter"] = filter_escape
-    listener = kb.Listener(on_press=lambda key: on_press(_names(key)), on_release=lambda key: on_release(_names(key)),
-                           suppress=suppress, **options)
+    def handle_press(key):
+        on_press(_names(key))
+
+    def handle_release(key):
+        on_release(_names(key))
+
+    listener = kb.Listener(on_press=handle_press, on_release=handle_release, suppress=suppress, **options)
     listener.start()
     return listener
 
@@ -121,27 +132,38 @@ def register(combo: str, on_press: Callable[[], None], on_release: Callable[[], 
     global _listener
     _held.clear()
     wanted, down = set(_parts(combo)), set()
+    escape_down = False
     mask = IS_WINDOWS and all(_is_modifier(p) for p in wanted) and any(p.endswith(("alt", "cmd")) for p in wanted)
 
     def press(names):
+        nonlocal escape_down
         if "esc" in names:
             if escape_active():
                 on_escape()
-            return
+                escape_down = True
+                return True
+            return False
         down.update(names)
         if wanted <= down and not _held.is_set():
             _held.set()
             if mask:
                 threading.Thread(target=_mask_menu, daemon=True).start()
             on_press()
+        return _held.is_set() and bool(wanted & names)
 
     def release(names):
+        nonlocal escape_down
+        if "esc" in names and escape_down:
+            escape_down = False
+            return True
+        consumed = _held.is_set() and bool(wanted & names)
         down.difference_update(names)
-        if wanted & names and _held.is_set():
+        if consumed:
             _held.clear()
             on_release()
+        return consumed
 
-    _listener = _listen(press, release, suppress_escape=escape_active)
+    _listener = _listen(press, release, suppress_keys=True)
 
 
 def unregister() -> None:
