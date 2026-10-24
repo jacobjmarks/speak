@@ -318,6 +318,7 @@ class SettingsPage(QScrollArea):
 
         self.enter = self._toggle(settings["press_enter"], "press_enter")
         self.enter.setEnabled(settings["auto_paste"])
+        self.paste.toggled.connect(self.enter.setEnabled)
         self.enter_row = self._row(rows, f"Press {'Return' if platform_utils.IS_MAC else 'Enter'} afterwards",
                                    "Experimental. Sends messages in chat apps. Skipped if you switched apps",
                                    self.enter)

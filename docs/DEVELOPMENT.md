@@ -48,6 +48,9 @@ uvx ruff check --select F speak tools tests
 
 The suite lives in `tests/`, uses the standard-library `unittest`, and mocks OS APIs, devices, clipboard, subprocesses,
 and HTTP responses.
+Qt interaction tests are grouped in `tests/ui/` by UI area and use `PySide6.QtTest.QTest` with the offscreen platform.
+They exercise dictation controls, settings persistence/dependent controls, saved-history actions, permission setup,
+navigation, notices, and first-close choices without opening a desktop window.
 CI runs it and Ruff through a shared reusable action (`.github/actions/python-ci-checks/action.yml`) that both
 `.github/workflows/build.yml` and `.github/workflows/release.yml` call on Windows and macOS. The step writes a coverage
 table into the GitHub job summary for each matrix run. `coverage.xml` artifact upload is optional (off by default).
