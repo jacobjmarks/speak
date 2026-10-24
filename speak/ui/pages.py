@@ -220,8 +220,18 @@ class SettingRow(QWidget):
         self.layout_.setStretch(0, 1 if not compact else 0)
 
 
+class _SettingsComboBox(QComboBox):
+    def wheelEvent(self, event):
+        event.ignore()
+
+
+class _SettingsSlider(QSlider):
+    def wheelEvent(self, event):
+        event.ignore()
+
+
 def _combo(options: dict, current: str) -> QComboBox:
-    combo = QComboBox(cursor=Qt.PointingHandCursor)
+    combo = _SettingsComboBox(cursor=Qt.PointingHandCursor)
     for key, label in options.items():
         combo.addItem(label, key)
     index = combo.findData(current)
@@ -233,7 +243,7 @@ LANGUAGES = {"auto": "Detect automatically", "en": "English", "es": "Spanish", "
              "it": "Italian", "pt": "Portuguese", "nl": "Dutch", "ja": "Japanese", "zh": "Chinese"}
 
 
-class MicCombo(QComboBox):
+class MicCombo(_SettingsComboBox):
     """Input devices, re-read from the OS each time the list is opened (when `can_rescan()`)."""
 
     def __init__(self, current, can_rescan):
@@ -326,7 +336,7 @@ class SettingsPage(QScrollArea):
         if not platform_utils.IS_WINDOWS:
             self.enter_row.hide()
 
-        self.language = QComboBox(cursor=Qt.PointingHandCursor, editable=True)
+        self.language = _SettingsComboBox(cursor=Qt.PointingHandCursor, editable=True)
         for code, label in LANGUAGES.items():
             self.language.addItem(f"{label} ({code})" if code != "auto" else label, code)
         index = self.language.findData(settings["language"])
@@ -374,7 +384,7 @@ class SettingsPage(QScrollArea):
         self.audio_dim_level = QWidget()
         level_layout = QHBoxLayout(self.audio_dim_level)
         level_layout.setContentsMargins(0, 0, 0, 0)
-        self.audio_dim_slider = QSlider(Qt.Horizontal)
+        self.audio_dim_slider = _SettingsSlider(Qt.Horizontal)
         self.audio_dim_slider.setAccessibleName("Reduce system audio by")
         self.audio_dim_slider.setRange(10, 90)
         self.audio_dim_slider.setSingleStep(config.AUDIO_DIM_STEP)

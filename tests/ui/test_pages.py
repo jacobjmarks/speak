@@ -1,9 +1,11 @@
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from PySide6.QtCore import QEvent, QObject, Qt
+<<<<<<< HEAD
+from PySide6.QtCore import QEvent, QObject, QPoint, QPointF, Qt
+from PySide6.QtGui import QWheelEvent
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QLabel, QPushButton
+from PySide6.QtWidgets import QApplication, QLabel, QPushButton, QSlider
 
 from tests.ui import QtTestCase
 from speak import config
@@ -98,6 +100,25 @@ class SettingsInteractionTest(QtTestCase):
         self.capture(page, "toggle-shortcut-mode")
         self.assertEqual("toggle", page.shortcut_mode.currentData())
         self.assertEqual([{"shortcut_mode": "toggle"}], changes)
+
+    def test_scrolling_over_settings_controls_does_not_change_their_values(self):
+        page = self.make_page({"audio_dim_enabled": True, "audio_dim_percent": 35})
+        page.advanced_toggle.setChecked(True)
+        self.app.processEvents()
+        controls = (page.shortcut_mode, page.mic, page.language, page.audio_dim_slider)
+
+        for control in controls:
+            with self.subTest(control=type(control).__name__):
+                before = control.value() if isinstance(control, QSlider) else control.currentIndex()
+                control.setFocus()
+                position = QPointF(control.rect().center())
+                event = QWheelEvent(position, QPointF(control.mapToGlobal(position.toPoint())),
+                                   QPoint(), QPoint(0, -120), Qt.NoButton, Qt.NoModifier,
+                                   Qt.ScrollUpdate, False)
+                QApplication.sendEvent(control, event)
+                after = control.value() if isinstance(control, QSlider) else control.currentIndex()
+                self.assertEqual(before, after)
+                self.assertFalse(event.isAccepted())
 
     def test_advanced_toggle_reveals_technical_settings_and_emits_preference(self):
         page = self.make_page()
