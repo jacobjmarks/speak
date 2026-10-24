@@ -1,5 +1,5 @@
-import unittest
 import threading
+import unittest
 from unittest.mock import Mock, patch
 
 from speak import config, system_audio
@@ -7,6 +7,8 @@ from speak.controller import Dictation, State
 
 
 class SystemAudioTest(unittest.TestCase):
+    """Audio dimming changes volume predictably and restores only Speak's own adjustment."""
+
     def test_audio_dim_percentage_snaps_to_five_point_steps(self):
         values = [config.snap_audio_dim_percent(value) for value in range(10, 91)]
         self.assertTrue(all(value % 5 == 0 and 10 <= value <= 90 for value in values))
@@ -37,6 +39,8 @@ class SystemAudioTest(unittest.TestCase):
 
 
 class DictationAudioDimmingTest(unittest.TestCase):
+    """Dictation dims output while listening and restores it when processing begins."""
+
     def test_listening_dims_and_processing_restores_output(self):
         dictation = Dictation.__new__(Dictation)
         dictation._lock = threading.RLock()
