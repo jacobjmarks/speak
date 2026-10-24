@@ -1,0 +1,48 @@
+name: Python CI checks
+description: Install deps, run unit tests with coverage, publish the summary, and lint.
+inputs:
+  python-version:
+    description: Python version to use
+    required: false
+    default: "3.14"
+  upload-coverage-artifact:
+    description: Upload coverage.xml artifact
+    required: false
+    default: "false"
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+        cache: pip
+
+    - name: Install dependencies
+      shell: bash
+      run: python -m pip install -r requirements.txt ruff coverage
+
+    - name: Run tests with coverage
+      shell: bash
+      run: |
+        python -m coverage run -m unittest discover -s tests -p "test_*.py"
+        python -m coverage xml -o coverage.xml
+        python -m coverage report -m > coverage.txt
+        {
+          echo "## Coverage summary ($RUNNER_OS)"
+          echo ""
+          echo '```text'
+          cat coverage.txt
+          echo '```'
+        } >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Lint
+      shell: bash
+      run: ruff check --select F speak tools tests
+
+    - uses: actions/upload-artifact@v7
+      if: inputs.upload-coverage-artifact == 'true'
+      with:
+        name: ${{ runner.os }}-coverage
+        path: coverage.xml
+        if-no-files-found: error
+        retention-days: 14

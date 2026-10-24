@@ -6,6 +6,8 @@ from speak import config, tidy
 
 
 class TidyPlanningTest(unittest.TestCase):
+    """Tidy plans fit model/device choices to available memory and user preferences."""
+
     def setUp(self):
         self.settings = {**config.DEFAULTS, "tidy": "auto"}
         self.gpu = patch.multiple(tidy, _gpu=None)

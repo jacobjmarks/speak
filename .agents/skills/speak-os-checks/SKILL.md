@@ -32,7 +32,7 @@ print([(k, round(t - t0, 2)) for k, t in ev])
 
 `keyboard` is not an app dependency (the app uses `pynput`, needed for lone modifiers like right alt); `pip install keyboard` into the venv only if you need it for injection, or inject with `ctypes.windll.user32.keybd_event(vk, scan, flags, 0)` (right alt = vk `0xA5`, extended-key flag `1`, key-up flag `2`). Hooks can behave differently across processes: inject from a second process and verify the app process sees the events.
 
-Pure parsing/matching logic goes in `tools/test_hotkey.py` with mocks.
+Pure parsing/matching logic goes in `tests/test_hotkey.py` with mocks.
 
 ## Paste (+ Enter) into another app
 

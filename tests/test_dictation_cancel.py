@@ -22,7 +22,9 @@ def dictation_for_processing():
     return dictation
 
 
-class DictationCancelTest(unittest.TestCase):
+class DictationFlowTest(unittest.TestCase):
+    """Dictation completion, silence, and cancellation report the right result and side effects."""
+
     def test_cancel_before_processing_discards_transcript(self):
         dictation = dictation_for_processing()
         dictation.mic = Mock(frames=10)
@@ -36,6 +38,50 @@ class DictationCancelTest(unittest.TestCase):
         finalize.assert_not_called()
         paste.assert_not_called()
         dictation.listener.on_cancelled.assert_called_once()
+        dictation.listener.on_result.assert_not_called()
+        self.assertEqual(dictation.state, State.IDLE)
+
+    def test_successful_processing_cleans_records_and_pastes_the_transcript(self):
+        dictation = dictation_for_processing()
+        dictation.mic = Mock(frames=10)
+        session = dictation.session = Mock()
+        session.finish.return_value = "um the the answer is 42 exclamation mark"
+        dictation.settings.update(history_enabled=True, press_enter=True)
+        plan = SimpleNamespace(model_id=None, level="fast", llm_mode="literal")
+        events = []
+
+        def paste(text, should_enter):
+            events.append(("paste", text, should_enter()))
+
+        with patch.object(tidy, "plan", return_value=plan), \
+                patch("speak.controller.history.add", side_effect=lambda text: events.append(("history", text))), \
+                patch("speak.controller.output.paste", side_effect=paste), \
+                patch("speak.controller.platform_utils.foreground_window", return_value=dictation._target):
+            dictation._process()
+
+        expected = "The answer is 42!"
+        self.assertEqual([("history", expected), ("paste", expected, True)], events)
+        session.finish.assert_called_once()
+        dictation.listener.on_result.assert_called_once_with(expected, "")
+        dictation.listener.on_error.assert_not_called()
+        dictation.listener.on_cancelled.assert_not_called()
+        self.assertEqual(expected, dictation.latest)
+        self.assertEqual(dictation.state, State.IDLE)
+
+    def test_silence_reports_a_microphone_error_without_finishing_or_pasting(self):
+        dictation = dictation_for_processing()
+        dictation.mic = Mock(frames=0)
+        session = dictation.session = Mock()
+
+        with patch("speak.controller.output.paste") as paste:
+            dictation._process()
+
+        session.close.assert_called_once()
+        session.finish.assert_not_called()
+        dictation.listener.on_error.assert_called_once_with(
+            "Speak didn't hear anything. Check that your microphone is working."
+        )
+        paste.assert_not_called()
         dictation.listener.on_result.assert_not_called()
         self.assertEqual(dictation.state, State.IDLE)
 

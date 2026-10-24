@@ -7,6 +7,8 @@ from speak.ui.app import SpeakApp
 
 
 class DevicePreferenceTest(unittest.TestCase):
+    """A saved GPU that disappears is reset and communicated to the user."""
+
     def test_missing_saved_gpu_resets_and_notifies(self):
         settings = {"cleanup_device": "Vulkan9"}
         detected = [tidy.Gpu("Vulkan0", "RTX", 9000)]

@@ -8,6 +8,8 @@ from tools import make_notices
 
 
 class MakeNoticesTest(unittest.TestCase):
+    """Bundled notices include dependency licenses without inventing a root license."""
+
     def test_generates_third_party_notices_without_root_license(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -9,6 +9,8 @@ from speak import hotkey
 
 
 class HotkeyRegistrationTest(unittest.TestCase):
+    """Shortcut handling consumes only matching keys and cancels only active dictation."""
+
     def test_only_matching_shortcut_events_are_consumed(self):
         callbacks = {}
         pressed, released = [], []
@@ -86,6 +88,8 @@ class HotkeyRegistrationTest(unittest.TestCase):
 
 
 class MacKeyTapTest(unittest.TestCase):
+    """The macOS Quartz tap suppresses only events consumed by Speak."""
+
     def test_only_consumed_shortcut_events_are_suppressed(self):
         names = (
             "CFMachPortCreateRunLoopSource", "CFRunLoopAddSource", "CFRunLoopGetCurrent", "CFRunLoopRunInMode",

@@ -37,6 +37,24 @@ Headless pipeline check (real ASR + tidy, no UI), printing the plan and timing f
 python -m tools.dictate_wav path\to\16bit-mono.wav --tidy fast,auto,best [--cpu]
 ```
 
+## Automated tests
+
+Run the hardware- and network-independent suite with:
+
+```powershell
+python -m unittest discover -s tests -p "test_*.py"
+uvx ruff check --select F speak tools tests
+```
+
+The suite lives in `tests/`, uses the standard-library `unittest`, and mocks OS APIs, devices, clipboard, subprocesses,
+and HTTP responses.
+CI runs it and Ruff through a shared reusable action (`.github/actions/python-ci-checks/action.yml`) that both
+`.github/workflows/build.yml` and `.github/workflows/release.yml` call on Windows and macOS. The step writes a coverage
+table into the GitHub job summary for each matrix run. `coverage.xml` artifact upload is optional (off by default).
+It does not download models or require a microphone.
+Real hotkey/paste injection, packaged-app behavior, and inference pipelines remain separate manual or
+hardware-dependent checks; see the verification skills in `AGENTS.md`.
+
 ## Code map
 
 | Path | What |

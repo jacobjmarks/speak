@@ -67,10 +67,15 @@ Entry point: `main.py` (repo root) or `python -m speak`; both call `speak.ui.app
 ```powershell
 pwsh -File ./build.ps1            # native package for Windows x64 or macOS arm64/x64
 .\.venv\Scripts\python.exe main.py
+# Automated tests (no model downloads or hardware required):
+.\.venv\Scripts\python.exe -m unittest discover -s tests -p "test_*.py"
 # Headless pipeline check (ASR + each tidy level) on a 16-bit mono WAV:
 .\.venv\Scripts\python.exe -m tools.dictate_wav sample.wav --tidy fast,auto,best
-uvx ruff check --select F speak tools   # lint
+uvx ruff check --select F speak tools tests   # lint
 ```
+
+Each test class documents its behavioral contract in a docstring; test names describe observable outcomes. Prefer
+end-to-end logic flows with external services and OS APIs mocked at their boundaries over line-coverage-only tests.
 
 Verification skills (read `speak-verify` first) live in `.agents/skills/`: `speak-verify`, `speak-ui-harness` (for focused app-driving, page navigation, and specific UI interactions), `speak-ui-screenshots` (`python -m tools.screenshots` for broad visual checks), `speak-pipeline-checks`, `speak-os-checks`, `speak-build-exe`. Choose focused tests for focused UI behavior; check existing Speak/runtime processes before checks that can launch or interact with them, and leave pre-existing processes alone. Always run a check and look at its output before calling a change done.
 

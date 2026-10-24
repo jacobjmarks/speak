@@ -11,8 +11,8 @@ Never say "done" from reading code. Run something that exercises the change, loo
 
 | You changed | Run | Skill |
 |---|---|---|
-| Any Python | `uvx ruff check --select F speak tools` | this file |
-| Pure logic (`tidy`, `cleanup`, `config`, `updates`, `hotkey` parsing, controller states) | `.\.venv\Scripts\python.exe -m unittest discover -s tools -p "test_*.py"` then a throwaway script for new logic | this file |
+| Any Python | `uvx ruff check --select F speak tools tests` | this file |
+| Pure logic (`tidy`, `cleanup`, `config`, `updates`, `hotkey` parsing, controller states) | `.\.venv\Scripts\python.exe -m unittest discover -s tests -p "test_*.py"` then a throwaway script for new logic | this file |
 | Broad visual changes (shared layout/theme, several pages/states, visual regression) | `python -m tools.screenshots`, then **view the PNGs** | `speak-ui-screenshots` |
 | Focused UI behavior or one-widget change | Use the real app flow to navigate and click the target control; assert widget state/signal output; capture only the affected state if appearance is part of the requirement | `speak-ui-harness` |
 | ASR, cleanup prompt, tidy models, runtimes | `python -m tools.dictate_wav ...` | `speak-pipeline-checks` |

@@ -111,10 +111,7 @@ jobs:
         with:
           ref: ${{ inputs.ref }}
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.14'
-          cache: pip
+      - uses: ./.github/actions/python-ci-checks
 
       - name: Stamp version
         shell: pwsh
