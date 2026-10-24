@@ -24,7 +24,7 @@ Speak is a local desktop dictation app. A global hotkey (hold or tap) records th
 | `ui/window.py` | `MainWindow` (sidebar + pages), `app_icon()`, first-close `CloseDialog` |
 | `ui/banner.py` | `Banner`: keyed in-window notices (errors, permission warnings, updates); use `window.notify(key, text, level, action)`. User-facing text must be plain language |
 | `ui/pages.py` | `DictatePage`, `HistoryPage`, `SettingsPage` (basic card + collapsible Advanced), `AboutPage` (version, sponsor links, licence/notices), `SetupPage` (macOS first-run permissions) |
-| `ui/onboarding.py` | `OnboardingPage`: animated 8-step first-run flow (welcome, theme, mic check + retry, shortcut/mode/dimming, tidy level + model + speed test, overlay preview via real `Overlay.snapshot`, updates + pre-releases, done); changes apply live; changing tidy options cancels the running test (`Dictation.cancel_benchmark`) and re-tests; rerun from Settings |
+| `ui/onboarding/` | `OnboardingPage`: animated 8-step first-run flow (welcome, theme, mic check + retry, shortcut/mode/dimming, tidy level + model + speed test, overlay preview via real `Overlay.snapshot`, updates + pre-releases, done); changes apply live; changing tidy options cancels the running test (`Dictation.cancel_benchmark`) and re-tests; rerun from Settings |
 | `benchmark.py` | `run(...)`: times a recording through ASR + tidy; `Result.verdict` plain-language rating |
 | `ui/overlay.py` | Floating pill: waveform / phase word / check; position (cursor/top/bottom); live text (line/full/off) |
 | `ui/widgets.py` | Painted widgets: `MicButton`, `WaveStrip`, `Spinner`, `Toggle`, `ShortcutButton`; `draw_wave`/`draw_shimmer_text` shared with the overlay; glyph helpers |

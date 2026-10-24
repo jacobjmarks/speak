@@ -1,60 +1,15 @@
-from unittest.mock import patch
-
 from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QPushButton
 
-from tests.ui import QtTestCase
-from speak import config, tidy
-from speak.benchmark import Result
-from speak.ui import onboarding, theme as ui_theme
-from speak.ui.onboarding import OnboardingPage
+from speak import config
+from speak.ui import onboarding
+from tests.ui.onboarding_support import OnboardingCase, button, result
 
 
-def button(page, text):
-    return next(b for b in page.findChildren(QPushButton) if b.text() == text)
-
-
-def result(latency=0.5):
-    return Result(10.0, 3.0, latency - 0.2, 0.2, "raw", "Clean.", tidy.Plan("fast", None, "literal", None, "plan"))
-
-
-def fake_plan(settings):
-    """A computer with a good graphics card: Automatic and Large both mean Large AI there."""
-    level = settings["tidy"]
-    if level in ("off", "fast"):
-        return tidy.Plan(level, None, "literal", None, "")
-    small = settings.get("cleanup_model") == config.SMALL_MODEL
-    model = config.SMALL_MODEL if small else config.LARGE_MODEL
-    mode = "smart" if model == config.LARGE_MODEL and settings["corrections"] else "literal"
-    return tidy.Plan(level, model, mode, "Vulkan0", "")
-
-
-class OnboardingPageTest(QtTestCase):
+class OnboardingPageTest(OnboardingCase):
     """First-run setup goes welcome -> mic -> shortcut -> tidy + speed test -> indicator -> look and updates ->
     done. Choices apply live; tidy options that don't apply are greyed out; changing a tidy option cancels the
     running speed test and re-runs it."""
-
-    theme = "Light"
-
-    def make(self, settings=None):
-        patches = [patch.object(onboarding, "ANIMATE", False),
-                   patch("speak.ui.onboarding.audio.Microphone"),
-                   patch("speak.ui.pages.audio.input_devices", return_value=["Desk mic"]),
-                   patch("speak.ui.onboarding.tidy.plan", side_effect=fake_plan)]
-        mocks = [p.start() for p in patches]
-        for p in patches:
-            self.addCleanup(p.stop)
-        mocks[1].return_value.level = 0.5
-        page = OnboardingPage(settings or dict(config.DEFAULTS))
-        pal = ui_theme.resolve(self.theme)
-        page.setStyleSheet(ui_theme.stylesheet(pal) + f"QWidget#page {{ background: {pal.bg}; }}")
-        page.set_palette(ui_theme.resolve(self.theme))
-        page.resize(1000, 760)
-        page.show()
-        self.addCleanup(page.close)
-        self.mic = mocks[1]
-        return page
 
     def test_welcome_starts_the_flow_and_mic_step_hears_you(self):
         page = self.make()

@@ -1,4 +1,7 @@
+import tempfile
 import unittest
+import wave
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from speak import benchmark, tidy
@@ -62,6 +65,46 @@ class RunTest(unittest.TestCase):
 
         with self.assertRaises(benchmark.Cancelled):
             self.run_with(plan, cancelled=lambda: True)
+
+    def test_a_failing_speech_session_is_closed_and_the_error_surfaces(self):
+        plan = tidy.Plan("fast", None, "literal", None, "s")
+        session = MagicMock()
+        session.send_audio.side_effect = ConnectionError("lost")
+        with patch.object(benchmark, "AsrSession", return_value=session), \
+                patch.object(benchmark.tidy, "plan", return_value=plan), \
+                patch.object(benchmark.tidy, "_probed"), \
+                patch.object(benchmark, "STREAM_SPEEDUP", 1000):
+            with self.assertRaises(ConnectionError):
+                benchmark.run({"model": "m", "language": "auto"}, bytes(32000), 16000,
+                              MagicMock(port=1), MagicMock(port=2), MagicMock())
+
+        session.close.assert_called_once()
+
+
+class ReadWavTest(unittest.TestCase):
+    """Sample audio loads only as 16-bit mono, returned with its sample rate."""
+
+    def write(self, channels, width):
+        folder = tempfile.TemporaryDirectory(prefix="speak-wav-")
+        self.addCleanup(folder.cleanup)
+        path = Path(folder.name) / "s.wav"
+        with wave.open(str(path), "wb") as wav:
+            wav.setnchannels(channels)
+            wav.setsampwidth(width)
+            wav.setframerate(16000)
+            wav.writeframes(bytes(width * channels * 100))
+        return path
+
+    def test_mono_16_bit_returns_pcm_and_rate(self):
+        pcm, rate = benchmark.read_wav(self.write(1, 2))
+
+        self.assertEqual((200, 16000), (len(pcm), rate))
+
+    def test_stereo_or_8_bit_is_rejected(self):
+        for channels, width in ((2, 2), (1, 1)):
+            with self.subTest(channels=channels, width=width):
+                with self.assertRaises(ValueError):
+                    benchmark.read_wav(self.write(channels, width))
 
 
 if __name__ == "__main__":
