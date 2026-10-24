@@ -1,7 +1,6 @@
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-<<<<<<< HEAD
 from PySide6.QtCore import QEvent, QObject, QPoint, QPointF, Qt
 from PySide6.QtGui import QWheelEvent
 from PySide6.QtTest import QTest
