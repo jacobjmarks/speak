@@ -25,6 +25,7 @@ class Bridge(QObject, Listener):
     state = Signal(str)
     progress = Signal(str, object)
     live = Signal(str)
+    warning = Signal(str)
     result = Signal(str, str)
     error = Signal(str)
     hotkey_down = Signal()
@@ -44,6 +45,9 @@ class Bridge(QObject, Listener):
 
     def on_live_text(self, text):
         self.live.emit(text)
+
+    def on_warning(self, message):
+        self.warning.emit(message)
 
     def on_result(self, text, note):
         self.result.emit(text, note)
@@ -88,6 +92,7 @@ class SpeakApp(QObject):
         b.state.connect(self._on_state)
         b.progress.connect(self._on_progress)
         b.live.connect(self._on_live)
+        b.warning.connect(lambda message: self.window.notify("audio-dimming", message, "error", timeout=12))
         b.result.connect(self._on_result)
         b.error.connect(self._on_error)
         b.hotkey_down.connect(self._on_hotkey_down)

@@ -7,7 +7,7 @@ import threading
 import time
 from enum import Enum
 
-from . import cleanup, history, output, platform_utils, tidy
+from . import cleanup, history, output, platform_utils, system_audio, tidy
 from .asr import AsrSession
 from .audio import Microphone
 from .config import CLEANUP_MODELS, MODELS_DIR
@@ -40,6 +40,7 @@ class Listener:
     def on_state(self, state: State) -> None: ...
     def on_progress(self, message: str, percent) -> None: ...
     def on_live_text(self, text: str) -> None: ...
+    def on_warning(self, message: str) -> None: ...
     def on_result(self, text: str, note: str) -> None: ...
     def on_error(self, message: str) -> None: ...
     def on_cancelled(self) -> None: ...
@@ -60,6 +61,7 @@ class Dictation:
         self._cancel_error = False
         self._cancel_event = threading.Event()
         self._target = None  # window focused when dictation started
+        self._audio_volume = None
         self._unload_timer = None
         self._cleanup_retry_at = 0.0  # monotonic time before which a failed tidy-up download isn't retried
         threading.Thread(target=tidy.probe, args=(llama_root() / exe_name("llama-server"),), daemon=True).start()
@@ -170,6 +172,10 @@ class Dictation:
 
     def shutdown(self):
         self._cancel_unload()
+        with self._lock:
+            warning = self._restore_audio()
+        if warning:
+            self.listener.on_warning(warning)
         if self.mic is not None:
             self.mic.stop()
         if self.session is not None:
@@ -178,11 +184,34 @@ class Dictation:
         self.cleanup_server.stop()
 
     def _set_state(self, state: State):
+        warning = None
         with self._lock:
+            if self.state == State.LISTENING and state != State.LISTENING:
+                warning = self._restore_audio()
+            if (state == State.LISTENING and system_audio.SUPPORTED
+                    and self.settings.get("audio_dim_enabled") is True):
+                try:
+                    self._audio_volume = system_audio.dim(self.settings["audio_dim_percent"])
+                except Exception as exc:
+                    log.warning("Couldn't dim system audio", exc_info=exc)
+                    warning = "Couldn't dim system audio. Dictation will continue at the current volume."
             self.state = state
             if state == State.IDLE:
                 self._schedule_unload()
         self.listener.on_state(state)
+        if warning:
+            self.listener.on_warning(warning)
+
+    def _restore_audio(self):
+        if self._audio_volume is None:
+            return None
+        try:
+            system_audio.restore(*self._audio_volume)
+            self._audio_volume = None
+        except Exception as exc:
+            log.warning("Couldn't restore system audio", exc_info=exc)
+            return "Speak couldn't restore your previous system volume. Check your output volume."
+        return None
 
     def _ensure_cleanup(self, plan, progress):
         if self.cleanup_server.ensure(plan, progress):

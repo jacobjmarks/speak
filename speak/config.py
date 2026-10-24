@@ -14,6 +14,13 @@ REPO_URL = "https://github.com/jacobjmarks/speak"
 COFFEE_URL = "https://buymeacoffee.com/jacobjmarks"
 SPONSOR_URL = "https://github.com/sponsors/jacobjmarks"
 
+AUDIO_DIM_STEP = 5
+
+
+def snap_audio_dim_percent(percent: int) -> int:
+    return ((percent + AUDIO_DIM_STEP // 2) // AUDIO_DIM_STEP) * AUDIO_DIM_STEP
+
+
 # close_action: "ask" until the user answers the first-close prompt, then "tray" or "exit".
 DEFAULTS = {
     "hotkey": "right alt",
@@ -22,6 +29,8 @@ DEFAULTS = {
     "history_enabled": False,
     "auto_paste": True,
     "press_enter": False,  # experimental: Enter after pasting, only if the same app is still in front
+    "audio_dim_enabled": False,
+    "audio_dim_percent": 20,
     "advanced_settings": False,
     "mic_device": None,  # device name; None = system default
     "overlay_enabled": True,
@@ -90,6 +99,13 @@ def load_settings() -> dict:
         settings["tidy"] = "auto"
     if isinstance(settings["live_preview"], bool):
         settings["live_preview"] = "line" if settings["live_preview"] else "off"
+    if not isinstance(settings["audio_dim_enabled"], bool):
+        settings["audio_dim_enabled"] = DEFAULTS["audio_dim_enabled"]
+    if (not isinstance(settings["audio_dim_percent"], int) or isinstance(settings["audio_dim_percent"], bool)
+            or not 10 <= settings["audio_dim_percent"] <= 90):
+        settings["audio_dim_percent"] = DEFAULTS["audio_dim_percent"]
+    else:
+        settings["audio_dim_percent"] = snap_audio_dim_percent(settings["audio_dim_percent"])
     if "hold_to_talk" in stored and "shortcut_mode" not in stored:
         settings["shortcut_mode"] = "auto" if stored["hold_to_talk"] else "toggle"
     if "check_updates" in stored and "updates" not in stored:

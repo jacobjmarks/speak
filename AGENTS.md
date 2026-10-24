@@ -12,6 +12,7 @@ Speak is a local desktop dictation app. A global hotkey (hold or tap) records th
 | `runtimes.py` | `ManagedServer` subprocess lifecycle; `AsrServer`, `CleanupServer`; cleanup model download |
 | `asr.py` | `AsrSession`: realtime websocket (send PCM, receive deltas/finals) |
 | `audio.py` | `Microphone(device_name)`, `input_devices()`: sounddevice capture + RMS level |
+| `system_audio.py` | System output volume dimming and safe restore (Windows/macOS) |
 | `tidy.py` | Hardware probe (`llama-server --list-devices`) + `plan(settings)`: tidy level → model, device, llm mode, user-facing summary |
 | `cleanup.py` | `finalize(raw, level, llm_mode, port)`: regex rules (spoken punctuation, fillers, pauses) → LLM cleanup → `validate()` guardrails; `warm()` primes the prompt cache |
 | `controller.py` | `Dictation` state machine (`State`: idle → preparing → listening → processing) and the `Listener` callbacks the UI implements |

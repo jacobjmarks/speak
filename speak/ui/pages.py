@@ -4,7 +4,7 @@ from datetime import datetime
 from PySide6.QtCore import Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (QBoxLayout, QComboBox, QFrame, QHBoxLayout, QLabel, QPlainTextEdit, QPushButton,
-                               QScrollArea, QSizePolicy, QVBoxLayout, QWidget)
+                               QScrollArea, QSlider, QSizePolicy, QVBoxLayout, QWidget)
 
 from .. import audio, config, history, hotkey, output, permissions, platform_utils, updates
 from .widgets import MicButton, ShortcutButton, Toggle, WaveStrip
@@ -364,6 +364,33 @@ class SettingsPage(QScrollArea):
         # --- indicator ---
         layout.addWidget(_label("While dictating", "section"))
         card, rows = _card()
+        self.audio_dim = self._toggle(settings["audio_dim_enabled"], "audio_dim_enabled")
+        self.audio_dim_row = self._row(
+            rows, "Dim system audio", "Lowers output while listening, then restores it. Changes apply next time.",
+            self.audio_dim)
+        audio_dim_divider = rows.itemAt(rows.count() - 1).widget()
+        self.audio_dim_level = QWidget()
+        level_layout = QHBoxLayout(self.audio_dim_level)
+        level_layout.setContentsMargins(0, 0, 0, 0)
+        self.audio_dim_slider = QSlider(Qt.Horizontal)
+        self.audio_dim_slider.setAccessibleName("Reduce system audio by")
+        self.audio_dim_slider.setRange(10, 90)
+        self.audio_dim_slider.setSingleStep(config.AUDIO_DIM_STEP)
+        self.audio_dim_slider.setPageStep(10)
+        self.audio_dim_slider.setValue(settings["audio_dim_percent"])
+        self.audio_dim_value = _label(f'{settings["audio_dim_percent"]}%')
+        self.audio_dim_value.setMinimumWidth(42)
+        level_layout.addWidget(self.audio_dim_slider, 1)
+        level_layout.addWidget(self.audio_dim_value)
+        self.audio_dim_slider.setEnabled(settings["audio_dim_enabled"])
+        self.audio_dim_slider.valueChanged.connect(self._on_audio_dim_changed)
+        self.audio_dim_level_row = self._row(rows, "Reduce by", "", self.audio_dim_level)
+        audio_dim_level_divider = rows.itemAt(rows.count() - 1).widget()
+        if not (platform_utils.IS_WINDOWS or platform_utils.IS_MAC):
+            for widget in (self.audio_dim_row, audio_dim_divider, self.audio_dim_level_row, audio_dim_level_divider):
+                widget.hide()
+        self.audio_dim.toggled.connect(self._on_audio_dim_toggled)
+
         self.overlay = self._toggle(settings["overlay_enabled"], "overlay_enabled")
         self._row(rows, "Show indicator", "Hidden while Speak's Dictate page is in front", self.overlay)
         self.position = _combo(config.OVERLAY_POSITIONS, settings["overlay_position"])
@@ -504,6 +531,18 @@ class SettingsPage(QScrollArea):
         toggle.toggled.connect(lambda on: self.changed.emit({key: on}))
         return toggle
 
+    def _on_audio_dim_toggled(self, enabled: bool):
+        self.audio_dim_slider.setEnabled(enabled)
+        self.changed.emit({"audio_dim_enabled": enabled})
+
+    def _on_audio_dim_changed(self, percent: int):
+        percent = config.snap_audio_dim_percent(percent)
+        if self.audio_dim_slider.value() != percent:
+            self.audio_dim_slider.setValue(percent)
+            return
+        self.audio_dim_value.setText(f"{percent}%")
+        self.changed.emit({"audio_dim_percent": percent})
+
     def set_palette(self, palette):
         for toggle in self.findChildren(Toggle):
             toggle.palette_ = palette
@@ -519,6 +558,14 @@ class SettingsPage(QScrollArea):
         self.history.blockSignals(True)
         self.history.setChecked(settings["history_enabled"])
         self.history.blockSignals(False)
+        self.audio_dim.blockSignals(True)
+        self.audio_dim.setChecked(settings["audio_dim_enabled"])
+        self.audio_dim.blockSignals(False)
+        self.audio_dim_slider.blockSignals(True)
+        self.audio_dim_slider.setValue(settings["audio_dim_percent"])
+        self.audio_dim_slider.blockSignals(False)
+        self.audio_dim_slider.setEnabled(settings["audio_dim_enabled"])
+        self.audio_dim_value.setText(f'{settings["audio_dim_percent"]}%')
         self.enter.setEnabled(settings["auto_paste"])
         self._update_hint(settings["updates"])
         self._shortcut_mode_hint(settings["shortcut_mode"])

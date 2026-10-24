@@ -46,6 +46,7 @@ python -m tools.dictate_wav path\to\16bit-mono.wav --tidy fast,auto,best [--cpu]
 | `speak/cleanup.py` | Rules (spoken commands, fillers, pauses), LLM prompts, output validation |
 | `speak/runtimes.py` | Starts/stops the bundled ASR and llama.cpp servers; model downloads |
 | `speak/asr.py`, `speak/audio.py` | Streaming ASR session, microphone capture |
+| `speak/system_audio.py` | Optional system output-volume dimming while listening (Windows/macOS) |
 | `speak/hotkey.py` | Global shortcut (press/release for hold-to-talk), capture, key sending |
 | `speak/updates.py` | Update check against `v<semver>` release tags; download, sha256 check, exe swap |
 | `speak/ui/` | Window, pages, overlay, widgets, theme |
@@ -92,3 +93,4 @@ Donation links (`COFFEE_URL`, `SPONSOR_URL` in `speak/config.py`, `.github/FUNDI
 ## Privacy
 
 Microphone audio is held in memory only and sent to the app-owned local runtime on loopback. History stores transcript text only, and only when enabled. Network use: model downloads (Hugging Face) and the update check/download (GitHub releases; can be turned off).
+Optional system audio dimming is off by default. On Windows and macOS it lowers output volume by the chosen percentage only while the microphone is listening, then restores the previous level if the user has not changed it meanwhile. It requires no additional macOS permission.
