@@ -79,7 +79,8 @@ def _mask_menu() -> None:
     user32.keybd_event(0xE8, 0, 2, 0)
 
 
-def _listen(on_press: Callable[[set], None], on_release: Callable[[set], None], suppress: bool = False):
+def _listen(on_press: Callable[[set], None], on_release: Callable[[set], None], suppress: bool = False,
+            suppress_escape: Callable[[], bool] | None = None):
     """Start a global key listener whose callbacks get the set of names each key answers to; returns it (`.stop()`).
 
     Raises PermissionError on macOS when Input Monitoring (or, to suppress keys, Accessibility) is missing.
@@ -87,18 +88,31 @@ def _listen(on_press: Callable[[set], None], on_release: Callable[[set], None], 
     if IS_MAC:
         from .keytap_mac import KeyTap
 
-        tap = KeyTap(on_press, on_release, suppress)
+        tap = KeyTap(on_press, on_release, suppress, suppress_escape)
         tap.start()
         return tap
     from pynput import keyboard as kb
 
+    options = {}
+    if IS_WINDOWS and suppress_escape:
+        def filter_escape(msg, data):
+            if data.vkCode == 0x1B and msg in (0x100, 0x104):
+                if suppress_escape():
+                    on_press({"esc"})
+                    listener.suppress_event()
+                return False
+
+            return True
+
+        options["win32_event_filter"] = filter_escape
     listener = kb.Listener(on_press=lambda key: on_press(_names(key)), on_release=lambda key: on_release(_names(key)),
-                           suppress=suppress)
+                           suppress=suppress, **options)
     listener.start()
     return listener
 
 
-def register(combo: str, on_press: Callable[[], None], on_release: Callable[[], None]) -> None:
+def register(combo: str, on_press: Callable[[], None], on_release: Callable[[], None],
+             on_escape: Callable[[], None], escape_active: Callable[[], bool]) -> None:
     """Call `on_press` when the combo goes down and `on_release` when any of its keys comes up.
 
     Key autorepeat while held does not re-fire `on_press`. Callbacks run on the listener thread.
@@ -110,6 +124,10 @@ def register(combo: str, on_press: Callable[[], None], on_release: Callable[[], 
     mask = IS_WINDOWS and all(_is_modifier(p) for p in wanted) and any(p.endswith(("alt", "cmd")) for p in wanted)
 
     def press(names):
+        if "esc" in names:
+            if escape_active():
+                on_escape()
+            return
         down.update(names)
         if wanted <= down and not _held.is_set():
             _held.set()
@@ -123,7 +141,7 @@ def register(combo: str, on_press: Callable[[], None], on_release: Callable[[], 
             _held.clear()
             on_release()
 
-    _listener = _listen(press, release)
+    _listener = _listen(press, release, suppress_escape=escape_active)
 
 
 def unregister() -> None:

@@ -42,6 +42,7 @@ class Listener:
     def on_live_text(self, text: str) -> None: ...
     def on_result(self, text: str, note: str) -> None: ...
     def on_error(self, message: str) -> None: ...
+    def on_cancelled(self) -> None: ...
 
 
 class Dictation:
@@ -56,6 +57,8 @@ class Dictation:
         self.latest = ""
         self._lock = threading.RLock()  # re-entered by _set_state from _abort
         self._cancelled = False
+        self._cancel_error = False
+        self._cancel_event = threading.Event()
         self._target = None  # window focused when dictation started
         self._unload_timer = None
         self._cleanup_retry_at = 0.0  # monotonic time before which a failed tidy-up download isn't retried
@@ -82,12 +85,25 @@ class Dictation:
         with self._lock:
             if self.state == State.LISTENING:
                 self._stop_locked()
-            elif self.state == State.PREPARING:
+            elif self.state == State.PREPARING and not self._cancelled:
                 self._cancelled = True
+                self._cancel_error = True
+
+    def cancel(self):
+        self._cancel_event.set()
+        with self._lock:
+            if self.state == State.IDLE:
+                return
+            self._cancelled = True
+            self._cancel_error = False
+            if self.state == State.LISTENING:
+                self._abort()
 
     def _start_locked(self):
         self._cancel_unload()
         self._cancelled = False
+        self._cancel_error = False
+        self._cancel_event.clear()
         self._target = platform_utils.foreground_window()
         self._set_state(State.PREPARING)
         threading.Thread(target=self._prepare, daemon=True).start()
@@ -183,6 +199,12 @@ class Dictation:
         try:
             self.mic = Microphone(self._on_audio, self.settings["mic_device"])
             self._ensure_runtimes(self.listener.on_progress)
+            with self._lock:
+                if self._cancelled:
+                    message = ("You let go too soon. Hold the shortcut until the mic turns red."
+                               if self._cancel_error else None)
+                    self._abort(message)
+                    return
             self.session = AsrSession(
                 self.asr_server.port,
                 self.mic.sample_rate,
@@ -193,32 +215,52 @@ class Dictation:
             )
             with self._lock:
                 if self._cancelled:
-                    self._abort("You let go too soon. Hold the shortcut until the mic turns red.")
+                    message = ("You let go too soon. Hold the shortcut until the mic turns red."
+                               if self._cancel_error else None)
+                    self._abort(message)
                     return
                 self.mic.start()
                 self.listener.on_live_text("")
                 self._set_state(State.LISTENING)
         except Exception as exc:
-            self._abort(_explain(exc))
+            with self._lock:
+                message = None if self._cancelled else _explain(exc)
+                self._abort(message)
 
     def _on_audio(self, chunk: bytes):
         session = self.session
         if session is not None:
             session.send_audio(chunk)
 
-    def _abort(self, message: str):
+    def _abort(self, message: str | None = None):
         if self.mic is not None:
             self.mic.stop()
         if self.session is not None:
             self.session.close()
             self.session = None
         self._set_state(State.IDLE)
-        self.listener.on_error(message)
+        if message:
+            self.listener.on_error(message)
+        else:
+            self.listener.on_cancelled()
+
+    def _finish_cancel(self):
+        self._set_state(State.IDLE)
+        self.listener.on_cancelled()
+
+    def _was_cancelled(self) -> bool:
+        if self._cancel_event.is_set():
+            return True
+        with self._lock:
+            return self._cancelled
 
     def _finish(self):
         try:
             self._process()
         except Exception as exc:
+            if self._was_cancelled():
+                self._finish_cancel()
+                return
             self._set_state(State.IDLE)
             self.listener.on_error(_explain(exc))
 
@@ -226,6 +268,10 @@ class Dictation:
         mic, session = self.mic, self.session
         mic.stop()
         self.session = None
+        if self._was_cancelled():
+            session.close()
+            self._finish_cancel()
+            return
         if mic.frames == 0:
             session.close()
             self._set_state(State.IDLE)
@@ -233,6 +279,9 @@ class Dictation:
             return
         self.listener.on_progress(FINISHING, None)
         text = session.finish()
+        if self._was_cancelled():
+            self._finish_cancel()
+            return
         plan = tidy.plan(self.settings)
         port = None
         tidy_note = ""
@@ -249,22 +298,39 @@ class Dictation:
                     tidy_note = "Tidy-up is unavailable right now, so your text was left as spoken."
                 except Exception:
                     pass
+        if self._was_cancelled():
+            self._finish_cancel()
+            return
         text, note = cleanup.finalize(text, plan.level, plan.llm_mode, port)
+        if self._was_cancelled():
+            self._finish_cancel()
+            return
         note = note or tidy_note
         if not text:
             self._set_state(State.IDLE)
             self.listener.on_error("Speak didn't catch any words. Please try again.")
             return
-        self.latest = text
-        if self.settings["history_enabled"]:
-            history.add(text)
-        if self.settings["auto_paste"]:
-            target = self._target
-            enter = lambda: (self.settings["press_enter"] and target is not None  # noqa: E731
-                             and platform_utils.foreground_window() == target)
-            try:
-                output.paste(text, enter)
-            except Exception:
-                note = note or "Paste unavailable; copy it from Speak"
-        self._set_state(State.IDLE)
+        with self._lock:
+            if self._cancelled:
+                cancelled = True
+            else:
+                cancelled = False
+                self.latest = text
+                if self.settings["history_enabled"]:
+                    history.add(text)
+                if self.settings["auto_paste"]:
+                    target = self._target
+                    enter = lambda: (not self._cancel_event.is_set() and self.settings["press_enter"]
+                                     and target is not None  # noqa: E731
+                                     and platform_utils.foreground_window() == target)
+                    try:
+                        output.paste(text, enter)
+                    except Exception:
+                        note = note or "Paste unavailable; copy it from Speak"
+                cancelled = cancelled or self._cancelled or self._cancel_event.is_set()
+                if not cancelled:
+                    self._set_state(State.IDLE)
+        if cancelled:
+            self._finish_cancel()
+            return
         self.listener.on_result(text, note)

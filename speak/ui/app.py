@@ -29,6 +29,8 @@ class Bridge(QObject, Listener):
     error = Signal(str)
     hotkey_down = Signal()
     hotkey_up = Signal()
+    escape = Signal()
+    cancelled = Signal()
     probed = Signal()
     update_found = Signal(object, bool)   # Release or None, manual check
     update_progress = Signal(int)
@@ -48,6 +50,9 @@ class Bridge(QObject, Listener):
 
     def on_error(self, message):
         self.error.emit(message)
+
+    def on_cancelled(self):
+        self.cancelled.emit()
 
 
 HOLD_SECONDS = 0.4      # auto mode: a press held longer than this is push-to-talk
@@ -87,6 +92,8 @@ class SpeakApp(QObject):
         b.error.connect(self._on_error)
         b.hotkey_down.connect(self._on_hotkey_down)
         b.hotkey_up.connect(self._on_hotkey_up)
+        b.escape.connect(self.dictation.cancel)
+        b.cancelled.connect(self._on_cancelled)
         b.probed.connect(self._refresh_tidy)
         b.update_found.connect(self._on_update_found)
         b.update_progress.connect(lambda p: self._set_update(f"{p}%", "Downloading the update…", enabled=False))
@@ -239,7 +246,8 @@ class SpeakApp(QObject):
 
     def _register_hotkey(self):
         try:
-            hotkey.register(self.settings["hotkey"], self.bridge.hotkey_down.emit, self.bridge.hotkey_up.emit)
+            hotkey.register(self.settings["hotkey"], self.bridge.hotkey_down.emit, self.bridge.hotkey_up.emit,
+                            self.bridge.escape.emit, lambda: self.dictation.state != State.IDLE)
             self.window.clear_notice("restart")
         except PermissionError:
             self.window.notify("restart", "Speak can't hear your shortcut yet. Restart Speak to finish setting up.",
@@ -369,6 +377,14 @@ class SpeakApp(QObject):
             self.overlay.set_mode("error")
         if self.tray and not self.window.isVisible():
             self.tray.showMessage("Speak", message, QSystemTrayIcon.Warning, 4000)
+
+    def _on_cancelled(self):
+        self.window.dictate.set_live("")
+        self.window.dictate.set_mode("idle")
+        self.window.clear_notice("error")
+        self.window.set_status("Ready", self.palette.success)
+        self.overlay.hide_now()
+        self._use_overlay = False
 
     # ----- window / tray -----
 

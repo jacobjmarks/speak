@@ -101,8 +101,10 @@ def _key_name(keycode: int) -> str:
 
 
 class KeyTap:
-    def __init__(self, on_press: Callable[[set], None], on_release: Callable[[set], None], suppress: bool = False):
+    def __init__(self, on_press: Callable[[set], None], on_release: Callable[[set], None], suppress: bool = False,
+                 suppress_escape: Callable[[], bool] | None = None):
         self._on_press, self._on_release, self._suppress = on_press, on_release, suppress
+        self._suppress_escape = suppress_escape
         self._tap = None
         self._loop = None
         self._running = False
@@ -110,7 +112,7 @@ class KeyTap:
     def start(self) -> None:
         """Raises PermissionError if macOS refuses the tap (no Input Monitoring, or no Accessibility to suppress)."""
         mask = CGEventMaskBit(kCGEventKeyDown) | CGEventMaskBit(kCGEventKeyUp) | CGEventMaskBit(kCGEventFlagsChanged)
-        options = kCGEventTapOptionDefault if self._suppress else kCGEventTapOptionListenOnly
+        options = kCGEventTapOptionDefault if self._suppress or self._suppress_escape else kCGEventTapOptionListenOnly
         self._tap = CGEventTapCreate(kCGSessionEventTap, kCGHeadInsertEventTap, options, mask, self._handle, None)
         if self._tap is None:
             raise PermissionError(NOT_ALLOWED)
@@ -149,6 +151,9 @@ class KeyTap:
             else:
                 names = {_key_name(keycode)}
                 (self._on_press if event_type == kCGEventKeyDown else self._on_release)(names)
+                if event_type == kCGEventKeyDown and names == {"esc"} \
+                        and self._suppress_escape and self._suppress_escape():
+                    return None
         except Exception:
             log.exception("key event handler failed")
         return None if self._suppress else event
