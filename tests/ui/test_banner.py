@@ -19,6 +19,7 @@ class BannerInteractionTest(QtTestCase):
         actions = []
         banner.action_clicked.connect(actions.append)
 
+        self.capture(banner, "update-action")
         QTest.mouseClick(banner.findChild(QPushButton, "primary"), Qt.LeftButton)
 
         self.assertEqual(["update"], actions)
@@ -34,6 +35,7 @@ class BannerInteractionTest(QtTestCase):
         banner.show()
         self.addCleanup(banner.close)
 
+        self.capture(banner, "error-priority")
         self.assertEqual("Permission missing", banner.findChild(QLabel).text())
         banner.clear("permission")
         self.assertTrue(banner.isVisible())

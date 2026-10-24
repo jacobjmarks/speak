@@ -28,6 +28,7 @@ class SetupPageInteractionTest(QtTestCase):
         open_settings = next(button for button in buttons if button.text() == "Open Settings")
         restart = next(button for button in buttons if button.text() == "Restart Speak")
 
+        self.capture(page, "permissions-needed")
         QTest.mouseClick(allow, Qt.LeftButton)
         QTest.mouseClick(open_settings, Qt.LeftButton)
         QTest.mouseClick(restart, Qt.LeftButton)
@@ -43,6 +44,7 @@ class SetupPageInteractionTest(QtTestCase):
         page.show()
         self.addCleanup(page.close)
         page.set_status({"microphone": True}, LIGHT)
+        self.capture(page, "permission-granted")
         mark = next(label for label in page.findChildren(QLabel) if label.text() == "✓")
         buttons = page.findChildren(QPushButton)
         allow = next(button for button in buttons if button.text() == "Allow")

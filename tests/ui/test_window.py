@@ -22,6 +22,7 @@ class MainWindowInteractionTest(QtTestCase):
 
         QTest.mouseClick(window.nav.button(2), Qt.LeftButton)
 
+        self.capture(window, "settings-navigation")
         self.assertIs(window.stack.currentWidget(), window.settings)
         self.assertTrue(window.nav.button(2).isChecked())
 
@@ -37,6 +38,7 @@ class CloseDialogInteractionTest(QtTestCase):
                 self.addCleanup(dialog.close)
                 button = next(button for button in dialog.findChildren(QPushButton)
                               if button.text().startswith(label_prefix))
+                self.capture(dialog, f"{expected}-choice")
 
                 QTest.mouseClick(button, Qt.LeftButton)
 
@@ -47,6 +49,7 @@ class CloseDialogInteractionTest(QtTestCase):
         dialog = CloseDialog()
         dialog.show()
         self.addCleanup(dialog.close)
+        self.capture(dialog, "dismissible-close-prompt")
 
         QTest.keyClick(dialog, Qt.Key_Escape)
 

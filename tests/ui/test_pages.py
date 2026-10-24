@@ -30,6 +30,7 @@ class SettingsInteractionTest(QtTestCase):
         with patch.object(config, "save_settings") as save:
             QTest.mouseClick(page.history, Qt.LeftButton)
 
+        self.capture(page, "history-enabled")
         self.assertTrue(app.settings["history_enabled"])
         save.assert_called_once_with(app.settings)
         app.dictation.settings_changed.assert_called_once()
@@ -43,6 +44,7 @@ class SettingsInteractionTest(QtTestCase):
 
         QTest.mouseClick(page.paste, Qt.LeftButton)
 
+        self.capture(page, "auto-paste-disabled")
         self.assertFalse(page.enter.isEnabled())
         self.assertTrue(page.enter.isChecked())
         self.assertEqual([{"auto_paste": False}], changes)
@@ -55,6 +57,7 @@ class SettingsInteractionTest(QtTestCase):
 
         QTest.keyClick(page.audio_dim_slider, Qt.Key_Right)
 
+        self.capture(page, "audio-dim-adjusted")
         self.assertEqual(40, page.audio_dim_slider.value())
         self.assertEqual("40%", page.audio_dim_value.text())
         self.assertEqual([{"audio_dim_percent": 40}], changes)
@@ -67,6 +70,7 @@ class SettingsInteractionTest(QtTestCase):
 
         QTest.keyClick(page.shortcut_mode, Qt.Key_End)
 
+        self.capture(page, "toggle-shortcut-mode")
         self.assertEqual("toggle", page.shortcut_mode.currentData())
         self.assertEqual([{"shortcut_mode": "toggle"}], changes)
 
@@ -78,6 +82,7 @@ class SettingsInteractionTest(QtTestCase):
 
         QTest.mouseClick(page.advanced_toggle, Qt.LeftButton)
 
+        self.capture(page, "advanced-settings")
         self.assertTrue(page.asr_model.parentWidget().isVisible())
         self.assertEqual([{"advanced_settings": True}], changes)
 
@@ -94,10 +99,12 @@ class HistoryInteractionTest(QtTestCase):
         ]), patch("speak.ui.pages.history.clear") as clear:
             page.refresh(enabled=True)
             self.assertTrue(page.clear_button.isVisible())
+            self.capture(page, "history-before-clear")
 
             QTest.mouseClick(page.clear_button, Qt.LeftButton)
             self.app.processEvents()
 
+            self.capture(page, "history-after-clear")
         clear.assert_called_once()
         self.assertFalse(page.clear_button.isVisible())
         self.assertEqual("Nothing yet", page.empty_label.text())
@@ -110,6 +117,7 @@ class HistoryInteractionTest(QtTestCase):
                    return_value=[("2026-01-01T10:00:00+00:00", "A saved dictation")]):
             page.refresh(enabled=True)
         entry = page.findChild(HistoryEntry)
+        self.capture(page, "saved-history-entry")
 
         with patch("speak.ui.pages.output.copy") as copy:
             QTest.mouseClick(entry, Qt.LeftButton)

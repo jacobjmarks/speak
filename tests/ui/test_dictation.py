@@ -17,6 +17,7 @@ class DictatePageInteractionTest(QtTestCase):
         requests = []
         page.toggle_requested.connect(lambda: requests.append(True))
 
+        self.capture(page, "dictation-ready")
         QTest.mouseClick(page.mic, Qt.LeftButton)
 
         self.assertEqual([True], requests)
@@ -26,9 +27,11 @@ class DictatePageInteractionTest(QtTestCase):
         page.show()
         self.addCleanup(page.close)
         page.set_result("Your words are ready.")
+        self.capture(page, "transcript-ready-to-copy")
 
         with patch("speak.ui.pages.output.copy") as copy:
             QTest.mouseClick(page.copy_button, Qt.LeftButton)
 
+        self.capture(page, "transcript-copied")
         copy.assert_called_once_with("Your words are ready.")
         self.assertEqual("Copied ✓", page.copy_button.text())

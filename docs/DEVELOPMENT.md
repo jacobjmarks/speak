@@ -48,9 +48,18 @@ uvx ruff check --select F speak tools tests
 
 The suite lives in `tests/`, uses the standard-library `unittest`, and mocks OS APIs, devices, clipboard, subprocesses,
 and HTTP responses.
-Qt interaction tests are grouped in `tests/ui/` by UI area and use `PySide6.QtTest.QTest` with the offscreen platform.
-They exercise dictation controls, settings persistence/dependent controls, saved-history actions, permission setup,
-navigation, notices, and first-close choices without opening a desktop window.
+Qt interaction tests are grouped in `tests/ui/` by UI area and use `PySide6.QtTest.QTest`. To save screenshots of the
+tested states locally:
+
+```powershell
+$env:SPEAK_UI_SNAPSHOT_DIR = Join-Path $env:TEMP 'Speak-UI'
+.\.venv\Scripts\python.exe -m unittest discover -s tests -p "test_*.py"
+```
+
+CI uses each runner's native Qt platform and uploads these screenshots as a per-OS `ui-screenshots` artifact. The
+offscreen Qt plugin has no font database on our Windows setup, so it produces misleading missing-glyph images; it is
+intentionally not used. Tests exercise dictation controls, settings persistence/dependent controls, saved-history
+actions, permission setup, navigation, notices, and first-close choices.
 CI runs it and Ruff through a shared reusable action (`.github/actions/python-ci-checks/action.yml`) that both
 `.github/workflows/build.yml` and `.github/workflows/release.yml` call on Windows and macOS. The step writes a coverage
 table into the GitHub job summary for each matrix run. `coverage.xml` artifact upload is optional (off by default).

@@ -24,7 +24,7 @@ runs:
     - name: Run tests with coverage
       shell: bash
       env:
-        QT_QPA_PLATFORM: offscreen
+        SPEAK_UI_SNAPSHOT_DIR: ${{ runner.temp }}/speak-ui-screenshots
       run: |
         python -m coverage run --source=speak -m unittest discover -s tests -p "test_*.py"
         python -m coverage xml -o coverage.xml
@@ -36,6 +36,14 @@ runs:
           cat coverage.txt
           echo '```'
         } >> "$GITHUB_STEP_SUMMARY"
+
+    - uses: actions/upload-artifact@v7
+      if: always()
+      with:
+        name: ${{ runner.os }}-ui-screenshots
+        path: ${{ runner.temp }}/speak-ui-screenshots/*.png
+        if-no-files-found: ignore
+        retention-days: 14
 
     - name: Lint
       shell: bash
