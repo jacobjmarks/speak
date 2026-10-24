@@ -348,6 +348,12 @@ class SettingsPage(QScrollArea):
         self._row(rows, "Tidy-up model", "Automatic picks by tidy level and what your computer runs fast",
                   self.cleanup_model, advanced=True)
 
+        self.cleanup_device = _combo(config.CLEANUP_DEVICES, settings["cleanup_device"])
+        self.cleanup_device.currentIndexChanged.connect(
+            lambda: self.changed.emit({"cleanup_device": self.cleanup_device.currentData()}))
+        self._row(rows, "Tidy-up hardware", "Automatic picks, or force processor or graphics card",
+                  self.cleanup_device, advanced=True)
+
         self.unload = _combo(config.UNLOAD_AFTER, settings["unload_after"])
         self.unload.currentIndexChanged.connect(lambda: self.changed.emit({"unload_after": self.unload.currentData()}))
         self._row(rows, "Free up memory when idle",

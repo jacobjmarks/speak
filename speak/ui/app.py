@@ -148,7 +148,7 @@ class SpeakApp(QObject):
             self.window.dictate.set_shortcut(self.settings["hotkey"], self.settings["shortcut_mode"])
         if "history_enabled" in changes:
             self.window.history.refresh(self.settings["history_enabled"])
-        if {"tidy", "cleanup_model", "corrections"} & changes.keys():
+        if {"tidy", "cleanup_model", "cleanup_device", "corrections"} & changes.keys():
             self._refresh_tidy()
         if {"updates", "prereleases"} & changes.keys():
             self._check_updates()

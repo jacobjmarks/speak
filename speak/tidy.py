@@ -21,6 +21,7 @@ from . import platform_utils
 from .config import CLEANUP_MODELS, LARGE_MODEL, MODELS_DIR, SMALL_MODEL
 
 GPU_MIN_FREE_MB = 4000   # Large model (~2.5 GB) + KV cache + headroom
+AUTO_GPU_MIN_FREE_MB = 6000  # Avoid picking Large on borderline laptop GPUs in Automatic mode.
 CPU_LARGE_MIN_RAM_MB = 4500
 INTEGRATED = re.compile(r"\b(UHD|Iris|HD Graphics|Radeon\(TM\) Graphics|Radeon Graphics|Vega \d+ Graphics)\b", re.I)
 
@@ -85,21 +86,26 @@ def plan(settings: dict) -> Plan:
     if level == "fast":
         return Plan(level, None, "literal", None, "Instant. Removes ums and repeats, adds paragraphs. No download.")
 
-    g = _gpu if _gpu and _gpu.free_mb >= GPU_MIN_FREE_MB else None
+    preference = settings.get("cleanup_device", "auto")
+    gpu_requested = preference != "cpu"
+    g = _gpu if _gpu and gpu_requested else None
+    gpu_for_large = g if g and g.free_mb >= GPU_MIN_FREE_MB else None
+    gpu_for_auto_large = g if g and g.free_mb >= AUTO_GPU_MIN_FREE_MB else None
     pinned = settings.get("cleanup_model")
     if pinned in CLEANUP_MODELS:
         model = pinned
     elif level == "auto":
-        model = LARGE_MODEL if g else SMALL_MODEL
+        model = LARGE_MODEL if gpu_for_auto_large else SMALL_MODEL
     else:
-        model = LARGE_MODEL if g or platform_utils.available_memory_mb() >= CPU_LARGE_MIN_RAM_MB else SMALL_MODEL
+        model = LARGE_MODEL if gpu_for_large or platform_utils.available_memory_mb() >= CPU_LARGE_MIN_RAM_MB else SMALL_MODEL
 
-    device = g.device if g else None
+    use_gpu = preference == "gpu" or (preference == "auto" and model == LARGE_MODEL and gpu_for_large is not None)
+    device = g.device if use_gpu and g else None
     downloaded = (MODELS_DIR / "cleanup" / CLEANUP_MODELS[model]["file"]).exists()
     size = "" if downloaded else f" {CLEANUP_MODELS[model]['size_mb'] / 1000:.1f} GB download on first use."
-    where = "graphics card" if g else "processor"
+    where = "graphics card" if device else "processor"
     if model == LARGE_MODEL:
-        speed = "about half a second" if g else "a few seconds"
+        speed = "about half a second" if device else "a few seconds"
         mode = "smart" if settings.get("corrections", True) else "literal"
         what = ("Punctuation, paragraphs, changes of mind." if mode == "smart" else
                 "Punctuation and paragraphs, every word kept.")
@@ -109,12 +115,20 @@ def plan(settings: dict) -> Plan:
         what = "Punctuation and capitals only."
         mode = "literal"
         name = "Small AI"
+    notes = []
     if pinned in CLEANUP_MODELS:
-        note = " Model chosen in Advanced."
-    elif g:
-        note = " Same as Best here." if level == "auto" else " Same as Automatic here."
+        notes.append("Model chosen in Advanced.")
+    elif device:
+        notes.append("Same as Best here." if level == "auto" else "Same as Automatic here.")
     elif level == "best" and model != LARGE_MODEL:
-        note = " Not enough free memory for the large model."
-    else:
-        note = ""
+        notes.append("Not enough free memory for the large model.")
+    elif preference == "auto" and level == "auto" and g and gpu_for_auto_large is None:
+        notes.append("Using Small AI because your graphics card is low on free memory.")
+    if preference == "gpu" and g is None:
+        notes.append("GPU was forced, but none was found. Using your processor.")
+    elif preference == "gpu" and model == LARGE_MODEL and gpu_for_large is None:
+        notes.append("GPU was forced, but it doesn't have enough free memory for the large model. Using your processor.")
+    elif preference == "cpu":
+        notes.append("Processor forced in Advanced.")
+    note = (" " + " ".join(notes)) if notes else ""
     return Plan(level, model, mode, device, f"{name} on your {where}, {speed}. {what}{size}{note}")
