@@ -45,6 +45,7 @@ class Plan:
 
 
 _gpu: Optional[Gpu] = None
+_gpus: list = []
 _probed = threading.Event()
 
 
@@ -63,22 +64,28 @@ def _integrated_devices(llama_server) -> set:
 
 def probe(llama_server) -> None:
     """Ask llama.cpp which accelerators it can use. Slow-ish (~0.5 s); call once from a worker thread."""
-    global _gpu
+    global _gpu, _gpus
     try:
         out = subprocess.run([str(llama_server), "--list-devices"], capture_output=True, text=True, timeout=20,
                              **platform_utils.hidden_process_kwargs())
         integrated = _integrated_devices(llama_server)
+        found = []
         best = None
         for device, name, free in re.findall(r"^\s*(\S+): (.+?) \(\d+ MiB, (\d+) MiB free\)", out.stdout + out.stderr,
                                              re.M):
             gpu = Gpu(device, name.strip(), int(free), device in integrated)
+            found.append(gpu)
             if best is None or (not gpu.integrated, gpu.free_mb) > (not best.integrated, best.free_mb):
                 best = gpu
-        _gpu = best
+        _gpu, _gpus = best, found
     except Exception:
-        _gpu = None
+        _gpu, _gpus = None, []
     finally:
         _probed.set()
+
+
+def gpus() -> list:
+    return list(_gpus)
 
 
 def gpu() -> Optional[Gpu]:
@@ -102,7 +109,11 @@ def plan(settings: dict) -> Plan:
         return Plan(level, None, "literal", None, "Instant. Removes ums and repeats, adds paragraphs. No download.")
 
     preference = settings.get("cleanup_device", "auto")
-    g = _gpu if preference != "cpu" else None
+    if preference not in ("auto", "cpu", "gpu"):
+        g = next((x for x in _gpus if x.device == preference), None)
+        preference = "gpu"  # a specific card is always a forced choice
+    else:
+        g = _gpu if preference != "cpu" else None
     if g and g.integrated and preference == "auto":
         g = None  # forcing the GPU in Advanced still allows it
     gpu_for_large = g if g and g.free_mb >= _memory_required_mb(LARGE_MODEL) else None
@@ -142,7 +153,7 @@ def plan(settings: dict) -> Plan:
     elif level == "best" and model != LARGE_MODEL:
         notes.append("Not enough free memory for the large model.")
     if preference == "gpu" and g is None:
-        notes.append("GPU was forced, but none was found. Using your processor.")
+        notes.append("GPU was forced, but that graphics card was not found. Using your processor.")
     elif preference == "gpu" and gpu_for_model is None:
         notes.append("GPU was forced, but it doesn't have enough free memory for this model. Using your processor.")
     elif preference == "cpu":

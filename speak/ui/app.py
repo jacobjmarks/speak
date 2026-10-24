@@ -94,7 +94,7 @@ class SpeakApp(QObject):
         b.hotkey_up.connect(self._on_hotkey_up)
         b.escape.connect(self.dictation.cancel)
         b.cancelled.connect(self._on_cancelled)
-        b.probed.connect(self._refresh_tidy)
+        b.probed.connect(self._on_probed)
         b.update_found.connect(self._on_update_found)
         b.update_progress.connect(lambda p: self._set_update(f"{p}%", "Downloading the update…", enabled=False))
         b.update_ready.connect(self._on_update_ready)
@@ -225,6 +225,10 @@ class SpeakApp(QObject):
             self._download()
         elif self._release:
             QDesktopServices.openUrl(QUrl(self._release.page))
+
+    def _on_probed(self):
+        self.window.settings.set_gpus(tidy.gpus(), self.settings["cleanup_device"])
+        self._refresh_tidy()
 
     def _refresh_tidy(self):
         if tidy.probed():

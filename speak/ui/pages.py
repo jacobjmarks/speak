@@ -351,7 +351,7 @@ class SettingsPage(QScrollArea):
         self.cleanup_device = _combo(config.CLEANUP_DEVICES, settings["cleanup_device"])
         self.cleanup_device.currentIndexChanged.connect(
             lambda: self.changed.emit({"cleanup_device": self.cleanup_device.currentData()}))
-        self._row(rows, "Tidy-up hardware", "Automatic picks, or force processor or graphics card",
+        self._row(rows, "Tidy-up hardware", "Automatic picks, or force the processor or a specific graphics card",
                   self.cleanup_device, advanced=True)
 
         self.unload = _combo(config.UNLOAD_AFTER, settings["unload_after"])
@@ -471,6 +471,20 @@ class SettingsPage(QScrollArea):
         if self._last_check and mode != "off":
             hint += f". Last checked {self._last_check:%H:%M}"
         self.updates_row.hint.setText(hint)
+
+    def set_gpus(self, gpus: list, current: str):
+        combo = self.cleanup_device
+        combo.blockSignals(True)
+        combo.clear()
+        for key, label in config.CLEANUP_DEVICES.items():
+            combo.addItem(label, key)
+        for g in gpus:
+            kind = "shared memory" if g.integrated else f"{g.free_mb / 1000:.1f} GB free"
+            combo.addItem(f"{g.name} ({kind})", g.device)
+        if combo.findData(current) < 0:
+            combo.addItem(f"Unavailable graphics card ({current})", current)
+        combo.setCurrentIndex(combo.findData(current))
+        combo.blockSignals(False)
 
     def set_tidy_summary(self, summary: str, large_model: bool):
         self.tidy_row.hint.setText(summary)

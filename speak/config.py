@@ -62,7 +62,8 @@ SMALL_MODEL, LARGE_MODEL = "qwen25-q4km", "qwen3-4b-2507"
 
 SHORTCUT_MODES = {"auto": "Hold or tap", "hold": "Hold to talk", "toggle": "Tap to start and stop"}
 TIDY_LEVELS = {"off": "Off", "fast": "Fast · no AI", "auto": "Automatic · recommended", "best": "Best · always AI"}
-CLEANUP_DEVICES = {"auto": "Automatic", "cpu": "Processor only", "gpu": "Graphics card only"}
+# Any other saved value is a llama.cpp device id (e.g. "Vulkan1") picked from the detected graphics cards.
+CLEANUP_DEVICES = {"auto": "Automatic", "cpu": "Processor only", "gpu": "Graphics card (best available)"}
 CLOSE_ACTIONS = {"ask": "Ask me", "tray": f"Keep running in the {TRAY_NAME}", "exit": "Quit Speak"}
 OVERLAY_POSITIONS = {"cursor": "Near my cursor", "top": "Top of screen", "bottom": "Bottom of screen"}
 LIVE_PREVIEWS = {"line": "One sliding line", "full": "Full text", "off": "Off"}
@@ -95,7 +96,7 @@ def load_settings() -> dict:
         settings["model"] = DEFAULTS["model"]
     if settings["cleanup_model"] not in CLEANUP_MODELS:
         settings["cleanup_model"] = "auto"
-    if settings["cleanup_device"] not in CLEANUP_DEVICES:
+    if not isinstance(settings["cleanup_device"], str) or not settings["cleanup_device"]:
         settings["cleanup_device"] = DEFAULTS["cleanup_device"]
     for key, allowed in (("tidy", TIDY_LEVELS), ("close_action", CLOSE_ACTIONS),
                          ("overlay_position", OVERLAY_POSITIONS), ("live_preview", LIVE_PREVIEWS), ("updates", UPDATE_MODES),

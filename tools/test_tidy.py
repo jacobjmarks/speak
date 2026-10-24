@@ -55,6 +55,15 @@ class TidyPlanningTest(unittest.TestCase):
             self.assertIsNone(tidy.plan(self.settings).device)
             self.settings["cleanup_device"] = "gpu"
             self.assertEqual("Vulkan0", tidy.plan(self.settings).device)
+    def test_specific_device_is_forced_even_if_integrated(self):
+        gpus = [tidy.Gpu("Vulkan0", "dGPU", 9000), tidy.Gpu("Vulkan1", "iGPU", 30000, True)]
+        with patch.multiple(tidy, _gpu=gpus[0], _gpus=gpus):
+            self.settings["cleanup_device"] = "Vulkan1"
+            self.assertEqual("Vulkan1", tidy.plan(self.settings).device)
+            self.settings["cleanup_device"] = "Vulkan9"
+            plan = tidy.plan(self.settings)
+            self.assertIsNone(plan.device)
+            self.assertIn("not found", plan.summary)
     def test_best_cpu_threshold_uses_same_model_budget(self):
         self.settings.update(tidy="best", cleanup_device="cpu")
         with patch.object(tidy.platform_utils, "available_memory_mb", return_value=3999):
