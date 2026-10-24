@@ -21,7 +21,33 @@ runs:
       shell: bash
       run: python -m pip install -r requirements.txt ruff coverage
 
+    - name: Run tests with coverage in discovery order (macOS diagnostic)
+      if: runner.os == 'macOS'
+      shell: bash
+      env:
+        PYTHONPATH: ${{ github.workspace }}/tests
+        SPEAK_UI_SNAPSHOT_DIR: ${{ runner.temp }}/speak-ui-screenshots
+      run: |
+        python -m coverage run --data-file=.coverage-forward --source=speak -m unittest \
+          test_asr_runtimes test_cleanup test_config_history test_device_preference \
+          test_dictation_cancel test_hotkey test_make_notices test_platform_audio_output \
+          test_system_audio test_tidy test_updates \
+          ui.test_banner ui.test_dictation ui.test_pages ui.test_setup ui.test_updates ui.test_window
+
+    - name: Run tests with coverage in reverse order (macOS diagnostic)
+      if: always() && runner.os == 'macOS'
+      shell: bash
+      env:
+        PYTHONPATH: ${{ github.workspace }}/tests
+        SPEAK_UI_SNAPSHOT_DIR: ${{ runner.temp }}/speak-ui-screenshots
+      run: |
+        python -m coverage run --data-file=.coverage-reverse --source=speak -m unittest \
+          ui.test_window ui.test_updates ui.test_setup ui.test_pages ui.test_dictation ui.test_banner \
+          test_updates test_tidy test_system_audio test_platform_audio_output test_make_notices \
+          test_hotkey test_dictation_cancel test_device_preference test_config_history test_cleanup test_asr_runtimes
+
     - name: Run tests with coverage
+      if: runner.os != 'macOS'
       shell: bash
       env:
         SPEAK_UI_SNAPSHOT_DIR: ${{ runner.temp }}/speak-ui-screenshots
@@ -50,7 +76,7 @@ runs:
       run: ruff check --select F speak tools tests
 
     - uses: actions/upload-artifact@v7
-      if: inputs.upload-coverage-artifact == 'true'
+      if: inputs.upload-coverage-artifact == 'true' && runner.os != 'macOS'
       with:
         name: ${{ runner.os }}-coverage
         path: coverage.xml
