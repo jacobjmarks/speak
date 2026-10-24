@@ -89,7 +89,9 @@ class DictatePage(Page):
         self.wave.set_state(mode, word or (self._shortcut if mode == "idle" else ""))
         if mode in ("done", "error"):
             self._revert.start(1200)
-            QTimer.singleShot(1250, lambda: self.mic.mode == "idle" and self.wave.set_state("idle", self._shortcut))
+            QTimer.singleShot(
+                1250, self, lambda: self.mic.mode == "idle" and self.wave.set_state("idle", self._shortcut)
+            )
 
     def set_live(self, text: str):
         self.text.setPlainText(text)
@@ -103,7 +105,7 @@ class DictatePage(Page):
         if text:
             output.copy(text)
             self.copy_button.setText("Copied ✓")
-            QTimer.singleShot(1200, lambda: self.copy_button.setText("Copy"))
+            QTimer.singleShot(1200, self, lambda: self.copy_button.setText("Copy"))
 
 
 # ---------- History ----------
@@ -126,7 +128,7 @@ class HistoryEntry(QFrame):
     def mouseReleaseEvent(self, e):
         output.copy(self.text)
         self.when.setText("Copied ✓")
-        QTimer.singleShot(1000, lambda: self.when.setText(self._when_text))
+        QTimer.singleShot(1000, self, lambda: self.when.setText(self._when_text))
 
 
 class HistoryPage(Page):

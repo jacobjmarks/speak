@@ -395,7 +395,7 @@ class ShortcutButton(QPushButton):
     def _record(self):
         if permissions.missing():
             self.setText("Finish setup first")
-            QTimer.singleShot(3000, lambda: self.setText(hotkey.display(self.combo)))
+            QTimer.singleShot(3000, self, lambda: self.setText(hotkey.display(self.combo)))
             return
         self.setEnabled(False)
         self.setText("Press keys…")

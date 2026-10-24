@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 import unittest
 
+from PySide6.QtCore import QCoreApplication, QEvent
 from PySide6.QtWidgets import QApplication
 
 
@@ -9,6 +10,14 @@ class QtTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
+
+    def setUp(self):
+        self.addCleanup(self._flush_qt_events)
+
+    def _flush_qt_events(self):
+        QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+        QApplication.instance().processEvents()
+        QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
 
     def capture(self, widget, name):
         directory = os.environ.get("SPEAK_UI_SNAPSHOT_DIR")

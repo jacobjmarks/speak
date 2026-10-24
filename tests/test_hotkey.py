@@ -103,19 +103,32 @@ class MacKeyTapTest(unittest.TestCase):
         quartz = types.ModuleType("Quartz")
         for index, name in enumerate(names):
             setattr(quartz, name, index + 1 if name.startswith("k") else Mock())
-        with patch.dict(sys.modules, {"Quartz": quartz}):
-            keytap_module = importlib.import_module("speak.keytap_mac")
-
-        event = object()
-        presses = []
-        tap = keytap_module.KeyTap(lambda pressed: presses.append(pressed) or pressed == {"space"},
-                                   lambda released: released == {"space"}, suppress_keys=True)
-        with patch.object(keytap_module, "CGEventGetIntegerValueField", side_effect=[49, 0]), \
-                patch.object(keytap_module, "CGEventGetFlags", return_value=0), \
-                patch.object(keytap_module, "_key_name", side_effect=["space", "x"]):
-            self.assertIsNone(tap._handle(None, keytap_module.kCGEventKeyDown, event, None))
-            self.assertIs(event, tap._handle(None, keytap_module.kCGEventKeyDown, event, None))
-        self.assertEqual(presses, [{"space"}, {"x"}])
+        module_name = "speak.keytap_mac"
+        package = importlib.import_module("speak")
+        cached_module = sys.modules.pop(module_name, None)
+        missing = object()
+        cached_package_module = getattr(package, "keytap_mac", missing)
+        try:
+            with patch.dict(sys.modules, {"Quartz": quartz}):
+                keytap_module = importlib.import_module(module_name)
+                event = object()
+                presses = []
+                tap = keytap_module.KeyTap(lambda pressed: presses.append(pressed) or pressed == {"space"},
+                                           lambda released: released == {"space"}, suppress_keys=True)
+                with patch.object(keytap_module, "CGEventGetIntegerValueField", side_effect=[49, 0]), \
+                        patch.object(keytap_module, "CGEventGetFlags", return_value=0), \
+                        patch.object(keytap_module, "_key_name", side_effect=["space", "x"]):
+                    self.assertIsNone(tap._handle(None, keytap_module.kCGEventKeyDown, event, None))
+                    self.assertIs(event, tap._handle(None, keytap_module.kCGEventKeyDown, event, None))
+                self.assertEqual(presses, [{"space"}, {"x"}])
+        finally:
+            sys.modules.pop(module_name, None)
+            if cached_module is not None:
+                sys.modules[module_name] = cached_module
+            if cached_package_module is missing:
+                package.__dict__.pop("keytap_mac", None)
+            else:
+                package.keytap_mac = cached_package_module
 
 
 if __name__ == "__main__":
