@@ -19,7 +19,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: ./.github/actions/python-ci-checks
+      - name: Run tests with coverage and lint
+        uses: ./.github/actions/python-ci-checks
 
       - name: Stamp build id
         shell: pwsh

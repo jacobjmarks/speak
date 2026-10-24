@@ -111,7 +111,8 @@ jobs:
         with:
           ref: ${{ inputs.ref }}
 
-      - uses: ./.github/actions/python-ci-checks
+      - name: Run tests with coverage and lint
+        uses: ./.github/actions/python-ci-checks
 
       - name: Stamp version
         shell: pwsh

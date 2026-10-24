@@ -1,5 +1,5 @@
 name: Python CI checks
-description: Install deps, run unit tests with coverage, publish the summary, and lint.
+description: Install deps, lint, run unit tests with coverage, and publish the summary.
 inputs:
   python-version:
     description: Python version to use
@@ -20,6 +20,10 @@ runs:
     - name: Install dependencies
       shell: bash
       run: python -m pip install -r requirements.txt ruff coverage
+
+    - name: Lint
+      shell: bash
+      run: ruff check --select F speak tools tests
 
     - name: Run tests with coverage
       shell: bash
@@ -44,10 +48,6 @@ runs:
         path: ${{ runner.temp }}/speak-ui-screenshots/*.png
         if-no-files-found: ignore
         retention-days: 14
-
-    - name: Lint
-      shell: bash
-      run: ruff check --select F speak tools tests
 
     - uses: actions/upload-artifact@v7
       if: inputs.upload-coverage-artifact == 'true'
