@@ -1,10 +1,10 @@
 """Main-window pages: Dictate, History, Settings, About."""
 from datetime import datetime
 
-from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt, QTimer, QUrl, Signal
+from PySide6.QtCore import Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
-from PySide6.QtWidgets import (QComboBox, QFrame, QHBoxLayout, QLabel, QPlainTextEdit, QPushButton, QScrollArea,
-                               QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QBoxLayout, QComboBox, QFrame, QHBoxLayout, QLabel, QPlainTextEdit, QPushButton,
+                               QScrollArea, QSizePolicy, QVBoxLayout, QWidget)
 
 from .. import audio, config, history, hotkey, output, permissions, platform_utils, updates
 from .widgets import MicButton, ShortcutButton, Toggle, WaveStrip
@@ -192,18 +192,32 @@ class HistoryPage(Page):
 class SettingRow(QWidget):
     def __init__(self, title: str, hint: str, control: QWidget):
         super().__init__()
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 12, 0, 12)
-        text = QVBoxLayout()
-        text.setSpacing(2)
-        text.addWidget(_label(title))
+        self.layout_ = QHBoxLayout(self)
+        self.layout_.setSpacing(16)
+        self.layout_.setContentsMargins(0, 12, 0, 12)
+        self.text = QVBoxLayout()
+        self.text.setSpacing(2)
+        self.text.addWidget(_label(title))
         self.hint = _label(hint, "hint")
         self.hint.setWordWrap(True)
         self.hint.setVisible(bool(hint))
-        text.addWidget(self.hint)
-        layout.addLayout(text, 1)
-        layout.addSpacing(16)
-        layout.addWidget(control, 0, Qt.AlignVCenter)
+        self.text.addWidget(self.hint)
+        self.layout_.addLayout(self.text, 1)
+        self.layout_.addWidget(control, 0, Qt.AlignVCenter)
+        self.control = control
+        self._compact = None
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        compact = self.width() < 440
+        if compact == self._compact:
+            return
+        self._compact = compact
+        self.layout_.setDirection(QBoxLayout.TopToBottom if compact else QBoxLayout.LeftToRight)
+        self.layout_.setSpacing(8 if compact else 16)
+        self.layout_.setAlignment(self.control, Qt.Alignment() if compact and isinstance(self.control, QComboBox)
+                                  else Qt.AlignRight if compact else Qt.AlignVCenter)
+        self.layout_.setStretch(0, 1 if not compact else 0)
 
 
 def _combo(options: dict, current: str) -> QComboBox:
@@ -258,11 +272,22 @@ class SettingsPage(QScrollArea):
         self.setWidgetResizable(True)
         self.setFrameShape(QFrame.NoFrame)
         body = Page()
+        body.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         self.setWidget(body)
         layout = body.layout_
-        layout.addWidget(_label("Settings", "title"))
+        header = QHBoxLayout()
+        header.addWidget(_label("Settings", "title"), 1)
+        advanced_label = _label("Advanced", "hint")
+        advanced_label.setWordWrap(False)
+        header.addWidget(advanced_label)
+        self.advanced_toggle = Toggle()
+        self.advanced_toggle.setAccessibleName("Show advanced settings")
+        header.addWidget(self.advanced_toggle)
+        layout.addLayout(header)
+        self._advanced_widgets = []
 
-        # --- basic ---
+        # --- dictation ---
+        layout.addWidget(_label("Dictation", "section"))
         card, rows = _card()
         self.shortcut = ShortcutButton(settings["hotkey"])
         self.shortcut.captured.connect(self._on_shortcut)
@@ -299,6 +324,54 @@ class SettingsPage(QScrollArea):
         if not platform_utils.IS_WINDOWS:
             self.enter_row.hide()
 
+        self.language = QComboBox(cursor=Qt.PointingHandCursor, editable=True)
+        for code, label in LANGUAGES.items():
+            self.language.addItem(f"{label} ({code})" if code != "auto" else label, code)
+        index = self.language.findData(settings["language"])
+        if index >= 0:
+            self.language.setCurrentIndex(index)
+        else:
+            self.language.setEditText(settings["language"])
+        self.language.currentIndexChanged.connect(self._on_language)
+        self.language.lineEdit().editingFinished.connect(self._on_language)
+        self._row(rows, "Language", "Spoken language, or a code like “en”", self.language, advanced=True)
+
+        self.asr_model = _combo(config.ASR_MODELS, settings["model"])
+        self.asr_model.currentIndexChanged.connect(lambda: self.changed.emit({"model": self.asr_model.currentData()}))
+        self._row(rows, "Speech model", "", self.asr_model, advanced=True)
+
+        models = {"auto": "Automatic (recommended)"}
+        models.update({k: v["label"] for k, v in config.CLEANUP_MODELS.items()})
+        self.cleanup_model = _combo(models, settings["cleanup_model"])
+        self.cleanup_model.currentIndexChanged.connect(
+            lambda: self.changed.emit({"cleanup_model": self.cleanup_model.currentData()}))
+        self._row(rows, "Tidy-up model", "Automatic picks by tidy level and what your computer runs fast",
+                  self.cleanup_model, advanced=True)
+
+        self.unload = _combo(config.UNLOAD_AFTER, settings["unload_after"])
+        self.unload.currentIndexChanged.connect(lambda: self.changed.emit({"unload_after": self.unload.currentData()}))
+        self._row(rows, "Free up memory when idle",
+                  "Unloads the speech and tidy-up models (1 to 4 GB). The next dictation then takes a few seconds to start",
+                  self.unload, advanced=True, last=True)
+        layout.addWidget(card)
+
+        # --- indicator ---
+        layout.addWidget(_label("While dictating", "section"))
+        card, rows = _card()
+        self.overlay = self._toggle(settings["overlay_enabled"], "overlay_enabled")
+        self._row(rows, "Show indicator", "Hidden while Speak's Dictate page is in front", self.overlay)
+        self.position = _combo(config.OVERLAY_POSITIONS, settings["overlay_position"])
+        self.position.currentIndexChanged.connect(
+            lambda: self.changed.emit({"overlay_position": self.position.currentData()}))
+        self._row(rows, "Position", "", self.position)
+        self.live = _combo(config.LIVE_PREVIEWS, settings["live_preview"])
+        self.live.currentIndexChanged.connect(lambda: self.changed.emit({"live_preview": self.live.currentData()}))
+        self._row(rows, "Live text", "Words appear under the indicator as you speak", self.live, last=True)
+        layout.addWidget(card)
+
+        # --- app ---
+        layout.addWidget(_label("App", "section"))
+        card, rows = _card()
         options = {k: v for k, v in config.CLOSE_ACTIONS.items()}
         self.close_action = _combo(options, settings["close_action"])
         self.close_action.currentIndexChanged.connect(
@@ -321,6 +394,15 @@ class SettingsPage(QScrollArea):
         self.theme.currentIndexChanged.connect(lambda: self.changed.emit({"theme": self.theme.currentData()}))
         self._row(rows, "Appearance", "", self.theme)
 
+        folder = QPushButton("Open", cursor=Qt.PointingHandCursor)
+        folder.clicked.connect(lambda: (config.APP_DIR.mkdir(parents=True, exist_ok=True),
+                                        platform_utils.open_path(config.APP_DIR)))
+        self._row(rows, "Data folder", "Models, logs and settings", folder, advanced=True, last=True)
+        layout.addWidget(card)
+
+        # --- updates ---
+        layout.addWidget(_label("Updates", "section"))
+        card, rows = _card()
         self.updates = _combo(config.UPDATE_MODES, settings["updates"])
         self.updates.currentIndexChanged.connect(lambda: self.changed.emit({"updates": self.updates.currentData()}))
         self.updates_row = self._row(rows, "Updates", " ", self.updates)
@@ -342,75 +424,30 @@ class SettingsPage(QScrollArea):
         self._update_hint(settings["updates"])
         layout.addWidget(card)
 
-        # --- indicator ---
-        layout.addWidget(_label("While dictating", "section"))
-        card, rows = _card()
-        self.overlay = self._toggle(settings["overlay_enabled"], "overlay_enabled")
-        self._row(rows, "Show indicator", "Hidden while Speak's Dictate page is in front", self.overlay)
-        self.position = _combo(config.OVERLAY_POSITIONS, settings["overlay_position"])
-        self.position.currentIndexChanged.connect(
-            lambda: self.changed.emit({"overlay_position": self.position.currentData()}))
-        self._row(rows, "Position", "", self.position)
-        self.live = _combo(config.LIVE_PREVIEWS, settings["live_preview"])
-        self.live.currentIndexChanged.connect(lambda: self.changed.emit({"live_preview": self.live.currentData()}))
-        self._row(rows, "Live text", "Words appear under the indicator as you speak", self.live, last=True)
-        layout.addWidget(card)
-
-        # --- advanced (collapsed) ---
-        self.advanced_button = QPushButton("Advanced  ›", objectName="ghost", cursor=Qt.PointingHandCursor)
-        self.advanced_button.setCheckable(True)
-        self.advanced_button.toggled.connect(self._toggle_advanced)
-        layout.addWidget(self.advanced_button, 0, Qt.AlignLeft)
-
-        self.advanced, rows = _card()
-        self.language = QComboBox(cursor=Qt.PointingHandCursor, editable=True)
-        for code, label in LANGUAGES.items():
-            self.language.addItem(f"{label} ({code})" if code != "auto" else label, code)
-        index = self.language.findData(settings["language"])
-        if index >= 0:
-            self.language.setCurrentIndex(index)
-        else:
-            self.language.setEditText(settings["language"])
-        self.language.currentIndexChanged.connect(self._on_language)
-        self.language.lineEdit().editingFinished.connect(self._on_language)
-        self._row(rows, "Language", "Spoken language, or a code like “en”", self.language)
-
-        self.asr_model = _combo(config.ASR_MODELS, settings["model"])
-        self.asr_model.currentIndexChanged.connect(lambda: self.changed.emit({"model": self.asr_model.currentData()}))
-        self._row(rows, "Speech model", "", self.asr_model)
-
-        models = {"auto": "Automatic (recommended)"}
-        models.update({k: v["label"] for k, v in config.CLEANUP_MODELS.items()})
-        self.cleanup_model = _combo(models, settings["cleanup_model"])
-        self.cleanup_model.currentIndexChanged.connect(
-            lambda: self.changed.emit({"cleanup_model": self.cleanup_model.currentData()}))
-        self._row(rows, "Tidy-up model", "Automatic picks by tidy level and what your computer runs fast",
-                  self.cleanup_model)
-
-        self.unload = _combo(config.UNLOAD_AFTER, settings["unload_after"])
-        self.unload.currentIndexChanged.connect(lambda: self.changed.emit({"unload_after": self.unload.currentData()}))
-        self._row(rows, "Free up memory when idle",
-                  "Unloads the speech and tidy-up models (1 to 4 GB). The next dictation then takes a few seconds to start",
-                  self.unload)
-
-        folder = QPushButton("Open", cursor=Qt.PointingHandCursor)
-        folder.clicked.connect(lambda: (config.APP_DIR.mkdir(parents=True, exist_ok=True),
-                                        platform_utils.open_path(config.APP_DIR)))
-        self._row(rows, "Data folder", "Models, logs and settings", folder, last=True)
-        self.advanced.setMaximumHeight(0)
-        self.advanced.setVisible(False)
-        layout.addWidget(self.advanced)
         layout.addStretch(1)
-        self._anim = QPropertyAnimation(self.advanced, b"maximumHeight", self, duration=220,
-                                        easingCurve=QEasingCurve.OutCubic)
-        self._anim.finished.connect(self._anim_done)
+        self.advanced_toggle.setChecked(settings["advanced_settings"] is True)
+        self._toggle_advanced(self.advanced_toggle.isChecked())
+        self.advanced_toggle.toggled.connect(self._on_advanced_toggled)
 
-    def _row(self, rows: QVBoxLayout, title: str, hint: str, control: QWidget, last: bool = False) -> SettingRow:
+    def _row(self, rows: QVBoxLayout, title: str, hint: str, control: QWidget, last: bool = False,
+             advanced: bool = False) -> SettingRow:
         row = SettingRow(title, hint, control)
+        if advanced:
+            if rows.count():
+                divider = rows.itemAt(rows.count() - 1).widget()
+                if divider and divider.objectName() == "divider":
+                    divider.hide()
+                    if divider not in self._advanced_widgets:
+                        self._advanced_widgets.append(divider)
+            row.hide()
+            self._advanced_widgets.append(row)
         rows.addWidget(row)
         if not last:
             divider = QFrame(objectName="divider")
             divider.setFixedHeight(1)
+            if advanced:
+                divider.hide()
+                self._advanced_widgets.append(divider)
             rows.addWidget(divider)
         return row
 
@@ -486,23 +523,13 @@ class SettingsPage(QScrollArea):
             self.login.setChecked(not on)
             self.login.blockSignals(False)
 
-    def _toggle_advanced(self, open_: bool):
-        self.advanced_button.setText("Advanced  ⌄" if open_ else "Advanced  ›")
-        self._anim.stop()
-        if open_:
-            self.advanced.setVisible(True)
-        self._anim.setStartValue(self.advanced.maximumHeight() if self.advanced.maximumHeight() < 5000 else
-                                 self.advanced.sizeHint().height())
-        self._anim.setEndValue(self.advanced.sizeHint().height() if open_ else 0)
-        self._anim.start()
-        if open_:
-            QTimer.singleShot(240, lambda: self.ensureWidgetVisible(self.advanced))
+    def _toggle_advanced(self, visible: bool):
+        for widget in self._advanced_widgets:
+            widget.setVisible(visible)
 
-    def _anim_done(self):
-        if self.advanced_button.isChecked():
-            self.advanced.setMaximumHeight(16_777_215)
-        else:
-            self.advanced.setVisible(False)
+    def _on_advanced_toggled(self, visible: bool):
+        self._toggle_advanced(visible)
+        self.changed.emit({"advanced_settings": visible})
 
 
 # ---------- First-run setup ----------

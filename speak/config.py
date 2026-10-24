@@ -22,6 +22,7 @@ DEFAULTS = {
     "history_enabled": False,
     "auto_paste": True,
     "press_enter": False,  # experimental: Enter after pasting, only if the same app is still in front
+    "advanced_settings": False,
     "mic_device": None,  # device name; None = system default
     "overlay_enabled": True,
     "overlay_position": "cursor",
