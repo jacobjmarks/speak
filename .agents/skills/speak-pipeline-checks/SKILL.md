@@ -62,4 +62,4 @@ Expect servers present when loaded, `None` and lower VRAM after idle. Always cal
 
 ## 4. Pure-logic checks (no servers)
 
-`cleanup`'s regex rules and `validate()`, `tidy.plan()`, `updates.parse/pick`, and `config.load_settings` migrations are plain functions: call them in a throwaway script or add a `tests/test_*.py` `unittest` (see `tests/test_tidy.py`: patch hardware probes with `unittest.mock`). Add a test whenever you fix a bug in these.
+`cleanup`'s regex rules and `validate()`, `tidy.plan()`, `updates.parse/pick`, and `config.load_settings` migrations are plain functions: prefer focused `unittest` coverage in `tests/` (see `tests/test_tidy.py`: patch hardware probes with `unittest.mock`). Add or update a regression test whenever you fix a bug; use a throwaway script only for diagnosis that the suite cannot express.

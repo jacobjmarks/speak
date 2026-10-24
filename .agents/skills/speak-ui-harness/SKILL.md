@@ -1,11 +1,11 @@
 ---
 name: speak-ui-harness
-description: Start Speak, navigate the existing UI, and drive a specific screen or interaction without broad visual sweeps. Use for focused behavior checks on a page, control, state transition, or widget interaction; use the full screenshot sweep only for broad visual/regression coverage.
+description: Start Speak, navigate the existing UI, and drive a specific screen or interaction that needs real-app validation beyond the automated Qt tests. Use for focused behavior checks on a page, control, state transition, or widget interaction; use the full screenshot sweep only for broad visual/regression coverage.
 ---
 
 # Drive the app by the UI, not by guessing
 
-Use this when the goal is one behavior inside the real app: open a page, click a button, toggle a setting, check a state, or verify an interaction. Keep the scope narrow and assert the actual widget state or signals, not a whole-window screenshot unless the requirement is visual.
+Use this when a behavior needs validation in the real app beyond what the automated Qt tests cover: open a page, click a button, toggle a setting, check a state, or verify an interaction. Prefer a focused test in `tests/ui/` for repeatable UI behavior. Keep manual app-driving narrow and assert the actual widget state or signals, not a whole-window screenshot unless the requirement is visual.
 
 ## First: respect app collisions
 
