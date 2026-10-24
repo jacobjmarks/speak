@@ -13,7 +13,7 @@ From the repo root:
 .\.venv\Scripts\python.exe -m tools.marketing_images
 ```
 
-The script writes seven PNGs into `docs/images/`: light and dark Dictate/Settings screenshots, light and dark overlay screenshots, and the README hero. Pass a different output directory to preview changes without overwriting tracked images:
+The script writes eight PNGs into `docs/images/`: light and dark Dictate/Settings screenshots, light and dark overlay screenshots, the README hero, and the 1280 × 640 social preview. Pass a different output directory to preview changes without overwriting tracked images:
 
 ```powershell
 .\.venv\Scripts\python.exe -m tools.marketing_images "$env:TEMP\speak-images"
@@ -24,7 +24,7 @@ Open the generated PNGs with the `view` tool. Check framing, text, theme, spacin
 ## How the originals were made
 
 - Screenshots are real PySide6 widgets from `SpeakApp`, not browser mockups. The script forces a successful example result into Dictate, switches to Settings, and captures the floating `Overlay` separately.
-- The hero is a 1280 × 440 `QPixmap` painted with `QPainter`: gradient background, the app's `app_icon()`, tagline, feature line, and scaled dark overlay.
+- The hero and social preview are composed with `QPainter`, using the app's `app_icon()` and rendered dark overlay.
 - A fixed sample transcript makes screenshots repeatable. Update `EXAMPLE` or `LIVE_TEXT` in the tool when the copy should change; keep sample content short enough not to clip.
 - The script writes settings, history, and logs under a temporary app-data directory; disables hotkey registration, permissions checks, model warm-up, and update checks. It needs no microphone, model download, or real user settings.
 - Capture timing uses short Qt timer delays so pages render before `grab()`. If UI transitions change, adjust the capture steps in `tools/marketing_images.py`, then render and inspect every output.

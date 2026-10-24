@@ -90,40 +90,87 @@ def main():
         painter = QPainter(image)
         painter.setRenderHint(QPainter.Antialiasing)
         gradient = QLinearGradient(0, 0, 1280, 440)
-        gradient.setColorAt(0, QColor("#1d4a46"))
-        gradient.setColorAt(1, QColor("#2f7a72"))
+        gradient.setColorAt(0, QColor("#183d39"))
+        gradient.setColorAt(1, QColor("#347f75"))
         painter.setPen(Qt.NoPen)
         painter.setBrush(gradient)
         painter.drawRoundedRect(QRectF(0, 0, 1280, 440), 28, 28)
+        painter.setBrush(QColor(255, 255, 255, 14))
+        painter.drawEllipse(QRectF(850, -170, 620, 620))
         painter.setBrush(QColor(255, 255, 255, 34))
         painter.drawRoundedRect(QRectF(88, 142, 144, 144), 38, 38)
         painter.drawPixmap(96, 150, app_icon().pixmap(128, 128))
         font = QFont(app.font())
-        font.setPointSize(54)
+        font.setPointSize(62)
         font.setWeight(QFont.Bold)
         painter.setFont(font)
         painter.setPen(QColor("#f4e7c8"))
         painter.drawText(QRectF(256, 130, 600, 100), Qt.AlignLeft | Qt.AlignVCenter, "Speak")
-        font.setPointSize(20)
+        font.setPointSize(24)
         font.setWeight(QFont.Normal)
         painter.setFont(font)
         painter.setPen(QColor("#e6f0ee"))
-        painter.drawText(QRectF(260, 228, 640, 50), Qt.AlignLeft | Qt.AlignVCenter, "Talk anywhere. It types.")
-        font.setPointSize(12)
+        painter.drawText(QRectF(260, 228, 420, 50), Qt.AlignLeft | Qt.AlignVCenter, "Talk anywhere. It types.")
+        font.setPointSize(18)
+        font.setWeight(QFont.Normal)
         painter.setFont(font)
         painter.setPen(QColor("#b9d3cf"))
         painter.drawText(QRectF(262, 280, 640, 30), Qt.AlignLeft | Qt.AlignVCenter, "Private  ·  Offline  ·  Fast")
         painter.drawPixmap(
-            int(1280 - overlay.width() * 1.25 - 80),
-            int(220 - overlay.height() * 1.25 / 2),
+            735,
+            130,
             overlay.scaled(
-                int(overlay.width() * 1.25), int(overlay.height() * 1.25),
+                420, 180,
                 Qt.KeepAspectRatio, Qt.SmoothTransformation,
             ),
         )
         painter.end()
         if not image.save(str(OUT / "hero.png")):
             raise OSError(f"Could not save {OUT / 'hero.png'}")
+
+    def save_social_preview():
+        overlay = QPixmap(str(OUT / "overlay-dark.png"))
+        image = QPixmap(1280, 640)
+        image.fill(Qt.transparent)
+        painter = QPainter(image)
+        painter.setRenderHint(QPainter.Antialiasing)
+        gradient = QLinearGradient(0, 0, 1280, 640)
+        gradient.setColorAt(0, QColor("#183d39"))
+        gradient.setColorAt(1, QColor("#347f75"))
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(gradient)
+        painter.drawRect(0, 0, 1280, 640)
+        painter.setBrush(QColor(255, 255, 255, 14))
+        painter.drawEllipse(QRectF(850, -170, 620, 620))
+
+        painter.setBrush(QColor(255, 255, 255, 34))
+        painter.drawRoundedRect(QRectF(88, 248, 144, 144), 38, 38)
+        painter.drawPixmap(96, 256, app_icon().pixmap(128, 128))
+        font = QFont(app.font())
+        font.setPointSize(62)
+        font.setWeight(QFont.Bold)
+        painter.setFont(font)
+        painter.setPen(QColor("#f4e7c8"))
+        painter.drawText(QRectF(256, 236, 450, 100), Qt.AlignLeft | Qt.AlignVCenter, "Speak")
+
+        font.setPointSize(24)
+        font.setWeight(QFont.Normal)
+        painter.setFont(font)
+        painter.setPen(QColor("#e6f0ee"))
+        painter.drawText(QRectF(260, 326, 420, 50), Qt.AlignLeft | Qt.AlignVCenter, "Talk anywhere. It types.")
+
+        font.setPointSize(18)
+        painter.setFont(font)
+        painter.setPen(QColor("#b9d3cf"))
+        painter.drawText(QRectF(262, 374, 420, 32), Qt.AlignLeft | Qt.AlignVCenter, "Private  ·  Offline  ·  Fast")
+        painter.drawPixmap(
+            735,
+            230,
+            overlay.scaled(420, 180, Qt.KeepAspectRatio, Qt.SmoothTransformation),
+        )
+        painter.end()
+        if not image.save(str(OUT / "social-preview.png")):
+            raise OSError(f"Could not save {OUT / 'social-preview.png'}")
 
     def render_dark():
         speak._update({"theme": "Dark"})
@@ -142,6 +189,7 @@ def main():
 
         def capture_hero():
             save_hero()
+            save_social_preview()
             speak.quit()
 
         schedule(500, capture_dictate)
