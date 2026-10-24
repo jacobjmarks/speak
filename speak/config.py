@@ -63,7 +63,11 @@ SMALL_MODEL, LARGE_MODEL = "qwen25-q4km", "qwen3-4b-2507"
 SHORTCUT_MODES = {"auto": "Hold or tap", "hold": "Hold to talk", "toggle": "Tap to start and stop"}
 TIDY_LEVELS = {"off": "Off", "fast": "Fast · no AI", "auto": "Automatic · recommended", "best": "Best · always AI"}
 # Any other saved value is a llama.cpp device id (e.g. "Vulkan1") picked from the detected graphics cards.
-CLEANUP_DEVICES = {"auto": "Automatic", "cpu": "Processor only", "gpu": "Graphics card (best available)"}
+CLEANUP_DEVICES = {
+    "auto": "Automatic (recommended)",
+    "cpu": "CPU: Processor only",
+    "gpu": "GPU: Automatic (best available)",
+}
 CLOSE_ACTIONS = {"ask": "Ask me", "tray": f"Keep running in the {TRAY_NAME}", "exit": "Quit Speak"}
 OVERLAY_POSITIONS = {"cursor": "Near my cursor", "top": "Top of screen", "bottom": "Bottom of screen"}
 LIVE_PREVIEWS = {"line": "One sliding line", "full": "Full text", "off": "Off"}

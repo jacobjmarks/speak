@@ -227,6 +227,17 @@ class SpeakApp(QObject):
             QDesktopServices.openUrl(QUrl(self._release.page))
 
     def _on_probed(self):
+        device = self.settings["cleanup_device"]
+        if device not in config.CLEANUP_DEVICES and not any(g.device == device for g in tidy.gpus()):
+            self._update({"cleanup_device": config.DEFAULTS["cleanup_device"]})
+            message = f"The saved GPU preference ({device}) is unavailable. Tidy-up device reset to Automatic."
+            self.window.notify(
+                "cleanup-device",
+                message,
+                "error",
+            )
+            if self.tray and not self.window.isVisible():
+                self.tray.showMessage("Speak", message, QSystemTrayIcon.Warning, 4000)
         self.window.settings.set_gpus(tidy.gpus(), self.settings["cleanup_device"])
         self._refresh_tidy()
 

@@ -351,7 +351,7 @@ class SettingsPage(QScrollArea):
         self.cleanup_device = _combo(config.CLEANUP_DEVICES, settings["cleanup_device"])
         self.cleanup_device.currentIndexChanged.connect(
             lambda: self.changed.emit({"cleanup_device": self.cleanup_device.currentData()}))
-        self._row(rows, "Tidy-up hardware", "Automatic picks, or force the processor or a specific graphics card",
+        self._row(rows, "Tidy-up device", "Choose Automatic, CPU only, or a specific GPU",
                   self.cleanup_device, advanced=True)
 
         self.unload = _combo(config.UNLOAD_AFTER, settings["unload_after"])
@@ -479,10 +479,9 @@ class SettingsPage(QScrollArea):
         for key, label in config.CLEANUP_DEVICES.items():
             combo.addItem(label, key)
         for g in gpus:
-            kind = "shared memory" if g.integrated else f"{g.free_mb / 1000:.1f} GB free"
-            combo.addItem(f"{g.name} ({kind})", g.device)
+            combo.addItem(f"GPU: {g.name}", g.device)
         if combo.findData(current) < 0:
-            combo.addItem(f"Unavailable graphics card ({current})", current)
+            combo.addItem(f"GPU: Unavailable ({current})", current)
         combo.setCurrentIndex(combo.findData(current))
         combo.blockSignals(False)
 
@@ -512,7 +511,8 @@ class SettingsPage(QScrollArea):
 
     def sync(self, settings: dict):
         """Reflect settings changed elsewhere (e.g. first-close prompt, history page)."""
-        for widget, value in ((self.close_action, settings["close_action"]),):
+        for widget, value in ((self.close_action, settings["close_action"]),
+                              (self.cleanup_device, settings["cleanup_device"])):
             widget.blockSignals(True)
             widget.setCurrentIndex(max(0, widget.findData(value)))
             widget.blockSignals(False)
