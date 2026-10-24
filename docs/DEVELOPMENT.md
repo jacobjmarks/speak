@@ -60,6 +60,9 @@ CI uses each runner's native Qt platform and uploads these screenshots as a per-
 offscreen Qt plugin has no font database on our Windows setup, so it produces misleading missing-glyph images; it is
 intentionally not used. Tests exercise dictation controls, settings persistence/dependent controls, saved-history
 actions, permission setup, navigation, notices, and first-close choices.
+Update interaction tests cover available/up-to-date notifications, retry after download failure, immediately canceling
+active dictation when applying an update, and installing a staged update with temporary files. Network access and the
+running executable are never used.
 CI runs it and Ruff through a shared reusable action (`.github/actions/python-ci-checks/action.yml`) that both
 `.github/workflows/build.yml` and `.github/workflows/release.yml` call on Windows and macOS. The step writes a coverage
 table into the GitHub job summary for each matrix run. `coverage.xml` artifact upload is optional (off by default).

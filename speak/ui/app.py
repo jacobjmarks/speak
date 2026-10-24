@@ -223,7 +223,7 @@ class SpeakApp(QObject):
     def _on_update_clicked(self):
         if self._downloaded:
             if self.dictation.state != State.IDLE:
-                return
+                self.dictation.cancel()
             self._restart = True
             self.quit()
         elif updates.can_install(self._release):
