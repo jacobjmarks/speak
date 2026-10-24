@@ -5,6 +5,8 @@ description: Headless end-to-end checks of Speak's speech pipeline (real ASR ser
 
 # Headless pipeline checks
 
+Before starting servers, follow the process and instance collision preflight in `speak-verify`. A running Speak instance may already own the default ASR/cleanup ports. Do not reuse or stop existing servers unless their test ownership is clear; isolate settings and ports where supported, otherwise ask before running a conflicting check.
+
 ## 1. Get a test WAV (16-bit mono, 16 kHz)
 
 Windows built-in TTS gives repeatable audio with no mic:

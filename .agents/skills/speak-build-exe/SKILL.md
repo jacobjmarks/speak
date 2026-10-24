@@ -33,7 +33,7 @@ Stop-Process -Id $p.Id; Start-Sleep 3
 Get-Process llama-server, nemo-speech -ErrorAction SilentlyContinue   # expect none
 ```
 
-Interact with the frozen app using the techniques in `speak-ui-screenshots` and `speak-os-checks` (hold right alt via `keybd_event`, wait ~1 s, grab the screen, crop around the cursor, view the PNG). Only one instance runs per user: if the user's real Speak is open, the smoke test just signals it, so ask before closing it. Remove `$env:TEMP\speak-dist` when done.
+Before launching the packaged app, follow the process and instance collision preflight in `speak-verify`. Only one instance runs per user: if a real Speak instance is already open, launching the smoke test can signal that instance instead of testing the new exe. Do not close or interact with it without permission; ask before proceeding when the smoke test cannot be isolated. For a broad visual check use `speak-ui-screenshots`; use `speak-os-checks` only when validating OS interaction. Remove `$env:TEMP\speak-dist` when done.
 
 ## Release / CI
 

@@ -7,6 +7,8 @@ description: Test Speak's OS-level behaviour without a human - global hotkey hol
 
 Pattern: start a **separate process** as the "world" (a target window, a hook listener, a second instance), drive the code under test from another process, and print what the world observed. Run everything with `.\.venv\Scripts\python.exe` and `$env:PYTHONPATH=(Get-Location).Path`.
 
+Before running, follow the process and instance collision preflight in `speak-verify`. These checks can register desktop-wide hooks, inject keys, paste into the focused app, or exercise single-instance forwarding. Use a test-owned target and isolated app data; do not interact with or close a pre-existing Speak instance. Only stop processes and release hooks started by the test.
+
 ## Hotkey hold / tap
 
 Inject real key events and record callbacks (`hotkey.register(combo, on_press, on_release)`):

@@ -1,11 +1,15 @@
 ---
 name: speak-ui-screenshots
-description: Render and visually inspect the Speak window and overlay in every state (idle, listening, processing, download, done, settings, history, dark mode) without a mic, models, or hotkey. Use after any change under speak/ui/ or when diagnosing a visual bug.
+description: Render and visually inspect the Speak window and overlay across states for broad visual changes, visual regressions, or bugs spanning multiple screens. Use for shared layout/theme changes; focused UI behavior should use a targeted test instead.
 ---
 
 # See the UI without driving it
 
 `tools/screenshots.py` builds the real `SpeakApp`, forces each state with the page/overlay setters, and saves `QWidget.grab()` PNGs. Takes ~15 s, needs no human, microphone, or downloaded model.
+
+This is a broad visual sweep, not the default check for every `ui/` change. For a single control or state, use a focused test and capture just that state if appearance is the requirement. For behavior such as a click, state transition, or saved setting, assert the behavior directly.
+
+Before running, follow the process and instance collision preflight in `speak-verify`. The screenshot runner creates a separate `SpeakApp`; keep its output isolated and leave any pre-existing app or runtime process untouched.
 
 ```powershell
 $env:PYTHONIOENCODING="utf-8"

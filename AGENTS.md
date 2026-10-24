@@ -72,6 +72,6 @@ pwsh -File ./build.ps1            # native package for Windows x64 or macOS arm6
 uvx ruff check --select F speak tools   # lint
 ```
 
-Verification skills (read `speak-verify` first) live in `.agents/skills/`: `speak-verify`, `speak-ui-screenshots` (`python -m tools.screenshots`), `speak-pipeline-checks`, `speak-os-checks`, `speak-build-exe`. Always run a check and look at its output before calling a change done.
+Verification skills (read `speak-verify` first) live in `.agents/skills/`: `speak-verify`, `speak-ui-harness` (for focused app-driving, page navigation, and specific UI interactions), `speak-ui-screenshots` (`python -m tools.screenshots` for broad visual checks), `speak-pipeline-checks`, `speak-os-checks`, `speak-build-exe`. Choose focused tests for focused UI behavior; check existing Speak/runtime processes before checks that can launch or interact with them, and leave pre-existing processes alone. Always run a check and look at its output before calling a change done.
 
 More detail (tidy levels, idle unload, single instance, releases, licensing): `docs/DEVELOPMENT.md`.
