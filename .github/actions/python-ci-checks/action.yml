@@ -21,7 +21,15 @@ runs:
       shell: bash
       run: python -m pip install -r requirements.txt ruff coverage
 
+    - name: Run tests without coverage (macOS)
+      if: runner.os == 'macOS'
+      shell: bash
+      env:
+        SPEAK_UI_SNAPSHOT_DIR: ${{ runner.temp }}/speak-ui-screenshots
+      run: python -m unittest discover -s tests -p "test_*.py"
+
     - name: Run tests with coverage
+      if: runner.os != 'macOS'
       shell: bash
       env:
         SPEAK_UI_SNAPSHOT_DIR: ${{ runner.temp }}/speak-ui-screenshots
@@ -50,7 +58,7 @@ runs:
       run: ruff check --select F speak tools tests
 
     - uses: actions/upload-artifact@v7
-      if: inputs.upload-coverage-artifact == 'true'
+      if: inputs.upload-coverage-artifact == 'true' && runner.os != 'macOS'
       with:
         name: ${{ runner.os }}-coverage
         path: coverage.xml
