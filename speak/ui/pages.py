@@ -200,9 +200,9 @@ class SettingRow(QWidget):
         self.text.addWidget(_label(title))
         self.hint = _label(hint, "hint")
         self.hint.setWordWrap(True)
-        self.hint.setVisible(bool(hint))
         self.text.addWidget(self.hint)
         self.layout_.addLayout(self.text, 1)
+        self.hint.setVisible(bool(hint))
         self.layout_.addWidget(control, 0, Qt.AlignVCenter)
         self.control = control
         self._compact = None
