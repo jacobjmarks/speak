@@ -3,8 +3,8 @@
 Levels (settings["tidy"]):
   off       spoken commands only ("new paragraph"), verbatim otherwise. No model.
   fast      rules only: spoken commands, drop ums/stutters, pauses after sentences -> paragraphs. Instant.
-  auto      smartest model that stays under ~1 s here: Large on a capable GPU, else Small on CPU.
-            (Was "balanced"; renamed because on a GPU it is Best, and on CPU it's the Small model.)
+  auto      Large on a suitable GPU, else Small (uses the GPU too when Small fits).
+            (Was "balanced"; renamed because on a capable GPU it is Best.)
   best      always Large (self-corrections, paragraphs): GPU if possible, else CPU (a few seconds).
             On a capable GPU, auto and best are identical; the summary says so.
 settings["corrections"] False runs Large in literal mode (no words dropped). Prompting for a correction *reach*
@@ -17,13 +17,10 @@ import threading
 from dataclasses import dataclass
 from typing import Optional
 
+from pathlib import Path
+
 from . import platform_utils
 from .config import CLEANUP_MODELS, LARGE_MODEL, MODELS_DIR, SMALL_MODEL
-
-GPU_MIN_FREE_MB = 4000   # Large model (~2.5 GB) + KV cache + headroom
-AUTO_GPU_MIN_FREE_MB = 6000  # Avoid picking Large on borderline laptop GPUs in Automatic mode.
-CPU_LARGE_MIN_RAM_MB = 4500
-INTEGRATED = re.compile(r"\b(UHD|Iris|HD Graphics|Radeon\(TM\) Graphics|Radeon Graphics|Vega \d+ Graphics)\b", re.I)
 
 
 @dataclass(frozen=True)
@@ -31,6 +28,7 @@ class Gpu:
     device: str  # llama.cpp device id, e.g. "Vulkan0" or "MTL0"
     name: str
     free_mb: int
+    integrated: bool = False  # shares system RAM instead of having dedicated memory
 
 
 @dataclass(frozen=True)
@@ -50,19 +48,31 @@ _gpu: Optional[Gpu] = None
 _probed = threading.Event()
 
 
+def _integrated_devices(llama_server) -> set:
+    """Vulkan devices that llama.cpp flags as unified-memory (uma: 1). llama-server --list-devices omits this; the
+    bundled llama-bench prints it. Missing or unparsable -> empty set (no device is treated as integrated)."""
+    try:
+        bench = Path(llama_server).with_name("llama-bench" + Path(llama_server).suffix)
+        out = subprocess.run([str(bench), "--list-devices"], capture_output=True, text=True, timeout=20,
+                             **platform_utils.hidden_process_kwargs())
+        return {f"Vulkan{i}" for i, uma in re.findall(r"ggml_vulkan: (\d+) = .*?\| uma: (\d)", out.stdout + out.stderr)
+                if uma == "1"}
+    except Exception:
+        return set()
+
+
 def probe(llama_server) -> None:
     """Ask llama.cpp which accelerators it can use. Slow-ish (~0.5 s); call once from a worker thread."""
     global _gpu
     try:
         out = subprocess.run([str(llama_server), "--list-devices"], capture_output=True, text=True, timeout=20,
                              **platform_utils.hidden_process_kwargs())
+        integrated = _integrated_devices(llama_server)
         best = None
         for device, name, free in re.findall(r"^\s*(\S+): (.+?) \(\d+ MiB, (\d+) MiB free\)", out.stdout + out.stderr,
                                              re.M):
-            if INTEGRATED.search(name) and not platform_utils.IS_MAC:
-                continue  # shared-memory iGPUs report system RAM and are rarely faster than the CPU
-            gpu = Gpu(device, name.strip(), int(free))
-            if best is None or gpu.free_mb > best.free_mb:
+            gpu = Gpu(device, name.strip(), int(free), device in integrated)
+            if best is None or (not gpu.integrated, gpu.free_mb) > (not best.integrated, best.free_mb):
                 best = gpu
         _gpu = best
     except Exception:
@@ -79,6 +89,11 @@ def probed() -> bool:
     return _probed.is_set()
 
 
+def _memory_required_mb(model_id: str) -> int:
+    model = CLEANUP_MODELS[model_id]
+    return model["size_mb"] + model["runtime_headroom_mb"]
+
+
 def plan(settings: dict) -> Plan:
     level = settings["tidy"]
     if level == "off":
@@ -87,20 +102,24 @@ def plan(settings: dict) -> Plan:
         return Plan(level, None, "literal", None, "Instant. Removes ums and repeats, adds paragraphs. No download.")
 
     preference = settings.get("cleanup_device", "auto")
-    gpu_requested = preference != "cpu"
-    g = _gpu if _gpu and gpu_requested else None
-    gpu_for_large = g if g and g.free_mb >= GPU_MIN_FREE_MB else None
-    gpu_for_auto_large = g if g and g.free_mb >= AUTO_GPU_MIN_FREE_MB else None
+    g = _gpu if preference != "cpu" else None
+    if g and g.integrated and preference == "auto":
+        g = None  # forcing the GPU in Advanced still allows it
+    gpu_for_large = g if g and g.free_mb >= _memory_required_mb(LARGE_MODEL) else None
     pinned = settings.get("cleanup_model")
     if pinned in CLEANUP_MODELS:
         model = pinned
     elif level == "auto":
-        model = LARGE_MODEL if gpu_for_auto_large else SMALL_MODEL
+        model = LARGE_MODEL if gpu_for_large else SMALL_MODEL
+    elif preference == "gpu":
+        model = LARGE_MODEL if gpu_for_large else SMALL_MODEL
     else:
-        model = LARGE_MODEL if gpu_for_large or platform_utils.available_memory_mb() >= CPU_LARGE_MIN_RAM_MB else SMALL_MODEL
+        model = LARGE_MODEL if gpu_for_large or platform_utils.available_memory_mb() >= \
+            _memory_required_mb(LARGE_MODEL) else SMALL_MODEL
 
-    use_gpu = preference == "gpu" or (preference == "auto" and model == LARGE_MODEL and gpu_for_large is not None)
-    device = g.device if use_gpu and g else None
+    gpu_for_model = g if g and g.free_mb >= _memory_required_mb(model) else None
+    use_gpu = preference == "gpu" or (preference == "auto" and gpu_for_model is not None)
+    device = gpu_for_model.device if use_gpu and gpu_for_model else None
     downloaded = (MODELS_DIR / "cleanup" / CLEANUP_MODELS[model]["file"]).exists()
     size = "" if downloaded else f" {CLEANUP_MODELS[model]['size_mb'] / 1000:.1f} GB download on first use."
     where = "graphics card" if device else "processor"
@@ -122,12 +141,10 @@ def plan(settings: dict) -> Plan:
         notes.append("Same as Best here." if level == "auto" else "Same as Automatic here.")
     elif level == "best" and model != LARGE_MODEL:
         notes.append("Not enough free memory for the large model.")
-    elif preference == "auto" and level == "auto" and g and gpu_for_auto_large is None:
-        notes.append("Using Small AI because your graphics card is low on free memory.")
     if preference == "gpu" and g is None:
         notes.append("GPU was forced, but none was found. Using your processor.")
-    elif preference == "gpu" and model == LARGE_MODEL and gpu_for_large is None:
-        notes.append("GPU was forced, but it doesn't have enough free memory for the large model. Using your processor.")
+    elif preference == "gpu" and gpu_for_model is None:
+        notes.append("GPU was forced, but it doesn't have enough free memory for this model. Using your processor.")
     elif preference == "cpu":
         notes.append("Processor forced in Advanced.")
     note = (" " + " ".join(notes)) if notes else ""

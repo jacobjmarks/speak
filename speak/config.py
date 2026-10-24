@@ -48,12 +48,14 @@ CLEANUP_MODELS = {
         "repo": "Qwen/Qwen2.5-0.5B-Instruct-GGUF",
         "file": "qwen2.5-0.5b-instruct-q4_k_m.gguf",
         "size_mb": 491,
+        "runtime_headroom_mb": 512,
     },
     "qwen3-4b-2507": {
         "label": "Large · Qwen3 4B Instruct (2.5 GB)",
         "repo": "bartowski/Qwen_Qwen3-4B-Instruct-2507-GGUF",
         "file": "Qwen_Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
         "size_mb": 2500,
+        "runtime_headroom_mb": 1500,
     },
 }
 SMALL_MODEL, LARGE_MODEL = "qwen25-q4km", "qwen3-4b-2507"
