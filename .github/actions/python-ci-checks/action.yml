@@ -21,7 +21,28 @@ runs:
       shell: bash
       run: python -m pip install -r requirements.txt ruff coverage
 
+    - name: Repeat test discovery with coverage (macOS diagnostic)
+      if: runner.os == 'macOS'
+      shell: bash
+      env:
+        SPEAK_UI_SNAPSHOT_DIR: ${{ runner.temp }}/speak-ui-screenshots
+      run: |
+        status=0
+        for attempt in 1 2 3; do
+          echo "Coverage discovery attempt $attempt"
+          if COVERAGE_FILE=".coverage-discovery-$attempt" \
+            python -m coverage run --source=speak -m unittest discover -s tests -p "test_*.py"; then
+            attempt_status=0
+          else
+            attempt_status=$?
+            status=$attempt_status
+          fi
+          echo "Coverage discovery attempt $attempt exited with $attempt_status"
+        done
+        exit "$status"
+
     - name: Run tests with coverage
+      if: runner.os != 'macOS'
       shell: bash
       env:
         SPEAK_UI_SNAPSHOT_DIR: ${{ runner.temp }}/speak-ui-screenshots
