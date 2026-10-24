@@ -23,7 +23,7 @@ class SettingsInteractionTest(QtTestCase):
 
     def test_turning_on_history_persists_setting_and_refreshes_history_view(self):
         page = self.make_page()
-        window = SimpleNamespace(history=Mock(), settings=Mock())
+        window = SimpleNamespace(history=Mock(), settings=Mock(), onboarding=Mock())
         app = SimpleNamespace(settings={**config.DEFAULTS}, dictation=Mock(), window=window)
         page.changed.connect(lambda changes: SpeakApp._update(app, changes))
 

@@ -32,6 +32,7 @@ DEFAULTS = {
     "audio_dim_enabled": False,
     "audio_dim_percent": 20,
     "advanced_settings": False,
+    "onboarding_done": False,  # first-run setup finished or skipped; existing installs count as done
     "mic_device": None,  # device name; None = system default
     "overlay_enabled": True,
     "overlay_position": "cursor",
@@ -78,7 +79,7 @@ CLEANUP_DEVICES = {
     "gpu": "GPU: Automatic (best available)",
 }
 CLOSE_ACTIONS = {"ask": "Ask me", "tray": f"Keep running in the {TRAY_NAME}", "exit": "Quit Speak"}
-OVERLAY_POSITIONS = {"cursor": "Near my cursor", "top": "Top of screen", "bottom": "Bottom of screen"}
+OVERLAY_POSITIONS = {"cursor": "Below my cursor", "top": "Top of screen", "bottom": "Bottom of screen"}
 LIVE_PREVIEWS = {"line": "One sliding line", "full": "Full text", "off": "Off"}
 THEMES = ("System", "Light", "Dark")
 # Speech model ~1 GB RAM, large tidy model ~3 GB VRAM. Reloading costs ~2-4 s on the next dictation.
@@ -99,6 +100,10 @@ def load_settings() -> dict:
         settings["tidy"] = "auto"
     if isinstance(settings["live_preview"], bool):
         settings["live_preview"] = "line" if settings["live_preview"] else "off"
+    if stored and "onboarding_done" not in stored:
+        settings["onboarding_done"] = True
+    elif not isinstance(settings["onboarding_done"], bool):
+        settings["onboarding_done"] = DEFAULTS["onboarding_done"]
     if not isinstance(settings["audio_dim_enabled"], bool):
         settings["audio_dim_enabled"] = DEFAULTS["audio_dim_enabled"]
     if (not isinstance(settings["audio_dim_percent"], int) or isinstance(settings["audio_dim_percent"], bool)

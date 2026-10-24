@@ -52,9 +52,16 @@ def stylesheet(p: Palette) -> str:
     QWidget#page {{ background: transparent; }}
     QLabel {{ background: transparent; }}
     QLabel#title {{ font-size: 18pt; font-weight: 600; }}
+    QLabel#display {{ font-size: 30pt; font-weight: 700; }}
+    QLabel#heading {{ font-size: 22pt; font-weight: 600; }}
+    QLabel#lead {{ font-size: 13pt; color: {p.muted}; }}
+    QLabel#keycap {{ font-family: "Consolas", "Menlo", monospace; font-size: 20pt; font-weight: 600;
+                     padding: 10px 28px; background: {p.surface}; border: 1px solid {p.border};
+                     border-bottom: 3px solid {p.border}; border-radius: 12px; }}
     QLabel#section {{ font-size: 9pt; font-weight: 600; color: {p.muted}; letter-spacing: 1px; }}
     QLabel#muted, QLabel#hint {{ color: {p.muted}; }}
     QLabel#hint {{ font-size: 9pt; }}
+    QLabel:disabled, QLabel#hint:disabled {{ color: {p.border}; }}
     QFrame#card {{ background: {p.surface}; border: 1px solid {p.border}; border-radius: 14px; }}
     QFrame#divider {{ background: {p.border}; max-height: 1px; border: none; }}
     QFrame#banner {{ background: {_tint(p.accent)}; border: 1px solid {p.accent}; border-radius: 12px; }}
@@ -73,6 +80,7 @@ def stylesheet(p: Palette) -> str:
     QPushButton:disabled {{ color: {p.muted}; }}
     QPushButton#primary {{ background: {p.accent}; color: {p.accent_text}; border: none; font-weight: 600; }}
     QPushButton#primary:hover {{ background: {QColor(p.accent).lighter(110).name()}; }}
+    QPushButton[size="large"] {{ padding: 12px 32px; font-size: 12pt; border-radius: 14px; }}
     QPushButton#ghost {{ background: transparent; border: none; color: {p.muted}; padding: 6px 8px; }}
     QPushButton#ghost:hover {{ color: {p.text}; }}
     QPushButton#danger {{ background: transparent; border: 1px solid {p.border}; color: {p.danger}; }}

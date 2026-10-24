@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (QButtonGroup, QDialog, QHBoxLayout, QLabel, QMain
 from .. import updates
 from ..platform_utils import IS_MAC, TRAY_NAME, hide_title_text, system_app_icon_png
 from .banner import Banner
+from .onboarding import OnboardingPage
 from .pages import AboutPage, DictatePage, HistoryPage, SetupPage, SettingsPage
 from .widgets import draw_mic
 
@@ -125,7 +126,7 @@ class MainWindow(QMainWindow):
         if IS_MAC:  # content runs under the title bar; only the traffic-light buttons remain
             self.setWindowFlags(self.windowFlags() | Qt.ExpandedClientAreaHint | Qt.NoTitleBarBackgroundHint)
             self.setAttribute(Qt.WA_ContentsMarginsRespectsSafeArea, False)  # lay out under the title bar
-        self.resize(760, 560)
+        self.resize(1000, 760)
         self.setMinimumSize(640, 480)
 
         root = QWidget(objectName="root")
@@ -187,13 +188,20 @@ class MainWindow(QMainWindow):
         column.addWidget(self.stack, 1)
         layout.addWidget(content, 1)
         self.setup = SetupPage()
-        self.screens = QStackedWidget()  # [root app, first-run setup]
+        self.onboarding = OnboardingPage(settings, can_rescan_mics, Logo(96))
+        self.screens = QStackedWidget()  # [root app, permissions setup, first-run onboarding]
         self.screens.addWidget(root)
         self.screens.addWidget(self.setup)
+        self.screens.addWidget(self.onboarding)
         self.setCentralWidget(self.screens)
 
     def show_setup(self, active: bool):
         self.screens.setCurrentIndex(1 if active else 0)
+
+    def show_onboarding(self, active: bool):
+        if active:
+            self.onboarding.reset()
+        self.screens.setCurrentIndex(2 if active else 0)
 
     def show_page(self, index: int):
         self.nav.button(index).setChecked(True)

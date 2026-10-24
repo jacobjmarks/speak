@@ -99,6 +99,7 @@ try {
         '--add-data', "$nemoVendor${dataSeparator}vendor/nemo-speech",
         '--add-data', "$llamaVendor${dataSeparator}vendor/llama-cpp",
         '--add-data', "$notices${dataSeparator}.",
+        '--add-data', "$(Join-Path $PSScriptRoot 'assets')${dataSeparator}assets",
         '--additional-hooks-dir', (Join-Path $PSScriptRoot 'tools/hooks'),
         '--exclude-module', 'tkinter')
     if ($IsWindows) {

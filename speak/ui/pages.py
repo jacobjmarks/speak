@@ -266,6 +266,7 @@ class SettingsPage(QScrollArea):
     shortcut_changed = Signal(str)
     shortcut_recording = Signal(bool)
     check_updates = Signal()
+    rerun_setup = Signal()
 
     def __init__(self, settings: dict, can_rescan_mics=lambda: False):
         super().__init__()
@@ -428,6 +429,10 @@ class SettingsPage(QScrollArea):
         self.theme.currentIndexChanged.connect(lambda: self.changed.emit({"theme": self.theme.currentData()}))
         self._row(rows, "Appearance", "", self.theme)
 
+        setup = QPushButton("Run setup", cursor=Qt.PointingHandCursor)
+        setup.clicked.connect(self.rerun_setup)
+        self._row(rows, "First-run setup", "Re-pick your microphone and test dictation speed", setup)
+
         folder = QPushButton("Open", cursor=Qt.PointingHandCursor)
         folder.clicked.connect(lambda: (config.APP_DIR.mkdir(parents=True, exist_ok=True),
                                         platform_utils.open_path(config.APP_DIR)))
@@ -552,10 +557,18 @@ class SettingsPage(QScrollArea):
     def sync(self, settings: dict):
         """Reflect settings changed elsewhere (e.g. first-close prompt, history page)."""
         for widget, value in ((self.close_action, settings["close_action"]),
-                              (self.cleanup_device, settings["cleanup_device"])):
+                              (self.cleanup_device, settings["cleanup_device"]),
+                              (self.shortcut_mode, settings["shortcut_mode"]),
+                              (self.tidy, settings["tidy"]),
+                              (self.cleanup_model, settings["cleanup_model"]),
+                              (self.position, settings["overlay_position"]),
+                              (self.live, settings["live_preview"]),
+                              (self.theme, settings["theme"]),
+                              (self.updates, settings["updates"])):
             widget.blockSignals(True)
             widget.setCurrentIndex(max(0, widget.findData(value)))
             widget.blockSignals(False)
+        self.shortcut.set_combo(settings["hotkey"])
         self.history.blockSignals(True)
         self.history.setChecked(settings["history_enabled"])
         self.history.blockSignals(False)

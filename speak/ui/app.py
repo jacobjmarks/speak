@@ -3,6 +3,7 @@
 Controller callbacks arrive on worker threads; `Bridge` re-emits them as Qt signals (queued onto the UI thread).
 """
 import hashlib
+import logging
 import sys
 import threading
 import time
@@ -13,12 +14,16 @@ from PySide6.QtGui import QAction, QColor, QDesktopServices, QGuiApplication, QK
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtWidgets import QApplication, QMenu, QMenuBar, QSystemTrayIcon
 
-from .. import config, hotkey, permissions, platform_utils, tidy, updates
+from .. import benchmark, config, hotkey, permissions, platform_utils, tidy, updates
 from ..controller import Dictation, Listener, State
+from ..runtimes import ModelDownloadError
 from ..platform_utils import IS_MAC
 from . import theme
 from .overlay import Overlay
 from .window import CloseDialog, MainWindow, app_icon, menu_bar_icon
+
+
+log = logging.getLogger(__name__)
 
 
 class Bridge(QObject, Listener):
@@ -36,6 +41,9 @@ class Bridge(QObject, Listener):
     update_found = Signal(object, bool)   # Release or None, manual check
     update_progress = Signal(int)
     update_ready = Signal(object)        # Path of downloaded exe, or None on failure
+    test_progress = Signal(str, object)  # setup test phase, percent
+    test_done = Signal(object)           # benchmark.Result
+    test_failed = Signal(str)
 
     def on_state(self, state):
         self.state.emit(state.value)
@@ -87,6 +95,7 @@ class SpeakApp(QObject):
         self._downloading = False
         self._downloaded = None    # verified exe waiting beside ours; swapped in on quit
         self._restart = False
+        self._onboarding = False   # first-run setup is showing: the global hotkey stays quiet
 
         b = self.bridge
         b.state.connect(self._on_state)
@@ -103,6 +112,9 @@ class SpeakApp(QObject):
         b.update_found.connect(self._on_update_found)
         b.update_progress.connect(lambda p: self._set_update(f"{p}%", "Downloading the update…", enabled=False))
         b.update_ready.connect(self._on_update_ready)
+        b.test_progress.connect(lambda message, percent: self.window.onboarding.set_progress(message, percent))
+        b.test_done.connect(self.window.onboarding.set_result)
+        b.test_failed.connect(self.window.onboarding.set_failure)
 
         w = self.window
         w.close_requested.connect(self._on_close)
@@ -111,6 +123,13 @@ class SpeakApp(QObject):
         w.setup.settings_clicked.connect(permissions.open_settings)
         w.setup.restart_clicked.connect(self._relaunch)
         w.settings.check_updates.connect(lambda: self._check_updates(manual=True))
+        w.settings.rerun_setup.connect(self._start_onboarding)
+        w.onboarding.changed.connect(self._update)
+        w.onboarding.skipped.connect(self._finish_onboarding)
+        w.onboarding.finished.connect(self._finish_onboarding)
+        w.onboarding.test_requested.connect(self._run_test)
+        w.onboarding.test_cancelled.connect(self.dictation.cancel_benchmark)
+        w.onboarding.shortcut_recording.connect(self._on_shortcut_recording)
         w.dictate.toggle_requested.connect(self.dictation.toggle)
         w.history.open_settings.connect(lambda: w.show_page(2))
         w.settings.changed.connect(self._update)
@@ -122,10 +141,13 @@ class SpeakApp(QObject):
 
         self._apply_theme()
         setup_needed = bool(permissions.missing())
+        onboarding_needed = not self.settings["onboarding_done"]
         if setup_needed:
             self._start_setup()
         else:
             self._register_hotkey()
+            if onboarding_needed:
+                self._start_onboarding()
         w.dictate.set_shortcut(self.settings["hotkey"], self.settings["shortcut_mode"])
         w.history.refresh(self.settings["history_enabled"])
         self._refresh_tidy()
@@ -136,7 +158,7 @@ class SpeakApp(QObject):
         self._update_timer = QTimer(self, interval=24 * 3600 * 1000, timeout=self._check_updates)
         self._update_timer.start()
         QTimer.singleShot(5000, self._check_updates)
-        if not (background and self.tray) or setup_needed:
+        if not (background and self.tray) or setup_needed or onboarding_needed:
             w.show()
 
     # ----- settings -----
@@ -158,6 +180,7 @@ class SpeakApp(QObject):
         if {"updates", "prereleases"} & changes.keys():
             self._check_updates()
         self.window.settings.sync(self.settings)
+        self.window.onboarding.sync(self.settings)
 
     # ----- updates -----
 
@@ -244,14 +267,17 @@ class SpeakApp(QObject):
             if self.tray and not self.window.isVisible():
                 self.tray.showMessage("Speak", message, QSystemTrayIcon.Warning, 4000)
         self.window.settings.set_gpus(tidy.gpus(), self.settings["cleanup_device"])
+        self.window.onboarding.set_gpus(tidy.gpus(), self.settings["cleanup_device"])
         self._refresh_tidy()
 
     def _refresh_tidy(self):
         if tidy.probed():
             plan = tidy.plan(self.settings)
-            self.window.settings.set_tidy_summary(plan.summary, plan.model_id == config.LARGE_MODEL)
+            summary, large = plan.summary, plan.model_id == config.LARGE_MODEL
         else:
-            self.window.settings.set_tidy_summary("Checking what your computer can run…", True)
+            summary, large = "Checking what your computer can run…", True
+        self.window.settings.set_tidy_summary(summary, large)
+        self.window.onboarding.set_tidy_summary(summary, large)
 
     def _apply_theme(self):
         self.palette = theme.resolve(self.settings["theme"])
@@ -261,6 +287,7 @@ class SpeakApp(QObject):
         self.app.setPalette(links)
         self.window.dictate.set_palette(self.palette)
         self.window.settings.set_palette(self.palette)
+        self.window.onboarding.set_palette(self.palette)
         self.overlay.palette_ = self.palette
         self._on_state(self.dictation.state.value, refresh_only=True)
 
@@ -292,7 +319,40 @@ class SpeakApp(QObject):
             self.window.show_setup(False)
             self.window.clear_notice("permissions")
             self._register_hotkey()
+            if not self.settings["onboarding_done"]:
+                self._start_onboarding()
             self.show_window()
+
+    # ----- first-run setup -----
+
+    def _start_onboarding(self):
+        self._onboarding = True
+        self.window.show_onboarding(True)
+        self.show_window()
+
+    def _finish_onboarding(self):
+        self._onboarding = False
+        self.window.show_onboarding(False)
+        if not self.settings["onboarding_done"]:
+            self._update({"onboarding_done": True})
+
+    def _run_test(self, pcm, rate: int):
+        bridge, dictation = self.bridge, self.dictation
+
+        def run():
+            try:
+                if pcm is None:
+                    audio, sample_rate = benchmark.read_wav(platform_utils.sample_audio_file())
+                else:
+                    audio, sample_rate = pcm, rate
+                bridge.test_done.emit(dictation.run_benchmark(audio, sample_rate, bridge.test_progress.emit))
+            except benchmark.Cancelled:
+                pass
+            except Exception as exc:
+                log.warning("Setup test failed", exc_info=exc)
+                bridge.test_failed.emit(str(exc) if isinstance(exc, (ModelDownloadError, RuntimeError))
+                                        else "The test didn't work. Please try again.")
+        threading.Thread(target=run, daemon=True).start()
 
     def _check_permissions(self):
         """After setup: warn if the user has since switched a permission off."""
@@ -321,7 +381,7 @@ class SpeakApp(QObject):
         return self._capturing or time.monotonic() - self._capture_ended < CAPTURE_GRACE
 
     def _on_hotkey_down(self):
-        if self._hotkey_blocked():
+        if self._hotkey_blocked() or self._onboarding:
             return
         state = self.dictation.state
         if state == State.IDLE:
@@ -496,6 +556,7 @@ class SpeakApp(QObject):
         self.window.allow_close = True  # Qt 6 quit() closes windows; don't re-prompt
         hotkey.unregister()
         self.overlay.hide_now()
+        self.dictation.cancel_benchmark()
         self.dictation.shutdown()
         if self.tray:
             self.tray.hide()

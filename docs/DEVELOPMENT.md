@@ -90,7 +90,8 @@ See `.agents/skills/speak-marketing-images/SKILL.md` for the capture/composition
 | `speak/system_audio.py` | Optional system output-volume dimming while listening (Windows/macOS) |
 | `speak/hotkey.py` | Global shortcut (press/release for hold-to-talk), capture, key sending |
 | `speak/updates.py` | Update check against `v<semver>` release tags; download, sha256 check, exe swap |
-| `speak/ui/` | Window, pages, overlay, widgets, theme |
+| `speak/benchmark.py` | First-run setup test: streams audio through the real ASR + tidy pipeline and times it; `assets/onboarding-sample.wav` is the bundled sample (Windows TTS, 16 kHz mono) |
+| `speak/ui/` | Window, pages, overlay, widgets, theme; `ui/onboarding.py` is the first-run setup (mic, shortcut, tidy + timed test, indicator, theme/updates), shown once (`onboarding_done`; existing installs count as done) and rerunnable from Settings |
 
 ## Tidy levels
 
@@ -109,7 +110,7 @@ Both runtimes unload after `unload_after` idle minutes (default 5; Advanced → 
 
 ASR runs with `--asr.streaming.rnnt_right_context=-1` (max lookahead, ~0.25 s): better words and punctuation on clean speech, same finish time, live text every 320 ms. A full offline re-pass (`POST /v1/audio/transcriptions`) was tested: ~1.6 s per 20 s of audio and worse on noisy audio, so not used. Context-dependent word fixes ("pair" → "pear") are left to the tidy model.
 Model output is validated (length/similarity bounds, no invented numbers, no dropped words in literal mode); on failure the rule-processed text is used.
-The llama.cpp server runs with `--parallel 1`, a pinned `--device`, and a warm-up request so the first dictation hits a warm prompt cache. Device selection budgets model file size plus runtime headroom (512 MB for Small, 1.5 GB for Large). Device choice is memory-budget based. The probe also runs the bundled `llama-bench --list-devices`, which prints llama.cpp's own `uma` (shared-memory) flag per Vulkan device; shared-memory GPUs are skipped in Automatic (still forceable in Advanced) and dedicated GPUs rank first. If `llama-bench` is missing or prints nothing, no GPU is treated as integrated. A first-run setup page for testing latency and tuning is planned.
+The llama.cpp server runs with `--parallel 1`, a pinned `--device`, and a warm-up request so the first dictation hits a warm prompt cache. Device selection budgets model file size plus runtime headroom (512 MB for Small, 1.5 GB for Large). Device choice is memory-budget based. The probe also runs the bundled `llama-bench --list-devices`, which prints llama.cpp's own `uma` (shared-memory) flag per Vulkan device; shared-memory GPUs are skipped in Automatic (still forceable in Advanced) and dedicated GPUs rank first. If `llama-bench` is missing or prints nothing, no GPU is treated as integrated. A first-run setup page (`ui/onboarding.py`) tests latency and lets users tune these.
 Advanced settings can pin the Small or Large model, and choose the tidy-up device: Automatic (recommended), CPU only, GPU Automatic (best available), or a specific detected GPU. GPU entries show the device name only; available memory fluctuates and is not shown. A specific device is stored as its llama.cpp id (e.g. `Vulkan1`); the list fills in after the probe. If the selected GPU is unavailable or lacks memory, cleanup falls back to CPU and the tidy summary explains why.
 
 ## Releases

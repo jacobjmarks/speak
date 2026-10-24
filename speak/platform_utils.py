@@ -29,6 +29,11 @@ def bundle_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
+def sample_audio_file() -> Path:
+    """Bundled recording used by first-run setup to time dictation."""
+    return bundle_root() / "assets" / "onboarding-sample.wav"
+
+
 def notices_file() -> Path:
     """Bundled third-party notices; in source runs, the copy build.ps1 generates under build/."""
     root = bundle_root()

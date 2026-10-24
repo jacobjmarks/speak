@@ -77,6 +77,16 @@ class Overlay(_Animated):
         self.text = text.strip()
         self._relayout()
 
+    def snapshot(self, mode: str, text: str = "", level: float = 0.0, word: str = ""):
+        """Render the indicator offscreen as a pixmap (the setup preview); never shows the window."""
+        if mode != self.mode:
+            self._mode_t = self.phase
+        self.mode, self.word, self.percent = mode, word, None
+        self.text = text
+        self._levels.append(level)
+        self._relayout()
+        return self.grab()
+
     def fade_out(self) -> None:
         if not self.isVisible():
             return

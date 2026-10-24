@@ -13,7 +13,7 @@ class DevicePreferenceTest(unittest.TestCase):
         settings = {"cleanup_device": "Vulkan9"}
         detected = [tidy.Gpu("Vulkan0", "RTX", 9000)]
         page = SimpleNamespace(set_gpus=Mock())
-        window = SimpleNamespace(settings=page, notify=Mock(), isVisible=lambda: True)
+        window = SimpleNamespace(settings=page, onboarding=Mock(), notify=Mock(), isVisible=lambda: True)
         app = SimpleNamespace(settings=settings, window=window, tray=None, _refresh_tidy=Mock())
         app._update = lambda changes: settings.update(changes)
 

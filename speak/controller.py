@@ -7,7 +7,7 @@ import threading
 import time
 from enum import Enum
 
-from . import cleanup, history, output, platform_utils, system_audio, tidy
+from . import benchmark, cleanup, history, output, platform_utils, system_audio, tidy
 from .asr import AsrSession
 from .audio import Microphone
 from .config import CLEANUP_MODELS, MODELS_DIR
@@ -60,6 +60,8 @@ class Dictation:
         self._cancelled = False
         self._cancel_error = False
         self._cancel_event = threading.Event()
+        self._benchmark_cancel = threading.Event()
+        self._benchmark_lock = threading.Lock()
         self._target = None  # window focused when dictation started
         self._audio_volume = None
         self._unload_timer = None
@@ -134,6 +136,33 @@ class Dictation:
                 if self.state == State.IDLE:
                     self._schedule_unload()
         threading.Thread(target=run, daemon=True).start()
+
+    def run_benchmark(self, pcm: bytes, rate: int, progress):
+        """Time `pcm` through the current settings (see benchmark.run). Call from a worker thread while idle."""
+        cancel = threading.Event()
+        with self._lock:
+            if self.state != State.IDLE:
+                raise RuntimeError("Finish dictating before testing.")
+            self._cancel_unload()
+            self._benchmark_cancel.set()  # supersede any run still unwinding
+            self._benchmark_cancel = cancel
+        with self._benchmark_lock:  # a cancelled run finishes unwinding first
+            try:
+                if cancel.is_set():
+                    raise benchmark.Cancelled()
+                return benchmark.run(self.settings, pcm, rate, self.asr_server, self.cleanup_server, progress,
+                                     cancel.is_set)
+            finally:
+                with self._lock:
+                    if self.state == State.IDLE:
+                        self._schedule_unload()
+                        # Cancelled with no newer run queued: free the models now.
+                        if cancel.is_set() and self._benchmark_cancel is cancel:
+                            self.asr_server.stop()
+                            self.cleanup_server.stop()
+
+    def cancel_benchmark(self):
+        self._benchmark_cancel.set()
 
     def settings_changed(self):
         with self._lock:

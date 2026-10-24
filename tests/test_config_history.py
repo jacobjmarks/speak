@@ -36,6 +36,15 @@ class ConfigTest(unittest.TestCase):
         self.settings_file.write_text('{"tidy": "balanced"}', encoding="utf-8")
         self.assertEqual("auto", config.load_settings()["tidy"])
 
+    def test_existing_installs_skip_first_run_setup_but_fresh_ones_get_it(self):
+        self.assertFalse(config.load_settings()["onboarding_done"])
+
+        self.settings_file.write_text('{"tidy": "fast"}', encoding="utf-8")
+        self.assertTrue(config.load_settings()["onboarding_done"])
+
+        self.settings_file.write_text('{"onboarding_done": false}', encoding="utf-8")
+        self.assertFalse(config.load_settings()["onboarding_done"])
+
     def test_invalid_json_falls_back_to_defaults_and_save_round_trips(self):
         self.settings_file.write_text("{", encoding="utf-8")
         self.assertEqual(config.DEFAULTS, config.load_settings())
