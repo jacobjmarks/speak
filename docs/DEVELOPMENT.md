@@ -70,6 +70,14 @@ It does not download models or require a microphone.
 Real hotkey/paste injection, packaged-app behavior, and inference pipelines remain separate manual or
 hardware-dependent checks; see the verification skills in `AGENTS.md`.
 
+Regenerate README product images from the real UI (no microphone or models required):
+
+```powershell
+python -m tools.marketing_images [output_dir]
+```
+
+See `.agents/skills/speak-marketing-images/SKILL.md` for the capture/composition workflow and review checklist.
+
 ## Code map
 
 | Path | What |
