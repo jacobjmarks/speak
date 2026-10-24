@@ -26,7 +26,11 @@ runs:
       env:
         SPEAK_UI_SNAPSHOT_DIR: ${{ runner.temp }}/speak-ui-screenshots
       run: |
-        python -m coverage run --source=speak -m unittest discover -s tests -p "test_*.py"
+        coverage_args=(--source=speak)
+        if [[ "$RUNNER_OS" == "macOS" ]]; then
+          coverage_args+=(--timid)
+        fi
+        python -m coverage run "${coverage_args[@]}" -m unittest discover -s tests -p "test_*.py"
         python -m coverage xml -o coverage.xml
         python -m coverage report -m > coverage.txt
         {
