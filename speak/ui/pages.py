@@ -2,9 +2,10 @@
 from datetime import datetime
 
 from PySide6.QtCore import Qt, QTimer, QUrl, Signal
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtGui import QColor, QDesktopServices, QPalette
 from PySide6.QtWidgets import (QBoxLayout, QComboBox, QFrame, QHBoxLayout, QLabel, QPlainTextEdit, QPushButton,
-                               QScrollArea, QSlider, QSizePolicy, QVBoxLayout, QWidget)
+                               QScrollArea, QSlider, QSizePolicy, QStyle, QStyleOptionViewItem, QStyledItemDelegate,
+                               QVBoxLayout, QWidget)
 
 from .. import audio, config, history, hotkey, output, permissions, platform_utils, updates
 from .widgets import MicButton, ShortcutButton, Toggle, WaveStrip
@@ -231,8 +232,40 @@ def _combo(options: dict, current: str) -> QComboBox:
     return combo
 
 
-LANGUAGES = {"auto": "Detect automatically", "en": "English", "es": "Spanish", "fr": "French", "de": "German",
-             "it": "Italian", "pt": "Portuguese", "nl": "Dutch", "ja": "Japanese", "zh": "Chinese"}
+class LanguageItemDelegate(QStyledItemDelegate):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.muted = None
+
+    def paint(self, painter, option, index):
+        if index.data(Qt.UserRole + 1) == "section":
+            super().paint(painter, option, index)
+            return
+
+        option = QStyleOptionViewItem(option)
+        self.initStyleOption(option, index)
+        text = option.text
+        option.text = ""
+        option.widget.style().drawControl(QStyle.CE_ItemViewItem, option, painter, option.widget)
+
+        code = str(index.data(Qt.UserRole))
+        code_width = option.fontMetrics.horizontalAdvance(code)
+        text_rect = option.rect.adjusted(12, 0, -12, 0)
+        language_rect = text_rect.adjusted(0, 0, -code_width - 16, 0)
+        code_rect = text_rect.adjusted(text_rect.width() - code_width, 0, 0, 0)
+        painter.save()
+        painter.setFont(option.font)
+        text_color = QPalette.HighlightedText if option.state & QStyle.State_Selected else QPalette.Text
+        painter.setPen(option.palette.color(text_color))
+        painter.drawText(language_rect, Qt.AlignVCenter | Qt.AlignLeft, text)
+        painter.setPen(self.muted or option.palette.color(QPalette.Disabled, QPalette.Text))
+        painter.drawText(code_rect, Qt.AlignVCenter | Qt.AlignRight, code)
+        painter.restore()
+
+    def sizeHint(self, option, index):
+        size = super().sizeHint(option, index)
+        size.setHeight(size.height() + (6 if index.data(Qt.UserRole + 1) == "section" else 8))
+        return size
 
 
 class MicCombo(QComboBox):
@@ -328,17 +361,30 @@ class SettingsPage(QScrollArea):
         if not platform_utils.IS_WINDOWS:
             self.enter_row.hide()
 
-        self.language = QComboBox(cursor=Qt.PointingHandCursor, editable=True)
-        for code, label in LANGUAGES.items():
-            self.language.addItem(f"{label} ({code})" if code != "auto" else label, code)
-        index = self.language.findData(settings["language"])
-        if index >= 0:
-            self.language.setCurrentIndex(index)
-        else:
-            self.language.setEditText(settings["language"])
+        self.language = QComboBox(cursor=Qt.PointingHandCursor)
+        self.language_delegate = LanguageItemDelegate(self.language)
+        self.language.setItemDelegate(self.language_delegate)
+        self.language.addItem(config.LANGUAGES["auto"], "auto")
+        for title, languages in (
+            ("Transcription-ready", config.TRANSCRIPTION_READY_LANGUAGES),
+            ("Broad coverage", config.BROAD_COVERAGE_LANGUAGES),
+        ):
+            self._add_language_section(title)
+            for code, label in languages.items():
+                self.language.addItem(label, code)
+        self.language.setCurrentIndex(max(0, self.language.findData(settings["language"])))
+        self.language.setMinimumWidth(280)
+        self.language.setMaximumWidth(340)
         self.language.currentIndexChanged.connect(self._on_language)
-        self.language.lineEdit().editingFinished.connect(self._on_language)
-        self._row(rows, "Language", "Spoken language, or a code like “en”", self.language, advanced=True)
+        self.language_code = QLabel(self.language.currentData(), objectName="hint")
+        self.language_code.setAccessibleName("Selected language code")
+        language_control = QWidget()
+        language_layout = QHBoxLayout(language_control)
+        language_layout.setContentsMargins(0, 0, 0, 0)
+        language_layout.setSpacing(8)
+        language_layout.addWidget(self.language)
+        language_layout.addWidget(self.language_code)
+        self._row(rows, "Language", "Spoken language, or detect automatically", language_control, advanced=True)
 
         self.asr_model = _combo(config.ASR_MODELS, settings["model"])
         self.asr_model.currentIndexChanged.connect(lambda: self.changed.emit({"model": self.asr_model.currentData()}))
@@ -555,6 +601,10 @@ class SettingsPage(QScrollArea):
         for toggle in self.findChildren(Toggle):
             toggle.palette_ = palette
             toggle.update()
+        self.language_delegate.muted = QColor(palette.muted)
+        label_palette = self.language_code.palette()
+        label_palette.setColor(QPalette.WindowText, QColor(palette.muted))
+        self.language_code.setPalette(label_palette)
 
     def sync(self, settings: dict):
         """Reflect settings changed elsewhere (e.g. first-close prompt, history page)."""
@@ -590,13 +640,19 @@ class SettingsPage(QScrollArea):
         self.shortcut_changed.emit(combo)
 
     def _on_language(self):
-        data = self.language.currentData()
-        text = self.language.currentText().strip()
-        if self.language.currentIndex() >= 0 and self.language.itemText(self.language.currentIndex()) == text:
-            value = data
-        else:
-            value = text or "auto"
+        value = self.language.currentData()
+        self.language_code.setText(value)
         self.changed.emit({"language": value})
+
+    def _add_language_section(self, title: str):
+        self.language.addItem(title)
+        item = self.language.model().item(self.language.count() - 1)
+        item.setData("section", Qt.UserRole + 1)
+        item.setFlags(Qt.ItemIsEnabled)
+        item.setForeground(self.language.palette().color(QPalette.Disabled, QPalette.Text))
+        font = item.font()
+        font.setBold(True)
+        item.setFont(font)
 
     def _on_login(self, on: bool):
         try:

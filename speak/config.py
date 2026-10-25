@@ -50,6 +50,43 @@ DEFAULTS = {
 }
 
 ASR_MODELS = {"nemotron-3.5": "Nemotron 3.5 ASR (multilingual)"}
+TRANSCRIPTION_READY_LANGUAGES = {
+    "en-US": "English (US)",
+    "en-GB": "English (UK)",
+    "es-US": "Spanish (US)",
+    "es-ES": "Spanish (Spain)",
+    "fr-FR": "French (France)",
+    "fr-CA": "French (Canada)",
+    "it-IT": "Italian",
+    "pt-BR": "Portuguese (Brazil)",
+    "pt-PT": "Portuguese (Portugal)",
+    "nl-NL": "Dutch",
+    "de-DE": "German",
+    "tr-TR": "Turkish",
+    "ru-RU": "Russian",
+    "ar-AR": "Arabic",
+    "hi-IN": "Hindi",
+    "ja-JP": "Japanese",
+    "ko-KR": "Korean",
+    "vi-VN": "Vietnamese",
+    "uk-UA": "Ukrainian",
+}
+BROAD_COVERAGE_LANGUAGES = {
+    "pl-PL": "Polish",
+    "sv-SE": "Swedish",
+    "cs-CZ": "Czech",
+    "nb-NO": "Norwegian Bokmål",
+    "da-DK": "Danish",
+    "bg-BG": "Bulgarian",
+    "fi-FI": "Finnish",
+    "hr-HR": "Croatian",
+    "sk-SK": "Slovak",
+    "zh-CN": "Mandarin Chinese",
+    "hu-HU": "Hungarian",
+    "ro-RO": "Romanian",
+    "et-EE": "Estonian",
+}
+LANGUAGES = {"auto": "Detect automatically", **TRANSCRIPTION_READY_LANGUAGES, **BROAD_COVERAGE_LANGUAGES}
 
 # Benchmarks: docs/wayfinder/research/dictation-quality.md. Only Large handles self-corrections.
 CLEANUP_MODELS = {
@@ -119,6 +156,8 @@ def load_settings() -> dict:
         settings.pop(key, None)
     if settings["model"] not in ASR_MODELS:
         settings["model"] = DEFAULTS["model"]
+    if not isinstance(settings["language"], str) or settings["language"] not in LANGUAGES:
+        settings["language"] = DEFAULTS["language"]
     if settings["cleanup_model"] not in CLEANUP_MODELS:
         settings["cleanup_model"] = "auto"
     if not isinstance(settings["cleanup_device"], str) or not settings["cleanup_device"]:

@@ -61,13 +61,14 @@ class AsrSessionTest(unittest.TestCase):
         ws = FakeSocket(events)
         updates, errors = [], []
         with patch("speak.asr.websocket.create_connection", return_value=ws):
-            session = AsrSession(1234, 16000, "en", True, lambda *v: updates.append(v), errors.append)
+            session = AsrSession(1234, 16000, "en-GB", True, lambda *v: updates.append(v), errors.append)
             session.send_audio(b"\x01\x00")
             transcript = session.finish(timeout=1)
 
         self.assertEqual(f"hello there {PAUSE} again now", transcript)
         self.assertEqual(b"\x01\x00", ws.binary[0])
         self.assertEqual("session.update", ws.sent[0]["type"])
+        self.assertEqual("en-GB", ws.sent[0]["session"]["language"])
         self.assertEqual("input_audio_buffer.commit", ws.sent[-1]["type"])
         self.assertTrue(any(final == "hello there" and partial == "" for final, partial in updates))
         self.assertEqual([], errors)

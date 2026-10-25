@@ -1,3 +1,4 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -53,6 +54,16 @@ class ConfigTest(unittest.TestCase):
         config.save_settings(settings)
 
         self.assertEqual(settings, config.load_settings())
+
+    def test_unknown_language_selection_falls_back_to_automatic_detection(self):
+        for value in ("xx", ["en"], None):
+            with self.subTest(value=value):
+                self.settings_file.write_text(
+                    json.dumps({"language": value}),
+                    encoding="utf-8",
+                )
+                self.assertEqual("auto", config.load_settings()["language"])
+
 
 
 class HistoryTest(unittest.TestCase):

@@ -20,7 +20,7 @@
 
 **⚡ Fast.** Words appear as you talk, and tidy text lands in your app the moment you stop.
 
-**🌍 Multilingual.** English, Spanish, French, German and 20+ more European languages. Speak works out which language you're using.
+**🌍 Multilingual.** 32 speech locales, including 19 transcription-ready locales. Speak detects the language, or you can choose a locale.
 
 **💚 Open source.** Free, and every line is public. Nothing hidden about what happens to your voice.
 

@@ -2,6 +2,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from PySide6.QtCore import QEvent, QObject, Qt
+from PySide6.QtGui import QPalette
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QLabel, QPushButton
 
@@ -9,6 +10,7 @@ from tests.ui import QtTestCase
 from speak import config
 from speak.ui.app import SpeakApp
 from speak.ui.pages import HistoryEntry, HistoryPage, SettingRow, SettingsPage
+from speak.ui import theme
 
 
 class SettingRowConstructionTest(QtTestCase):
@@ -98,6 +100,46 @@ class SettingsInteractionTest(QtTestCase):
         self.capture(page, "toggle-shortcut-mode")
         self.assertEqual("toggle", page.shortcut_mode.currentData())
         self.assertEqual([{"shortcut_mode": "toggle"}], changes)
+
+    def test_language_dropdown_selects_any_model_language_and_is_not_editable(self):
+        page = self.make_page({"advanced_settings": True})
+        changes = []
+        page.changed.connect(changes.append)
+
+        self.assertFalse(page.language.isEditable())
+        self.assertEqual(set(config.TRANSCRIPTION_READY_LANGUAGES), {
+            "en-US", "en-GB", "es-US", "es-ES", "fr-FR", "fr-CA", "it-IT", "pt-BR", "pt-PT",
+            "nl-NL", "de-DE", "tr-TR", "ru-RU", "ar-AR", "hi-IN", "ja-JP", "ko-KR", "vi-VN",
+            "uk-UA",
+        })
+        self.assertEqual(33, len(config.LANGUAGES))
+        self.assertEqual(set(config.LANGUAGES), {page.language.itemData(i)
+                                                  for i in range(page.language.count())
+                                                  if page.language.itemData(i) is not None})
+        transcription_header = page.language.findText("Transcription-ready")
+        broad_header = page.language.findText("Broad coverage")
+        self.assertLess(transcription_header, page.language.findData("en-US"))
+        self.assertGreater(broad_header, page.language.findData("uk-UA"))
+        self.assertFalse(page.language.model().item(transcription_header).flags() & Qt.ItemIsSelectable)
+        self.assertFalse(page.language.model().item(broad_header).flags() & Qt.ItemIsSelectable)
+        self.assertEqual("English (US)", page.language.itemText(page.language.findData("en-US")))
+        self.assertEqual("French (Canada)", page.language.itemText(page.language.findData("fr-CA")))
+
+        page.language.setFocus()
+        QTest.keyClick(page.language, Qt.Key_U)
+
+        self.assertEqual("uk-UA", page.language.currentData())
+        self.assertEqual("uk-UA", page.language_code.text())
+        self.assertEqual([{"language": "uk-UA"}], changes)
+        page.set_palette(theme.DARK)
+        self.assertEqual(theme.DARK.muted, page.language_code.palette().color(QPalette.WindowText).name())
+        page.language.showPopup()
+        self.app.processEvents()
+        page.language.view().scrollTo(page.language.model().index(0, 0))
+        self.capture(page.language.view(), "language-dropdown")
+        page.language.hidePopup()
+        self.app.processEvents()
+        self.capture(page.language.parentWidget(), "language-selected")
 
     def test_advanced_toggle_reveals_technical_settings_and_emits_preference(self):
         page = self.make_page()
