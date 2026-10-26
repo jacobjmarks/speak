@@ -376,14 +376,11 @@ class SettingsPage(QScrollArea):
         self.language.setMinimumWidth(280)
         self.language.setMaximumWidth(340)
         self.language.currentIndexChanged.connect(self._on_language)
-        self.language_code = QLabel(self.language.currentData(), objectName="hint")
-        self.language_code.setAccessibleName("Selected language code")
         language_control = QWidget()
         language_layout = QHBoxLayout(language_control)
         language_layout.setContentsMargins(0, 0, 0, 0)
         language_layout.setSpacing(8)
         language_layout.addWidget(self.language)
-        language_layout.addWidget(self.language_code)
         self._row(rows, "Language", "Spoken language, or detect automatically", language_control, advanced=True)
 
         self.asr_model = _combo(config.ASR_MODELS, settings["model"])
@@ -602,9 +599,6 @@ class SettingsPage(QScrollArea):
             toggle.palette_ = palette
             toggle.update()
         self.language_delegate.muted = QColor(palette.muted)
-        label_palette = self.language_code.palette()
-        label_palette.setColor(QPalette.WindowText, QColor(palette.muted))
-        self.language_code.setPalette(label_palette)
 
     def sync(self, settings: dict):
         """Reflect settings changed elsewhere (e.g. first-close prompt, history page)."""
@@ -640,9 +634,7 @@ class SettingsPage(QScrollArea):
         self.shortcut_changed.emit(combo)
 
     def _on_language(self):
-        value = self.language.currentData()
-        self.language_code.setText(value)
-        self.changed.emit({"language": value})
+        self.changed.emit({"language": self.language.currentData()})
 
     def _add_language_section(self, title: str):
         self.language.addItem(title)

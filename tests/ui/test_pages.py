@@ -129,10 +129,8 @@ class SettingsInteractionTest(QtTestCase):
         QTest.keyClick(page.language, Qt.Key_U)
 
         self.assertEqual("uk-UA", page.language.currentData())
-        self.assertEqual("uk-UA", page.language_code.text())
         self.assertEqual([{"language": "uk-UA"}], changes)
         page.set_palette(theme.DARK)
-        self.assertEqual(theme.DARK.muted, page.language_code.palette().color(QPalette.WindowText).name())
         page.language.showPopup()
         self.app.processEvents()
         page.language.view().scrollTo(page.language.model().index(0, 0))
