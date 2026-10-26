@@ -19,7 +19,7 @@ runs:
 
     - name: Install dependencies
       shell: bash
-      run: python -m pip install -r requirements.txt ruff coverage
+      run: python -m pip install -r requirements.txt ruff pytest pytest-xdist pytest-cov
 
     - name: Lint
       shell: bash
@@ -30,13 +30,12 @@ runs:
       env:
         SPEAK_UI_SNAPSHOT_DIR: ${{ runner.temp }}/speak-ui-screenshots
       run: |
-        python -m coverage run --source=speak -m unittest discover -s tests -p "test_*.py"
-        python -m coverage xml -o coverage.xml
-        python -m coverage report -m > coverage.txt
+        python -m pytest -n auto --cov=speak --cov-report=xml:coverage.xml --cov-report=term-missing
         {
           echo "## Coverage summary ($RUNNER_OS)"
           echo ""
           echo '```text'
+          python -m coverage report -m > coverage.txt || python -m pytest --cov=speak --cov-report=term > coverage.txt
           cat coverage.txt
           echo '```'
         } >> "$GITHUB_STEP_SUMMARY"

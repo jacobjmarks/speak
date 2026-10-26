@@ -42,18 +42,18 @@ python -m tools.dictate_wav path\to\16bit-mono.wav --tidy fast,auto,best [--cpu]
 Run the hardware- and network-independent suite with:
 
 ```powershell
-python -m unittest discover -s tests -p "test_*.py"
+python -m pytest -n auto --cov=speak
 uvx ruff check --select F speak tools tests
 ```
 
-The suite lives in `tests/`, uses the standard-library `unittest`, and mocks OS APIs, devices, clipboard, subprocesses,
-and HTTP responses.
+The suite lives in `tests/`, uses `pytest`, and mocks OS APIs, devices, clipboard, subprocesses,
+and HTTP responses. Tests run in parallel by default (`-n auto`).
 Qt interaction tests are grouped in `tests/ui/` by UI area and use `PySide6.QtTest.QTest`. To save screenshots of the
 tested states locally:
 
 ```powershell
 $env:SPEAK_UI_SNAPSHOT_DIR = Join-Path $env:TEMP 'Speak-UI'
-.\.venv\Scripts\python.exe -m unittest discover -s tests -p "test_*.py"
+.\.venv\Scripts\python.exe -m pytest -n auto --cov=speak
 ```
 
 CI uses each runner's native Qt platform and uploads these screenshots as a per-OS `ui-screenshots` artifact. The

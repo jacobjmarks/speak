@@ -12,7 +12,7 @@ Never say "done" from reading code. Run something that exercises the change, loo
 | You changed | Run | Skill |
 |---|---|---|
 | Any Python | `uvx ruff check --select F speak tools tests` | this file |
-| Python behavior or pure logic | Add/update a regression test; run its focused module, e.g. `.\.venv\Scripts\python.exe -m unittest discover -s tests -p "test_tidy.py"`; use the full suite for cross-module or broad changes | this file |
+| Python behavior or pure logic | Add/update a regression test; run its focused module, e.g. `.\.venv\Scripts\python.exe -m pytest tests/test_tidy.py`; use the full suite for cross-module or broad changes | this file |
 | Focused UI behavior | Prefer a focused Qt test in `tests/ui/`; use `speak-ui-harness` when the real app interaction is not covered by the automated tests | `speak-ui-harness` |
 | Broad visual changes (shared layout/theme, several pages/states, visual regression) | `.\.venv\Scripts\python.exe -m tools.screenshots`, then **view the PNGs** | `speak-ui-screenshots` |
 | ASR, cleanup prompt, tidy models, runtimes | `.\.venv\Scripts\python.exe -m tools.dictate_wav ...` | `speak-pipeline-checks` |
@@ -24,7 +24,7 @@ Never say "done" from reading code. Run something that exercises the change, loo
 1. Find or add the smallest regression test in `tests/` that captures the behavior. Use a scratch script for diagnosis only when the suite cannot express the check.
 2. Edit the code.
 3. Re-run the focused test. Read the actual output (or view the screenshot). Don't assume.
-4. Run lint for Python changes. Run the full suite for cross-module, broad, or high-risk changes; CI runs the full unittest suite with coverage and lint.
+4. Run lint for Python changes. Run the full suite for cross-module, broad, or high-risk changes; CI runs the full pytest suite with coverage and lint.
 5. Clean up (see below).
 
 ## Choose the scope
