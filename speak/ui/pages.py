@@ -223,8 +223,14 @@ class SettingRow(QWidget):
         self.layout_.setStretch(0, 1 if not compact else 0)
 
 
-def _combo(options: dict, current: str) -> QComboBox:
-    combo = QComboBox(cursor=Qt.PointingHandCursor)
+class NoWheelComboBox(QComboBox):
+    """QComboBox that ignores the mouse wheel so scrolling the page can't change its value."""
+
+    def wheelEvent(self, event):
+        event.ignore()
+
+def _combo(options: dict, current: str) -> NoWheelComboBox:
+    combo = NoWheelComboBox(cursor=Qt.PointingHandCursor)
     for key, label in options.items():
         combo.addItem(label, key)
     index = combo.findData(current)
@@ -268,7 +274,7 @@ class LanguageItemDelegate(QStyledItemDelegate):
         return size
 
 
-class MicCombo(QComboBox):
+class MicCombo(NoWheelComboBox):
     """Input devices, re-read from the OS each time the list is opened (when `can_rescan()`)."""
 
     def __init__(self, current, can_rescan):
@@ -361,7 +367,7 @@ class SettingsPage(QScrollArea):
         if not platform_utils.IS_WINDOWS:
             self.enter_row.hide()
 
-        self.language = QComboBox(cursor=Qt.PointingHandCursor)
+        self.language = NoWheelComboBox(cursor=Qt.PointingHandCursor)
         self.language_delegate = LanguageItemDelegate(self.language)
         self.language.setItemDelegate(self.language_delegate)
         self.language.addItem(config.LANGUAGES["auto"], "auto")
