@@ -119,7 +119,7 @@ class SpeakApp(QObject):
         w = self.window
         w.close_requested.connect(self._on_close)
         w.notice_action.connect(self._on_notice_action)
-        w.setup.allow_clicked.connect(permissions.request)
+        w.setup.allow_clicked.connect(self._allow_permission)
         w.setup.settings_clicked.connect(permissions.open_settings)
         w.setup.restart_clicked.connect(self._relaunch)
         w.settings.check_updates.connect(lambda: self._check_updates(manual=True))
@@ -303,6 +303,12 @@ class SpeakApp(QObject):
             self.window.notify("restart", "That shortcut can't be used. Choose a different one in Settings.", "error")
 
     # ----- permissions -----
+
+    def _allow_permission(self, permission_id: str):
+        permissions.request(permission_id)
+        if permission_id == "input_monitoring" and not permissions.granted(permission_id):
+            self.window.notify("restart", "Turn Speak on under Input Monitoring, then restart Speak to finish.",
+                               "error", "Restart Speak")
 
     def _start_setup(self):
         self.window.show_setup(True)

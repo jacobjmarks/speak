@@ -1,9 +1,12 @@
 """OS permissions Speak needs before it can work. Only macOS gates these; elsewhere nothing is required."""
+import logging
 import subprocess
 from typing import NamedTuple
 
 from .platform_utils import IS_MAC
 
+
+log = logging.getLogger(__name__)
 
 class Permission(NamedTuple):
     id: str
@@ -60,13 +63,16 @@ def request(permission_id: str) -> None:
         elif permission_id == "input_monitoring":
             from Quartz import CGRequestListenEventAccess
 
-            CGRequestListenEventAccess()
+            if not CGRequestListenEventAccess():
+                # macOS prompts once per app only; after that this fails silently. Only Settings can change it.
+                open_settings(permission_id)
         elif permission_id == "accessibility":
             from ApplicationServices import AXIsProcessTrustedWithOptions, kAXTrustedCheckOptionPrompt
 
             AXIsProcessTrustedWithOptions({kAXTrustedCheckOptionPrompt: True})
     except Exception:
-        pass
+        log.warning("Could not request %s access", permission_id, exc_info=True)
+        open_settings(permission_id)
 
 
 def open_settings(permission_id: str) -> None:
