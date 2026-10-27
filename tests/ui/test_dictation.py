@@ -4,6 +4,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
 
 from tests.ui import QtTestCase
+from speak.ui import theme as ui_theme
 from speak.ui.pages import DictatePage
 
 
@@ -12,6 +13,7 @@ class DictatePageInteractionTest(QtTestCase):
 
     def test_microphone_button_requests_dictation_toggle(self):
         page = DictatePage(lambda: 0.0)
+        page.setStyleSheet(ui_theme.stylesheet(ui_theme.DARK))
         page.show()
         self.addCleanup(page.close)
         requests = []
@@ -24,6 +26,7 @@ class DictatePageInteractionTest(QtTestCase):
 
     def test_copy_button_copies_visible_transcript_and_confirms_to_user(self):
         page = DictatePage(lambda: 0.0)
+        page.setStyleSheet(ui_theme.stylesheet(ui_theme.DARK))
         page.show()
         self.addCleanup(page.close)
         page.set_result("Your words are ready.")

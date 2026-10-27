@@ -7,6 +7,7 @@ from PySide6.QtWidgets import QDialog, QPushButton
 
 from tests.ui import QtTestCase
 from speak import config
+from speak.ui import theme as ui_theme
 from speak.ui.window import CloseDialog, MainWindow
 
 
@@ -17,6 +18,7 @@ class MainWindowInteractionTest(QtTestCase):
         with patch("speak.ui.pages.audio.input_devices", return_value=[]), \
                 patch("speak.ui.pages.platform_utils.launch_at_login_enabled", return_value=False):
             window = MainWindow({**config.DEFAULTS}, lambda: 0.0)
+        window.setStyleSheet(ui_theme.stylesheet(ui_theme.DARK))
         window.show()
         self.addCleanup(window.close)
 
@@ -34,6 +36,7 @@ class CloseDialogInteractionTest(QtTestCase):
         for label_prefix, expected in (("Keep in ", "tray"), ("Quit Speak", "exit")):
             with self.subTest(choice=expected):
                 dialog = CloseDialog()
+                dialog.setStyleSheet(ui_theme.stylesheet(ui_theme.DARK))
                 dialog.show()
                 self.addCleanup(dialog.close)
                 button = next(button for button in dialog.findChildren(QPushButton)
@@ -47,6 +50,7 @@ class CloseDialogInteractionTest(QtTestCase):
 
     def test_escape_dismisses_without_persisting_a_choice(self):
         dialog = CloseDialog()
+        dialog.setStyleSheet(ui_theme.stylesheet(ui_theme.DARK))
         dialog.show()
         self.addCleanup(dialog.close)
         self.capture(dialog, "dismissible-close-prompt")

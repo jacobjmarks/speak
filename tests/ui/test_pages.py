@@ -43,6 +43,7 @@ class SettingsInteractionTest(QtTestCase):
         with patch("speak.ui.pages.audio.input_devices", return_value=[]), \
                 patch("speak.ui.pages.platform_utils.launch_at_login_enabled", return_value=False):
             page = SettingsPage({**config.DEFAULTS, **(settings or {})})
+        page.setStyleSheet(theme.stylesheet(theme.DARK))
         page.show()
         self.addCleanup(page.close)
         return page

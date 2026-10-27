@@ -5,6 +5,7 @@ from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QLabel, QPushButton
 
 from tests.ui import QtTestCase
+from speak.ui import theme as ui_theme
 from speak.ui.banner import Banner
 
 
@@ -13,6 +14,7 @@ class BannerInteractionTest(QtTestCase):
 
     def test_action_emits_key_and_dismiss_removes_notice(self):
         banner = Banner()
+        banner.setStyleSheet(ui_theme.stylesheet(ui_theme.DARK))
         banner.show_notice("update", "A new version is ready", action="Restart")
         banner.show()
         self.addCleanup(banner.close)
@@ -30,6 +32,7 @@ class BannerInteractionTest(QtTestCase):
 
     def test_error_notice_precedes_info_and_info_returns_after_error_is_cleared(self):
         banner = Banner()
+        banner.setStyleSheet(ui_theme.stylesheet(ui_theme.DARK))
         banner.show_notice("update", "Update ready")
         banner.show_notice("permission", "Permission missing", level="error")
         banner.show()

@@ -6,8 +6,8 @@ from PySide6.QtWidgets import QLabel, QPushButton
 
 from tests.ui import QtTestCase
 from speak import permissions
+from speak.ui import theme as ui_theme
 from speak.ui.pages import SetupPage
-from speak.ui.theme import LIGHT
 
 
 class SetupPageInteractionTest(QtTestCase):
@@ -17,6 +17,7 @@ class SetupPageInteractionTest(QtTestCase):
         permission = permissions.Permission("microphone", "Microphone", "Needed to hear speech.", "Privacy_Microphone")
         with patch("speak.ui.pages.permissions.REQUIRED", (permission,)):
             page = SetupPage()
+        page.setStyleSheet(ui_theme.stylesheet(ui_theme.DARK))
         page.show()
         self.addCleanup(page.close)
         allowed, settings, restarted = [], [], []
@@ -41,9 +42,10 @@ class SetupPageInteractionTest(QtTestCase):
         permission = permissions.Permission("microphone", "Microphone", "Needed to hear speech.", "Privacy_Microphone")
         with patch("speak.ui.pages.permissions.REQUIRED", (permission,)):
             page = SetupPage()
+        page.setStyleSheet(ui_theme.stylesheet(ui_theme.DARK))
         page.show()
         self.addCleanup(page.close)
-        page.set_status({"microphone": True}, LIGHT)
+        page.set_status({"microphone": True}, ui_theme.DARK)
         self.capture(page, "permission-granted")
         mark = next(label for label in page.findChildren(QLabel) if label.text() == "✓")
         buttons = page.findChildren(QPushButton)
