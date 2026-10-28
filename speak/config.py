@@ -137,9 +137,7 @@ def load_settings() -> dict:
         settings["tidy"] = "auto"
     if isinstance(settings["live_preview"], bool):
         settings["live_preview"] = "line" if settings["live_preview"] else "off"
-    if stored and "onboarding_done" not in stored:
-        settings["onboarding_done"] = True
-    elif not isinstance(settings["onboarding_done"], bool):
+    if not isinstance(settings["onboarding_done"], bool):
         settings["onboarding_done"] = DEFAULTS["onboarding_done"]
     if not isinstance(settings["audio_dim_enabled"], bool):
         settings["audio_dim_enabled"] = DEFAULTS["audio_dim_enabled"]

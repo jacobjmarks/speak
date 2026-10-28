@@ -37,14 +37,21 @@ class ConfigTest(unittest.TestCase):
         self.settings_file.write_text('{"tidy": "balanced"}', encoding="utf-8")
         self.assertEqual("auto", config.load_settings()["tidy"])
 
-    def test_existing_installs_skip_first_run_setup_but_fresh_ones_get_it(self):
+    def test_onboarding_done_flag_defaults_and_explicit_values(self):
+        # Fresh install (no settings file) should have onboarding_done = False
         self.assertFalse(config.load_settings()["onboarding_done"])
 
+        # Existing settings without onboarding_done should also have onboarding_done = False
         self.settings_file.write_text('{"tidy": "fast"}', encoding="utf-8")
-        self.assertTrue(config.load_settings()["onboarding_done"])
+        self.assertFalse(config.load_settings()["onboarding_done"])
 
+        # Explicitly setting onboarding_done = false should still be respected
         self.settings_file.write_text('{"onboarding_done": false}', encoding="utf-8")
         self.assertFalse(config.load_settings()["onboarding_done"])
+
+        # Explicitly setting onboarding_done = true should skip onboarding
+        self.settings_file.write_text('{"onboarding_done": true}', encoding="utf-8")
+        self.assertTrue(config.load_settings()["onboarding_done"])
 
     def test_invalid_json_falls_back_to_defaults_and_save_round_trips(self):
         self.settings_file.write_text("{", encoding="utf-8")
