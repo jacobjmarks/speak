@@ -129,6 +129,8 @@ def load_settings() -> dict:
         stored = json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         stored = {}
+    if not isinstance(stored, dict):  # valid JSON but not an object (e.g. [] or null)
+        stored = {}
     settings = {**DEFAULTS, **stored}
     if stored and "tidy" not in stored:  # pre-tidy settings used cleanup_enabled + cleanup_mode
         settings["tidy"] = "auto" if stored.get("cleanup_enabled", True) else "off"
@@ -152,11 +154,11 @@ def load_settings() -> dict:
         settings["updates"] = "auto" if stored["check_updates"] else "off"
     for key in ("cleanup_enabled", "cleanup_mode", "check_updates", "hold_to_talk"):
         settings.pop(key, None)
-    if settings["model"] not in ASR_MODELS:
+    if not isinstance(settings["model"], str) or settings["model"] not in ASR_MODELS:
         settings["model"] = DEFAULTS["model"]
     if not isinstance(settings["language"], str) or settings["language"] not in LANGUAGES:
         settings["language"] = DEFAULTS["language"]
-    if settings["cleanup_model"] not in CLEANUP_MODELS:
+    if not isinstance(settings["cleanup_model"], str) or settings["cleanup_model"] not in CLEANUP_MODELS:
         settings["cleanup_model"] = "auto"
     if not isinstance(settings["cleanup_device"], str) or not settings["cleanup_device"]:
         settings["cleanup_device"] = DEFAULTS["cleanup_device"]

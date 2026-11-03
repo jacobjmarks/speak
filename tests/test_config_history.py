@@ -71,6 +71,14 @@ class ConfigTest(unittest.TestCase):
                 )
                 self.assertEqual("auto", config.load_settings()["language"])
 
+    def test_malformed_stored_values_fall_back_to_defaults(self):
+        for content in ("[]", "null", '"text"', '{"model": ["x"], "cleanup_model": {"a": 1}}'):
+            with self.subTest(content=content):
+                self.settings_file.write_text(content, encoding="utf-8")
+                settings = config.load_settings()
+                self.assertEqual(config.DEFAULTS["model"], settings["model"])
+                self.assertEqual("auto", settings["cleanup_model"])
+
 
 
 class HistoryTest(unittest.TestCase):
