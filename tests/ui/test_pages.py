@@ -151,6 +151,21 @@ class SettingsInteractionTest(QtTestCase):
         self.assertTrue(page.asr_model.parentWidget().isVisible())
         self.assertEqual([{"advanced_settings": True}], changes)
 
+    def test_sync_reflects_every_setting_changed_elsewhere_without_emitting(self):
+        page = self.make_page()
+        changes = []
+        page.changed.connect(changes.append)
+
+        page.sync({**config.DEFAULTS, "mic_device": "Headset", "language": "de-DE",
+                   "unload_after": "never", "corrections": False, "prereleases": True})
+
+        self.assertEqual("Headset", page.mic.currentData())
+        self.assertEqual("de-DE", page.language.currentData())
+        self.assertEqual("never", page.unload.currentData())
+        self.assertFalse(page.corrections.isChecked())
+        self.assertTrue(page.prereleases.isChecked())
+        self.assertEqual([], changes)
+
 
 class HistoryInteractionTest(QtTestCase):
     """History actions clear saved entries and expose the empty state."""

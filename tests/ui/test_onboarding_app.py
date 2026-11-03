@@ -16,7 +16,7 @@ from speak.runtimes import ModelDownloadError
 from speak.ui import theme as ui_theme
 from speak.ui.app import SpeakApp
 from tests.ui import QtTestCase
-from tests.ui.onboarding_support import button, fake_plan, result, wait_for
+from tests.ui.onboarding_support import GPU, button, fake_plan, result, wait_for
 
 
 class FirstRunAppTest(QtTestCase):
@@ -107,6 +107,103 @@ class FirstRunAppTest(QtTestCase):
         self.assertFalse(app._onboarding)
         self.assertIsNot(app.window.screens.currentWidget(), self.page)
         self.assertEqual("Tap to start. Tap again to stop", self.page.shortcut_hint.text())
+
+    def test_prerelease_switched_off_during_setup_reads_off_on_the_settings_page(self):
+        app = self.make_app(prereleases=True)
+        self.page.go(self.page.APP)
+        self.assertTrue(self.page.prereleases.isChecked())
+
+        QTest.mouseClick(self.page.prereleases, Qt.LeftButton)
+        self.page.go(self.page.DONE)
+        QTest.mouseClick(button(self.page, "Finish"), Qt.LeftButton)
+
+        self.assertFalse(self.saved()["prereleases"])
+        self.assertFalse(app.window.settings.prereleases.isChecked())
+
+    def test_prerelease_switched_off_in_rerun_setup_reads_off_on_the_settings_page(self):
+        app = self.make_app(onboarding_done=True, prereleases=True)
+        app._start_onboarding()
+        self.page.go(self.page.APP)
+        self.assertTrue(self.page.prereleases.isChecked())
+
+        QTest.mouseClick(self.page.prereleases, Qt.LeftButton)
+        self.page.go(self.page.DONE)
+        QTest.mouseClick(button(self.page, "Finish"), Qt.LeftButton)
+
+        self.assertFalse(self.saved()["prereleases"])
+        self.assertFalse(app.window.settings.prereleases.isChecked())
+
+    def test_appearance_and_shortcut_choices_reflect_on_the_settings_page(self):
+        app = self.make_app()
+        settings = app.window.settings
+
+        self.page.theme_options.cards["Dark"].click()
+        self.assertEqual("Dark", settings.theme.currentData())
+        self.page.shortcut.captured.emit("f9")
+        self.assertEqual("f9", settings.shortcut.combo)
+        self.page.mode_options.cards["toggle"].click()
+        self.assertEqual("toggle", settings.shortcut_mode.currentData())
+
+    def test_audio_dimming_choices_reflect_on_the_settings_page(self):
+        app = self.make_app()
+        settings = app.window.settings
+
+        self.page.dim_toggle.setChecked(False)
+        self.assertFalse(settings.audio_dim.isChecked())
+        self.assertFalse(settings.audio_dim_slider.isEnabled())
+        self.page.dim_toggle.setChecked(True)
+        self.page.dim_slider.setValue(40)
+        self.assertEqual(config.snap_audio_dim_percent(40), settings.audio_dim_slider.value())
+
+    def test_microphone_choice_reflects_on_the_settings_page(self):
+        app = self.make_app()
+
+        self.page.mic_combo.setCurrentIndex(self.page.mic_combo.findData("Desk mic"))
+        self.assertEqual("Desk mic", app.window.settings.mic.currentData())
+
+    def test_tidy_choices_reflect_on_the_settings_page(self):
+        app = self.make_app()
+        settings = app.window.settings
+
+        self.page.tidy_options.cards["fast"].click()
+        self.assertEqual("fast", settings.tidy.currentData())
+        self.page.tidy_options.cards["ai"].click()
+
+        def tidy_and_model():
+            return settings.tidy.currentData(), settings.cleanup_model.currentData()
+
+        self.page.model_options.chips["small"].click()
+        self.assertEqual(("auto", config.SMALL_MODEL), tidy_and_model())
+        self.page.model_options.chips["large"].click()
+        self.assertEqual(("best", "auto"), tidy_and_model())
+        self.page.model_options.chips["auto"].click()
+        self.assertEqual(("auto", "auto"), tidy_and_model())
+        self.page.device.setCurrentIndex(self.page.device.findData("cpu"))
+        self.assertEqual("cpu", settings.cleanup_device.currentData())
+        self.page.corrections.setChecked(False)
+        self.assertFalse(settings.corrections.isChecked())
+
+    def test_gpu_choice_reflects_on_the_settings_page(self):
+        app = self.make_app()
+        with patch("speak.ui.app.tidy.gpus", return_value=[GPU]), \
+                patch("speak.ui.onboarding.page.tidy.gpus", return_value=[GPU]):
+            app._on_probed()
+
+        self.page.device.setCurrentIndex(self.page.device.findData(GPU.device))
+        self.assertEqual(GPU.device, app.window.settings.cleanup_device.currentData())
+
+    def test_look_and_update_choices_reflect_on_the_settings_page(self):
+        app = self.make_app()
+        settings = app.window.settings
+
+        self.page.live_options.chips["full"].click()
+        self.assertEqual("full", settings.live.currentData())
+        self.page.position_options.chips["top"].click()
+        self.assertEqual("top", settings.position.currentData())
+        self.page.updates_options.cards["off"].click()
+        self.assertEqual("off", settings.updates.currentData())
+        self.page.prereleases.setChecked(True)
+        self.assertTrue(settings.prereleases.isChecked())
 
     def test_skipping_setup_counts_as_done(self):
         app = self.make_app()

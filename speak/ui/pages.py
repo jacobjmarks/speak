@@ -297,6 +297,9 @@ class MicCombo(NoWheelComboBox):
         self.setCurrentIndex(max(0, self.findData(current)))
         self.blockSignals(False)
 
+    def set_device(self, current):
+        self._fill(current, rescan=False)
+
     def showPopup(self):
         self._fill(self.currentData(), rescan=self.can_rescan())
         super().showPopup()
@@ -613,6 +616,9 @@ class SettingsPage(QScrollArea):
                               (self.shortcut_mode, settings["shortcut_mode"]),
                               (self.tidy, settings["tidy"]),
                               (self.cleanup_model, settings["cleanup_model"]),
+                              (self.asr_model, settings["model"]),
+                              (self.language, settings["language"]),
+                              (self.unload, settings["unload_after"]),
                               (self.position, settings["overlay_position"]),
                               (self.live, settings["live_preview"]),
                               (self.theme, settings["theme"]),
@@ -624,6 +630,12 @@ class SettingsPage(QScrollArea):
         self.history.blockSignals(True)
         self.history.setChecked(settings["history_enabled"])
         self.history.blockSignals(False)
+        self.mic.set_device(settings["mic_device"])
+        for toggle, value in ((self.corrections, settings["corrections"]),
+                              (self.prereleases, settings["prereleases"])):
+            toggle.blockSignals(True)
+            toggle.setChecked(value)
+            toggle.blockSignals(False)
         self.audio_dim.blockSignals(True)
         self.audio_dim.setChecked(settings["audio_dim_enabled"])
         self.audio_dim.blockSignals(False)
