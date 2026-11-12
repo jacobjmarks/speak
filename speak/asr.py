@@ -59,10 +59,6 @@ class AsrSession:
         self.receiver.start()
 
     @property
-    def text(self) -> str:
-        return f"{self.final_text} {self.partial_text}".strip()
-
-    @property
     def marked(self) -> str:
         return f"{self.marked_text} {self.partial_text}".strip()
 

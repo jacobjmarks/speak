@@ -17,6 +17,7 @@ from .runtimes import AsrServer, CleanupServer, ModelDownloadError, llama_root
 log = logging.getLogger(__name__)
 
 FINISHING = "Finishing up"  # one word for transcribe + tidy: tidy-up may be off, and transcribing is brief
+TIDY_UNAVAILABLE = "Tidy-up is unavailable right now, so your text was left as spoken."
 
 
 def _explain(exc: Exception) -> str:
@@ -55,7 +56,6 @@ class Dictation:
         self.cleanup_server = CleanupServer()
         self.mic = None
         self.session = None
-        self.latest = ""
         self._lock = threading.RLock()  # re-entered by _set_state from _abort
         self._cancelled = False
         self._cancel_error = False
@@ -322,6 +322,23 @@ class Dictation:
             self._set_state(State.IDLE)
             self.listener.on_error(_explain(exc))
 
+    def _cleanup_port(self, text: str, plan) -> tuple:
+        """Start the AI cleanup server if this dictation needs it. Returns (port or None, note)."""
+        if not (text and plan.model_id):
+            return None, ""
+        if time.monotonic() < self._cleanup_retry_at:
+            return None, TIDY_UNAVAILABLE
+        try:
+            self._ensure_cleanup(plan, self.listener.on_progress)
+        except ModelDownloadError:
+            self._cleanup_retry_at = time.monotonic() + 300
+            return None, TIDY_UNAVAILABLE
+        except Exception as exc:
+            log.warning("Tidy-up server didn't start", exc_info=exc)
+            return None, TIDY_UNAVAILABLE
+        self.listener.on_progress(FINISHING, None)
+        return self.cleanup_server.port, ""
+
     def _process(self):
         mic, session = self.mic, self.session
         mic.stop()
@@ -341,21 +358,7 @@ class Dictation:
             self._finish_cancel()
             return
         plan = tidy.plan(self.settings)
-        port = None
-        tidy_note = ""
-        if text and plan.model_id:
-            if time.monotonic() < self._cleanup_retry_at:
-                tidy_note = "Tidy-up is unavailable right now, so your text was left as spoken."
-            else:
-                try:
-                    self._ensure_cleanup(plan, self.listener.on_progress)
-                    port = self.cleanup_server.port
-                    self.listener.on_progress(FINISHING, None)
-                except ModelDownloadError:
-                    self._cleanup_retry_at = time.monotonic() + 300
-                    tidy_note = "Tidy-up is unavailable right now, so your text was left as spoken."
-                except Exception:
-                    pass
+        port, tidy_note = self._cleanup_port(text, plan)
         if self._was_cancelled():
             self._finish_cancel()
             return
@@ -369,25 +372,28 @@ class Dictation:
             self.listener.on_error("Speak didn't catch any words. Please try again.")
             return
         with self._lock:
-            if self._cancelled:
-                cancelled = True
-            else:
-                cancelled = False
-                self.latest = text
-                if self.settings["history_enabled"]:
+            cancelled = self._was_cancelled()
+            if not cancelled and self.settings["history_enabled"]:
+                try:
                     history.add(text)
-                if self.settings["auto_paste"]:
-                    target = self._target
-                    enter = lambda: (not self._cancel_event.is_set() and self.settings["press_enter"]
-                                     and target is not None  # noqa: E731
-                                     and platform_utils.foreground_window() == target)
-                    try:
-                        output.paste(text, enter)
-                    except Exception:
-                        note = note or "Paste unavailable; copy it from Speak"
-                cancelled = cancelled or self._cancelled or self._cancel_event.is_set()
-                if not cancelled:
-                    self._set_state(State.IDLE)
+                except Exception as exc:
+                    log.warning("Couldn't save to history", exc_info=exc)
+        if cancelled:
+            self._finish_cancel()
+            return
+        if self.settings["auto_paste"]:
+            target = self._target
+            enter = lambda: (not self._cancel_event.is_set() and self.settings["press_enter"]
+                             and target is not None  # noqa: E731
+                             and platform_utils.foreground_window() == target)
+            try:
+                output.paste(text, enter)
+            except Exception:
+                note = note or "Paste unavailable; copy it from Speak"
+        with self._lock:
+            cancelled = self._was_cancelled()
+            if not cancelled:
+                self._set_state(State.IDLE)
         if cancelled:
             self._finish_cancel()
             return

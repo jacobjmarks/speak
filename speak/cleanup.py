@@ -57,7 +57,7 @@ _REFUSALS = ("i cannot", "i can't", "as an ai", "i'm sorry, but", "here is the",
 # Deterministic edits, applied before the model so small models don't have to get them right.
 _SPOKEN_PUNCTUATION = [
     (r"[ \t]*,?[ \t]*\bnew paragraph\b[,.]?[ \t]*", "\n\n"),
-    (r"[ \t]*,?[ \t]*\b(?:new line|next line|line break)\b[,.]?[ \t]*", "\n"),
+    (r"[ \t]*,?[ \t]*\b(?:new line|line break)\b[,.]?[ \t]*", "\n"),
     (r"\s*,?\s*\bquestion mark\b[,.]?", "?"),
     (r"\s*,?\s*\bexclamation (?:mark|point)\b[,.]?", "!"),
     (r"\s*,?\s*\bfull stop\b[,.]?", "."),
@@ -78,7 +78,7 @@ def apply_rules(text: str, mode: str) -> str:
     text = re.sub(r" +([,.?!;:])", r"\1", text)
     text = re.sub(r"(\w)\n\n", r"\1.\n\n", text)  # "…offsite new paragraph thanks" -> "…offsite.\n\nThanks"
     # Capitalize the first letter of each line/sentence that the edits above exposed.
-    text = re.sub(r"(^|[\n.?!]\s*)([a-z])", lambda m: m.group(1) + m.group(2).upper(), text.strip())
+    text = re.sub(r"(^|[\n?!]\s*|\.\s+)([a-z])", lambda m: m.group(1) + m.group(2).upper(), text.strip())
     return text
 
 
@@ -170,7 +170,7 @@ def finalize(raw: str, level: str, llm_mode: str = "literal", port=None):
     """
     text = apply_rules(raw, "literal" if level == "off" else "smart")
     if level != "off" and not (port and llm_mode == "smart"):  # smart model reads the markers itself
-        text = re.sub(rf"([.?!])\s*{PAUSE}\s*", r"\1\n\n", text)
+        text = re.sub(rf"([.?!])\s*{PAUSE}\s*([a-z]?)", lambda m: f"{m.group(1)}\n\n{m.group(2).upper()}", text)
     note = ""
     if port and text:
         try:

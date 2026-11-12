@@ -13,6 +13,10 @@ class CleanupTest(unittest.TestCase):
         self.assertEqual("The answer is 42 comma", cleanup.apply_rules(raw, "smart"))
         self.assertEqual("Um the the answer is 42 comma", cleanup.apply_rules(raw, "literal"))
 
+    def test_rules_capitalize_sentences_but_not_dotted_words_or_next_line(self):
+        self.assertEqual("Visit example.com and open config.json. Read the next line",
+                         cleanup.apply_rules("visit example.com and open config.json. read the next line", "literal"))
+
     def test_validation_rejects_empty_text_and_invented_numbers(self):
         self.assertEqual("empty output", cleanup.validate("hello there", "", "smart"))
         self.assertIn("invented numbers",
@@ -29,7 +33,7 @@ class CleanupTest(unittest.TestCase):
     def test_finalize_converts_long_pause_to_paragraph(self):
         text, note = cleanup.finalize(f"first sentence. {cleanup.PAUSE} next sentence", "fast")
 
-        self.assertEqual("First sentence.\n\nnext sentence", text)
+        self.assertEqual("First sentence.\n\nNext sentence", text)
         self.assertEqual("", note)
 
 

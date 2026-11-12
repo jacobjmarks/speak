@@ -101,34 +101,11 @@ jobs:
     needs: prepare
     permissions:
       contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        os: ${{ fromJSON(inputs.platform == 'windows' && '["windows-latest"]' || inputs.platform == 'macos' && '["macos-15"]' || '["windows-latest","macos-15"]') }}
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.ref }}
-
-      - name: Run tests with coverage and lint
-        uses: ./.github/actions/python-ci-checks
-
-      - name: Stamp version
-        shell: pwsh
-        env:
-          VERSION: ${{ inputs.version }}
-        run: 'Set-Content speak/_build.py "VERSION = `"$env:VERSION`""'
-
-      - name: Build package
-        shell: pwsh
-        run: ./build.ps1 -OutputDirectory ./release
-
-      - uses: actions/upload-artifact@v7
-        with:
-          path: release/Speak-*
-          archive: false
-          if-no-files-found: error
+    uses: ./.github/workflows/build.yml
+    with:
+      platform: ${{ inputs.platform }}
+      version: ${{ inputs.version }}
+      ref: ${{ inputs.ref }}
 
   publish:
     needs: [prepare, build]

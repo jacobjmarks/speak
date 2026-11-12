@@ -8,6 +8,20 @@ on:
         type: choice
         options: [all, windows, macos]
         default: all
+  workflow_call:
+    inputs:
+      platform:
+        description: 'Operating system to build'
+        type: string
+        default: all
+      version:
+        description: 'Semver to stamp into the build. Empty = dev build stamped with the commit.'
+        type: string
+        default: ''
+      ref:
+        description: 'Commit SHA, branch or tag to build. Empty = the default ref.'
+        type: string
+        default: ''
 
 jobs:
   build:
@@ -18,15 +32,20 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
 
       - name: Run tests with coverage and lint
         uses: ./.github/actions/python-ci-checks
 
-      - name: Stamp build id
+      - name: Stamp version
         shell: pwsh
         env:
+          VERSION: ${{ inputs.version }}
           SHA: ${{ github.sha }}
-        run: 'Set-Content speak/_build.py "VERSION = `"dev-$($env:SHA.Substring(0, 7))`""'
+        run: |
+          $version = if ($env:VERSION) { $env:VERSION } else { "dev-$($env:SHA.Substring(0, 7))" }
+          Set-Content speak/_build.py "VERSION = `"$version`""
 
       - name: Build package
         shell: pwsh

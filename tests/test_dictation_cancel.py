@@ -1,10 +1,11 @@
+import sqlite3
 import threading
 import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from speak import cleanup, tidy
-from speak.controller import Dictation, State
+from speak.controller import TIDY_UNAVAILABLE, Dictation, State
 
 
 def dictation_for_processing():
@@ -13,12 +14,12 @@ def dictation_for_processing():
     dictation._cancel_event = threading.Event()
     dictation._cancelled = False
     dictation._cancel_error = False
+    dictation._cleanup_retry_at = 0.0
     dictation._schedule_unload = lambda: None
     dictation.state = State.PROCESSING
     dictation.listener = Mock()
     dictation.settings = {"history_enabled": False, "auto_paste": True, "press_enter": True}
     dictation._target = 123
-    dictation.latest = ""
     return dictation
 
 
@@ -65,7 +66,6 @@ class DictationFlowTest(unittest.TestCase):
         dictation.listener.on_result.assert_called_once_with(expected, "")
         dictation.listener.on_error.assert_not_called()
         dictation.listener.on_cancelled.assert_not_called()
-        self.assertEqual(expected, dictation.latest)
         self.assertEqual(dictation.state, State.IDLE)
 
     def test_silence_reports_a_microphone_error_without_finishing_or_pasting(self):
@@ -107,6 +107,66 @@ class DictationFlowTest(unittest.TestCase):
         dictation.listener.on_cancelled.assert_called_once()
         dictation.listener.on_result.assert_not_called()
         self.assertEqual(dictation.state, State.IDLE)
+
+    def test_history_failure_does_not_stop_the_paste(self):
+        dictation = dictation_for_processing()
+        dictation.mic = Mock(frames=1)
+        dictation.session = Mock()
+        dictation.session.finish.return_value = "recognized words"
+        dictation.settings["history_enabled"] = True
+        plan = SimpleNamespace(model_id=None, level="off", llm_mode="off")
+
+        with patch.object(tidy, "plan", return_value=plan), \
+                patch.object(cleanup, "finalize", return_value=("recognized words", "")), \
+                patch("speak.controller.history.add", side_effect=sqlite3.OperationalError("database is locked")), \
+                patch("speak.controller.output.paste") as paste:
+            dictation._process()
+
+        paste.assert_called_once()
+        dictation.listener.on_result.assert_called_once_with("recognized words", "")
+        dictation.listener.on_error.assert_not_called()
+
+    def test_tidy_up_server_failure_is_logged_and_pastes_rule_based_text(self):
+        dictation = dictation_for_processing()
+        dictation.mic = Mock(frames=1)
+        dictation.session = Mock()
+        dictation.session.finish.return_value = "um hello there"
+        plan = SimpleNamespace(model_id="qwen25-q4km", level="auto", llm_mode="literal", device=None)
+
+        with patch.object(tidy, "plan", return_value=plan), \
+                patch.object(dictation, "_ensure_cleanup", side_effect=RuntimeError("server exited")), \
+                patch("speak.controller.output.paste"), \
+                self.assertLogs("speak.controller", "WARNING"):
+            dictation._process()
+
+        dictation.listener.on_result.assert_called_once_with("Hello there", TIDY_UNAVAILABLE)
+
+    def test_paste_does_not_hold_the_dictation_lock(self):
+        dictation = dictation_for_processing()
+        dictation.mic = Mock(frames=1)
+        dictation.session = Mock()
+        dictation.session.finish.return_value = "recognized words"
+        plan = SimpleNamespace(model_id=None, level="off", llm_mode="off")
+        pasting, release = threading.Event(), threading.Event()
+
+        def paste(text, should_enter):
+            pasting.set()
+            release.wait(5)
+
+        with patch.object(tidy, "plan", return_value=plan), \
+                patch.object(cleanup, "finalize", return_value=("recognized words", "")), \
+                patch("speak.controller.output.paste", side_effect=paste):
+            worker = threading.Thread(target=dictation._process)
+            worker.start()
+            self.assertTrue(pasting.wait(5))
+            lock_free = dictation._lock.acquire(timeout=1)
+            if lock_free:
+                dictation._lock.release()
+            release.set()
+            worker.join(5)
+
+        self.assertTrue(lock_free)
+        dictation.listener.on_result.assert_called_once_with("recognized words", "")
 
 
 if __name__ == "__main__":
