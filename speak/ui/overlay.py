@@ -22,6 +22,7 @@ CARD_W = 380
 LINE_W, LINE_H = 280, 30
 EDGE = 24  # gap from the screen edge for top/bottom positions
 MAX_LINES = 3
+FULL_WINDOW_CHARS = 600  # far more than MAX_LINES lines hold, so only the newest words can ever be shown
 
 
 class Overlay(_Animated):
@@ -140,7 +141,8 @@ class Overlay(_Animated):
         if self.preview == "line":
             return self.text[-300:]
         fm = QFontMetrics(self._font)
-        words = self.text.split()
+        # Searching a bounded tail keeps each update constant-cost however long the session runs.
+        words = self.text[-FULL_WINDOW_CHARS:].split()
         text = self.text
         start = 0
         while start < len(words):

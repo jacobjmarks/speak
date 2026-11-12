@@ -11,6 +11,9 @@ from .. import audio, config, history, hotkey, output, permissions, platform_uti
 from .widgets import MicButton, ShortcutButton, Toggle, WaveStrip
 
 
+LIVE_TAIL_CHARS = 4000  # live text stays pinned to its end, so only the newest part is ever visible
+
+
 def _card() -> tuple:
     frame = QFrame(objectName="card")
     layout = QVBoxLayout(frame)
@@ -43,6 +46,7 @@ class DictatePage(Page):
     def __init__(self, level_source):
         super().__init__()
         self.layout_.addStretch(1)
+        self._transcript = ""
         self.mic = MicButton(level_source)
         self.mic.clicked.connect(self.toggle_requested)
         self.layout_.addWidget(self.mic, 0, Qt.AlignHCenter)
@@ -95,14 +99,20 @@ class DictatePage(Page):
             )
 
     def set_live(self, text: str):
-        self.text.setPlainText(text)
+        self._transcript = text
+        self.text.setPlainText(text[-LIVE_TAIL_CHARS:])
         self.text.verticalScrollBar().setValue(self.text.verticalScrollBar().maximum())
 
     def set_result(self, text: str):
+        self._transcript = text
         self.text.setPlainText(text)
 
+    def transcript(self) -> str:
+        """Everything dictated so far, including any text scrolled out of the live view."""
+        return self._transcript
+
     def _copy(self):
-        text = self.text.toPlainText()
+        text = self._transcript
         if text:
             output.copy(text)
             self.copy_button.setText("Copied ✓")
