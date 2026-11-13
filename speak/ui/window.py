@@ -8,8 +8,12 @@ from .. import updates
 from ..platform_utils import IS_MAC, TRAY_NAME, hide_title_text, system_app_icon_png
 from .banner import Banner
 from .onboarding import OnboardingPage
-from .pages import AboutPage, DictatePage, HistoryPage, SetupPage, SettingsPage
-from .widgets import draw_mic
+from .paint import draw_mic
+from .pages.about import AboutPage
+from .pages.dictate import DictatePage
+from .pages.history import HistoryPage
+from .pages.settings import SettingsPage
+from .pages.setup import SetupPage
 
 BRAND = "#245b56"
 CREAM = "#f4e7c8"

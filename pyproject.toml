@@ -1,0 +1,8 @@
+# Lint and test settings shared by ruff, pytest, and CI (.github/actions/python-ci-checks).
+
+[tool.ruff.lint]
+# Pyflakes rules only: undefined names and unused imports. Style is not enforced.
+select = ["F"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

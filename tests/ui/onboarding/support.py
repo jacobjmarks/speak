@@ -86,7 +86,7 @@ class OnboardingCase(QtTestCase):
     def make(self, settings=None, size=(1000, 760)):
         patches = [patch.object(onboarding.common, "ANIMATE", self.animate),
                    patch("speak.ui.onboarding.steps.mic.audio.Microphone"),
-                   patch("speak.ui.pages.audio.input_devices", return_value=["Desk mic", "Headset"]),
+                   patch("speak.audio.input_devices", return_value=["Desk mic", "Headset"]),
                    patch("speak.ui.onboarding.steps.tidy.tidy.plan", side_effect=self.plan),
                    patch("speak.ui.onboarding.page.tidy.gpus", return_value=list(self.gpus)),
                    patch("speak.ui.onboarding.steps.keys.system_audio.SUPPORTED", self.dim_supported)]
@@ -114,3 +114,12 @@ class OnboardingCase(QtTestCase):
     @staticmethod
     def revealed(page, index) -> bool:
         return all(w.graphicsEffect() is None for w in page._reveals[index])
+
+
+class _DarkTheme:
+    theme = "Dark"
+
+
+def dark_variant(cls):
+    """Subclass of `cls` whose tests all run in the dark theme."""
+    return type(f"{cls.__name__}Dark", (_DarkTheme, cls), {"__doc__": f"{cls.__doc__} (dark theme)"})

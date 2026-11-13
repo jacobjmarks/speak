@@ -3,7 +3,7 @@ from PySide6.QtTest import QTest
 
 from speak import config
 from speak.ui import onboarding
-from tests.ui.onboarding_support import OnboardingCase, button, result
+from tests.ui.onboarding.support import OnboardingCase, button, result
 
 
 class OnboardingPageTest(OnboardingCase):

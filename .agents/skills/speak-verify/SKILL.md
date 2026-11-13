@@ -11,7 +11,7 @@ Never say "done" from reading code. Run something that exercises the change, loo
 
 | You changed | Run | Skill |
 |---|---|---|
-| Any Python | `uvx ruff check --select F speak tools tests` | this file |
+| Any Python | `.\.venv\Scripts\python.exe -m ruff check` (config in `pyproject.toml`) | this file |
 | Python behavior or pure logic | Add/update a regression test; run its focused module, e.g. `.\.venv\Scripts\python.exe -m pytest tests/test_tidy.py`; use the full suite for cross-module or broad changes | this file |
 | Focused UI behavior | Prefer a focused Qt test in `tests/ui/`; use `speak-ui-harness` when the real app interaction is not covered by the automated tests | `speak-ui-harness` |
 | Broad visual changes (shared layout/theme, several pages/states, visual regression) | `.\.venv\Scripts\python.exe -m tools.screenshots`, then **view the PNGs** | `speak-ui-screenshots` |

@@ -37,4 +37,4 @@ Before launching the packaged app, follow the process and instance collision pre
 
 ## Release / CI
 
-Workflows live in `.github/workflows/` (`build.yml`, `release.yml`). Validate YAML edits by parsing them and by simulating shell/regex logic locally. Never write the version into source: the Release workflow stamps `speak/_build.py`. Details: `docs/DEVELOPMENT.md`.
+Workflows live in `.github/workflows/` (`ci.yml`, `build.yml`, `release.yml`). Validate YAML edits by parsing them and by simulating shell/regex logic locally. Never write the version into source: the Release workflow stamps `speak/_build.py`. Details: `docs/releases-and-updates.md`.

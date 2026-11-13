@@ -13,7 +13,7 @@ from PySide6.QtCore import QPropertyAnimation, Qt, QTimer, Signal
 from PySide6.QtWidgets import QFrame, QGraphicsOpacityEffect, QHBoxLayout, QPushButton, QStackedWidget, QVBoxLayout, QWidget
 from ... import config, hotkey, tidy
 from .. import theme
-from ..pages import Page, _label
+from ..controls import Page, make_label
 
 class OnboardingPage(Page, WelcomeStep, ThemeStep, MicStep, KeysStep, TidyStep, LookStep, UpdatesStep, DoneStep):
     """Settings are emitted through `changed` as they're picked, like the Settings page.
@@ -101,11 +101,11 @@ class OnboardingPage(Page, WelcomeStep, ThemeStep, MicStep, KeysStep, TidyStep, 
 
 
     def _heading(self, text: str, lead: str = "") -> tuple:
-        heading = _label(text, "heading")
+        heading = make_label(text, "heading")
         heading.setAlignment(Qt.AlignCenter)
         if not lead:
             return heading, None
-        sub = _label(lead, "lead")
+        sub = make_label(lead, "lead")
         sub.setAlignment(Qt.AlignCenter)
         return heading, sub
 

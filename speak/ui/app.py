@@ -1,88 +1,28 @@
 """Qt application: wires the Dictation controller to the window, overlay, tray, and global hotkey.
 
-Controller callbacks arrive on worker threads; `Bridge` re-emits them as Qt signals (queued onto the UI thread).
+Controller callbacks reach the UI through `bridge.Bridge`; single-instance handling lives in `single_instance.py`.
 """
-import hashlib
 import logging
 import sys
 import threading
 import time
 from datetime import datetime
 
-from PySide6.QtCore import QLockFile, QObject, Qt, QTimer, QUrl, Signal
+from PySide6.QtCore import QObject, Qt, QTimer, QUrl
 from PySide6.QtGui import QAction, QColor, QDesktopServices, QGuiApplication, QKeySequence, QPalette
-from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtWidgets import QApplication, QMenu, QMenuBar, QSystemTrayIcon
 
 from .. import benchmark, config, hotkey, permissions, platform_utils, tidy, updates
-from ..controller import Dictation, Listener, State
-from ..runtimes import ModelDownloadError
+from ..controller import Dictation, State
 from ..platform_utils import IS_MAC
-from . import theme
+from ..runtimes import ModelDownloadError
+from . import single_instance, theme
+from .bridge import Bridge
 from .overlay import Overlay
 from .window import CloseDialog, MainWindow, app_icon, menu_bar_icon
 
 
 log = logging.getLogger(__name__)
-
-
-class Bridge(QObject, Listener):
-    state = Signal(str)
-    progress = Signal(str, object)
-    live = Signal(str)
-    warning = Signal(str)
-    result = Signal(str, str)
-    error = Signal(str)
-    hotkey_down = Signal()
-    hotkey_up = Signal()
-    escape = Signal()
-    cancelled = Signal()
-    probed = Signal()
-    update_found = Signal(object, bool)   # Release or None, manual check
-    update_progress = Signal(int)
-    update_ready = Signal(object)        # Path of downloaded exe, or None on failure
-    test_progress = Signal(str, object)  # setup test phase, percent
-    test_done = Signal(object)           # benchmark.Result
-    test_failed = Signal(str)
-    _live_ready = Signal()               # wakes the UI thread to take the newest live text
-
-    def __init__(self):
-        super().__init__()
-        self._live_lock = threading.Lock()
-        self._live_latest = None  # newest live text not yet delivered; None when no wake-up is queued
-        self._live_ready.connect(self._deliver_live)
-
-    def on_state(self, state):
-        self.state.emit(state.value)
-
-    def on_progress(self, message, percent):
-        self.progress.emit(message, percent)
-
-    def on_live_text(self, text):
-        # Updates can arrive faster than the UI paints; only the newest transcript matters, so queue one wake-up.
-        with self._live_lock:
-            queued = self._live_latest is not None
-            self._live_latest = text
-        if not queued:
-            self._live_ready.emit()
-
-    def _deliver_live(self):
-        with self._live_lock:
-            text, self._live_latest = self._live_latest, None
-        if text is not None:
-            self.live.emit(text)
-
-    def on_warning(self, message):
-        self.warning.emit(message)
-
-    def on_result(self, text, note):
-        self.result.emit(text, note)
-
-    def on_error(self, message):
-        self.error.emit(message)
-
-    def on_cancelled(self):
-        self.cancelled.emit()
 
 
 HOLD_SECONDS = 0.4      # auto mode: a press held longer than this is push-to-talk
@@ -595,37 +535,11 @@ class SpeakApp(QObject):
         self.app.quit()
 
 
-INSTANCE_NAME = "speak-" + hashlib.sha1(str(config.APP_DIR).encode()).hexdigest()[:12]  # per user
-
-
-def _single_instance(wait_ms: int):
-    """Return (lock, server) if this is the only Speak, else None after asking the running one to show itself.
-
-    Two instances would both hear the shortcut and paste every dictation twice.
-    """
-    config.APP_DIR.mkdir(parents=True, exist_ok=True)
-    lock = QLockFile(str(config.APP_DIR / "speak.lock"))
-    lock.setStaleLockTime(0)  # never by age; a crashed owner's lock is still detected (dead PID) and taken over
-    if not lock.tryLock(wait_ms):
-        if "--background" not in sys.argv:
-            socket = QLocalSocket()
-            socket.connectToServer(INSTANCE_NAME)
-            if socket.waitForConnected(1000):
-                socket.write(b"show")
-                socket.waitForBytesWritten(1000)
-                socket.disconnectFromServer()
-        return None
-    QLocalServer.removeServer(INSTANCE_NAME)
-    server = QLocalServer()
-    server.listen(INSTANCE_NAME)
-    return lock, server
-
-
 def main():
     QApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
     app = QApplication(sys.argv)
     app.setApplicationName("Speak")
-    claimed = _single_instance(15000 if "--restarted" in sys.argv else 0)
+    claimed = single_instance.claim(15000 if "--restarted" in sys.argv else 0)
     if claimed is None:
         sys.exit(0)
     lock, server = claimed

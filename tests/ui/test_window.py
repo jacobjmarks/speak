@@ -15,8 +15,8 @@ class MainWindowInteractionTest(QtTestCase):
     """Sidebar navigation selects the requested user-facing page."""
 
     def test_selecting_settings_navigation_opens_settings_page(self):
-        with patch("speak.ui.pages.audio.input_devices", return_value=[]), \
-                patch("speak.ui.pages.platform_utils.launch_at_login_enabled", return_value=False):
+        with patch("speak.audio.input_devices", return_value=[]), \
+                patch("speak.platform_utils.launch_at_login_enabled", return_value=False):
             window = MainWindow({**config.DEFAULTS}, lambda: 0.0)
         window.setStyleSheet(ui_theme.stylesheet(ui_theme.DARK))
         window.show()

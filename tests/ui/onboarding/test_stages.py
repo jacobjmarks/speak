@@ -9,7 +9,7 @@ from speak.ui.onboarding.common import STAGE_FROZEN_WORDS, STAGE_TEXT
 from speak.ui.onboarding.stages import OverlayStage, SpeedStage
 from speak.ui import theme as ui_theme
 from tests.ui import QtTestCase
-from tests.ui.onboarding_support import distinct_colours, jump_to
+from tests.ui.onboarding.support import distinct_colours, jump_to
 
 PALETTES = {"light": ui_theme.LIGHT, "dark": ui_theme.DARK}
 PHASES = (("idle", ""), ("idle", "Download failed."), ("preparing", "Getting ready"), ("listening", ""),

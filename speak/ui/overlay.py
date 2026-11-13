@@ -15,7 +15,8 @@ from PySide6.QtGui import (QColor, QCursor, QFont, QFontMetrics, QGuiApplication
 
 from .. import platform_utils
 from . import theme
-from .widgets import BARS, _Animated, draw_check, draw_cross, draw_ring, draw_shimmer_text, draw_wave
+from .paint import BARS, draw_check, draw_cross, draw_ring, draw_shimmer_text, draw_wave
+from .widgets import Animated
 
 PILL_W, PILL_H = 168, 46
 CARD_W = 380
@@ -25,7 +26,7 @@ MAX_LINES = 3
 FULL_WINDOW_CHARS = 600  # far more than MAX_LINES lines hold, so only the newest words can ever be shown
 
 
-class Overlay(_Animated):
+class Overlay(Animated):
     def __init__(self, level_source):
         super().__init__(None)
         self.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint

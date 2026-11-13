@@ -7,7 +7,7 @@ from PySide6.QtWidgets import QLabel, QPushButton
 from tests.ui import QtTestCase
 from speak import permissions
 from speak.ui import theme as ui_theme
-from speak.ui.pages import SetupPage
+from speak.ui.pages.setup import SetupPage
 
 
 class SetupPageInteractionTest(QtTestCase):
@@ -15,7 +15,7 @@ class SetupPageInteractionTest(QtTestCase):
 
     def test_permission_actions_emit_the_selected_permission_and_restart(self):
         permission = permissions.Permission("microphone", "Microphone", "Needed to hear speech.", "Privacy_Microphone")
-        with patch("speak.ui.pages.permissions.REQUIRED", (permission,)):
+        with patch("speak.permissions.REQUIRED", (permission,)):
             page = SetupPage()
         page.setStyleSheet(ui_theme.stylesheet(ui_theme.DARK))
         page.show()
@@ -40,7 +40,7 @@ class SetupPageInteractionTest(QtTestCase):
 
     def test_granted_permission_hides_actions_and_marks_status(self):
         permission = permissions.Permission("microphone", "Microphone", "Needed to hear speech.", "Privacy_Microphone")
-        with patch("speak.ui.pages.permissions.REQUIRED", (permission,)):
+        with patch("speak.permissions.REQUIRED", (permission,)):
             page = SetupPage()
         page.setStyleSheet(ui_theme.stylesheet(ui_theme.DARK))
         page.show()

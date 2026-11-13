@@ -1,7 +1,7 @@
 from ..widgets import CheckBurst
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel, QPushButton, QWidget
-from ...pages import _label
+from ...controls import make_label
 
 class DoneStep:
     def _done_step(self, settings: dict) -> QWidget:
@@ -9,13 +9,13 @@ class DoneStep:
         layout.addStretch(2)
         self.burst = CheckBurst()
         layout.addWidget(self.burst, 0, Qt.AlignHCenter)
-        heading = _label("You're all set", "display")
+        heading = make_label("You're all set", "display")
         heading.setAlignment(Qt.AlignCenter)
         layout.addWidget(heading)
         self.keycap = QLabel("", objectName="keycap")
         self.keycap.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.keycap, 0, Qt.AlignHCenter)
-        self.shortcut_hint = _label("", "lead")
+        self.shortcut_hint = make_label("", "lead")
         self.shortcut_hint.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.shortcut_hint)
         layout.addSpacing(8)
@@ -24,7 +24,7 @@ class DoneStep:
         go.clicked.connect(self.finished)
         layout.addWidget(go, 0, Qt.AlignHCenter)
         layout.addSpacing(6)
-        self.more_note = _label("More settings, including advanced options, are on the Settings page.", "hint")
+        self.more_note = make_label("More settings, including advanced options, are on the Settings page.", "hint")
         self.more_note.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.more_note)
         layout.addStretch(3)

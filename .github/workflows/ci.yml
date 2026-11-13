@@ -1,0 +1,23 @@
+name: CI
+
+# Lint and unit tests on every pull request and push to main. Packages are built only by build.yml (manual).
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-15]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run tests with coverage and lint
+        uses: ./.github/actions/python-ci-checks

@@ -67,7 +67,7 @@ Prefer the actual widget or signal path that users hit, not backend-only changes
 ```python
 w.dictate.mic.click()                  # click the mic button
 w.dictate.copy_button.click()         # copy output
-w.settings.keep_history_toggle.setChecked(True)
+w.settings.history.setChecked(True)
 ```
 
 For quick behavioral assertions, interact with widgets and inspect their state or the text they expose:

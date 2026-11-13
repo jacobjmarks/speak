@@ -7,6 +7,14 @@ Speak is a Python (PySide6) desktop app that bundles two local inference runtime
 
 Model weights download from Hugging Face on first use into the OS-specific Speak data directory.
 
+| Doc | Covers |
+|---|---|
+| [AGENTS.md](../AGENTS.md) | Module map, where to change what, test map, rules (start here for code changes) |
+| [runtimes-and-tidy.md](runtimes-and-tidy.md) | Tidy levels, bundled runtimes, idle unload, single instance |
+| [releases-and-updates.md](releases-and-updates.md) | Build and release workflows, CI, in-app updater |
+| [licensing-and-privacy.md](licensing-and-privacy.md) | Third-party notices, LGPL rules, privacy and network use |
+| [MODEL-VALUE-INVESTIGATION.md](MODEL-VALUE-INVESTIGATION.md) | Research: is the Large tidy-up model worth its size |
+
 ## Run from source
 
 Requires Python 3.11+ and PowerShell Core (`pwsh`). CI releases Windows x64 and macOS arm64 packages. Running the script on an Intel Mac builds the macOS x64 package locally.
@@ -39,17 +47,19 @@ python -m tools.dictate_wav path\to\16bit-mono.wav --tidy fast,auto,best [--cpu]
 
 ## Automated tests
 
-Run the hardware- and network-independent suite with:
+Install the dev tools once, then run lint and the hardware- and network-independent suite:
 
 ```powershell
+python -m pip install -r requirements-dev.txt
+python -m ruff check
 python -m pytest -n auto --cov=speak
-uvx ruff check --select F speak tools tests
 ```
 
-The suite lives in `tests/`, uses `pytest`, and mocks OS APIs, devices, clipboard, subprocesses,
-and HTTP responses. Tests run in parallel by default (`-n auto`).
-Qt interaction tests are grouped in `tests/ui/` by UI area and use `PySide6.QtTest.QTest`. To save screenshots of the
-tested states locally:
+Lint rules and the pytest path live in `pyproject.toml`. The suite lives in `tests/`; `tests/ui/` holds Qt interaction
+tests (`PySide6.QtTest.QTest`) grouped by UI area. Tests mock OS APIs, devices, clipboard, subprocesses and HTTP, so they
+need no microphone, models or network, and never use the running executable. Each test file's docstrings state the
+behaviour under test; [AGENTS.md](../AGENTS.md) has the file-to-area map.
+Qt interaction tests run on the platform-native Qt plugin. To save screenshots of the tested states locally:
 
 ```powershell
 $env:SPEAK_UI_SNAPSHOT_DIR = Join-Path $env:TEMP 'Speak-UI'
@@ -63,8 +73,7 @@ actions, permission setup, navigation, notices, and first-close choices.
 Update interaction tests cover available/up-to-date notifications, retry after download failure, immediately canceling
 active dictation when applying an update, and installing a staged update with temporary files. Network access and the
 running executable are never used.
-CI runs it and Ruff through a shared reusable action (`.github/actions/python-ci-checks/action.yml`) that both
-`.github/workflows/build.yml` and `.github/workflows/release.yml` call on Windows and macOS. The step writes a coverage
+CI runs lint and tests through the shared action (`.github/actions/python-ci-checks/action.yml`): `ci.yml` on pull requests and pushes to `main`, and `build.yml` and `release.yml` before packaging, on Windows and macOS. The step writes a coverage
 table into the GitHub job summary for each matrix run. `coverage.xml` artifact upload is optional (off by default).
 It does not download models or require a microphone.
 Real hotkey/paste injection, packaged-app behavior, and inference pipelines remain separate manual or
@@ -80,59 +89,4 @@ See `.agents/skills/speak-marketing-images/SKILL.md` for the capture/composition
 
 ## Code map
 
-| Path | What |
-|---|---|
-| `speak/controller.py` | Dictation state machine (idle → preparing → listening → processing), warm-up |
-| `speak/tidy.py` | Picks tidy model + device from the level and free GPU/RAM; user-facing summary |
-| `speak/cleanup.py` | Rules (spoken commands, fillers, pauses), LLM prompts, output validation |
-| `speak/runtimes.py` | Starts/stops the bundled ASR and llama.cpp servers; model downloads |
-| `speak/asr.py`, `speak/audio.py` | Streaming ASR session, microphone capture |
-| `speak/system_audio.py` | Optional system output-volume dimming while listening (Windows/macOS) |
-| `speak/hotkey.py` | Global shortcut (press/release for hold-to-talk), capture, key sending |
-| `speak/updates.py` | Update check against `v<semver>` release tags; download, sha256 check, exe swap |
-| `speak/benchmark.py` | First-run setup test: streams audio through the real ASR + tidy pipeline and times it; `assets/onboarding-sample.wav` is the bundled sample (Windows TTS, 16 kHz mono) |
-| `speak/ui/` | Window, pages, overlay, widgets, theme; `ui/onboarding/` is the first-run setup (mic, shortcut, tidy + timed test, indicator, theme/updates), shown once (`onboarding_done`; existing installs count as done) and rerunnable from Settings |
-
-## Tidy levels
-
-| Level | What happens | Typical speed |
-|---|---|---|
-| Off | Spoken commands only ("new paragraph") | instant |
-| Fast | Rules: drop fillers/stutters, pauses after sentences → paragraphs | instant |
-| Automatic | Large model (Qwen3 4B) when GPU memory fits, otherwise Small (Qwen 2.5 0.5B) | ~0.5 s |
-| Best | Large model on GPU, or CPU if there's RAM | 0.5 s GPU, a few s CPU |
-
-The Large model handles self-corrections ("three, no wait, four"); Small only punctuates (literal mode). The *Fix changes of mind* setting (`corrections`) runs Large in literal mode when off. A correction *reach* ("only the last sentence") was tried via prompting; Qwen3 4B ignored it, so it's on/off only.
-
-Single instance: `QLockFile` (`speak.lock` in the data folder; a dead owner's lock is taken over) plus a `QLocalServer` so a second launch shows the running window and exits. Two instances would each hear the shortcut and paste twice. An update relaunch passes `--restarted` and waits up to 15 s for the old lock.
-
-Both runtimes unload after `unload_after` idle minutes (default 5; Advanced → *Free up memory when idle*): speech ~1 GB RAM, large tidy ~3 GB VRAM. Reload costs ~2-4 s on the next dictation. Launch preloads them unless started at login (background) or set to unload right away.
-
-ASR runs with `--asr.streaming.rnnt_right_context=-1` (max lookahead, ~0.25 s): better words and punctuation on clean speech, same finish time, live text every 320 ms. A full offline re-pass (`POST /v1/audio/transcriptions`) was tested: ~1.6 s per 20 s of audio and worse on noisy audio, so not used. Context-dependent word fixes ("pair" → "pear") are left to the tidy model.
-Model output is validated (length/similarity bounds, no invented numbers, no dropped words in literal mode); on failure the rule-processed text is used.
-The llama.cpp server runs with `--parallel 1`, a pinned `--device`, and a warm-up request so the first dictation hits a warm prompt cache. Device selection budgets model file size plus runtime headroom (512 MB for Small, 1.5 GB for Large). Device choice is memory-budget based. The probe also runs the bundled `llama-bench --list-devices`, which prints llama.cpp's own `uma` (shared-memory) flag per Vulkan device; shared-memory GPUs are skipped in Automatic (still forceable in Advanced) and dedicated GPUs rank first. If `llama-bench` is missing or prints nothing, no GPU is treated as integrated. A first-run setup page (`ui/onboarding/`) tests latency and lets users tune these.
-Advanced settings can pin the Small or Large model, and choose the tidy-up device: Automatic (recommended), CPU only, GPU Automatic (best available), or a specific detected GPU. GPU entries show the device name only; available memory fluctuates and is not shown. A specific device is stored as its llama.cpp id (e.g. `Vulkan1`); the list fills in after the probe. If the selected GPU is unavailable or lacks memory, cleanup falls back to CPU and the tidy summary explains why.
-
-## Releases
-
-- `.github/workflows/build.yml` is run by hand (Actions → Build → Run workflow), never automatically on pushes or pull requests. `release.yml` calls it to make its packages. Choose *platform*: `all` (default) builds Windows x64 and macOS arm64 artifacts; `windows` or `macos` builds only that OS. Use GitHub's branch selector to choose which branch to build. These builds are stamped `dev-<short commit>` (shown as "Development build <commit>", and in the package name); that is not a semver, so they never check for or offer updates.
-- `.github/workflows/release.yml` is run by hand (Actions → Release → Run workflow) with a semver version like `1.0.0-alpha.1`, `1.0.0-rc.1` or `1.0.0`. Choose *platform*: `all` (default) builds Windows x64 and macOS arm64 packages; `windows` or `macos` builds only that OS. It publishes release `v<version>` with only the selected packages and matching release notes. A `-suffix` marks it a GitHub pre-release: stable installs never get offered it unless they turn on *Pre-release versions* in Settings, pre-release installs update to newer pre-releases and stable versions by semver order (`alpha.1` < `rc.1` < `1.0.0`). *Latest* (`auto` by default) is only set for a stable version higher than every existing stable release, so a hotfix for an older line (e.g. `1.1.1` built from `ref: v1.1.0` after `1.2.0`) stays out of the way; choose `yes`/`no` to override. The in-app updater ignores the Latest flag and always picks the highest eligible version. Optional *ref* (commit SHA, branch or tag; default `main`) releases an earlier commit. It refuses a version whose tag exists (including OS-specific releases; another OS needs a new version), lists issues closed since the previous tag (`Closes #N` in commit messages) in the notes, and comments the release on each. The version only comes from this input, never from source.
-
-Installed apps check the GitHub releases API at start and daily. Each OS only considers releases that carry its own package (`Speak-<version>-windows-x64.exe` on Windows, `Speak-<version>-macos-arm64.zip` / `-macos-x64.zip` on macOS); a release without it is not an update for that OS. Depending on the Updates setting they download the new package's `.exe` beside the running one (verified against GitHub's sha256 digest) and swap it in on quit or via "Restart to update", or just show the button. Source runs and non-Windows builds open the release page instead.
-
-## Licensing
-
-The build runs `tools/make_notices.py`, which writes `build/THIRD_PARTY_NOTICES.txt` (Python, every runtime pip dependency's licence files, PySide6/Qt LGPL-3, PortAudio, PyInstaller bootloader, NeMo-Speech.cpp and llama.cpp licences, model attributions, LGPL-3/GPL-3 texts from `licenses/`) and bundles it; The About page's *Open-source notices* link opens it, or this section when no bundled notices are available. No root `LICENSE` file is required. Add new dependencies to `requirements.txt` and they're picked up; anything vendored or bundled another way needs a section in the script.
-
-Qt/PySide6 and pynput are LGPL-3: they stay separate libraries inside the exe, and since Speak's source and build script are public anyone can rebuild with a modified copy. Keep it that way (no static linking, no closed forks of the bundle).
-
-`tools/hooks/hook-sounddevice.py` overrides the contrib hook so only the plain PortAudio library is bundled, not the ASIO builds (Steinberg ASIO SDK, GPL-3/proprietary) that sounddevice never loads by default.
-
-Models aren't bundled (downloaded on first use): Nemotron 3.5 ASR is OpenMDW-1.1, Qwen models are Apache-2.0.
-
-Donation links (`COFFEE_URL`, `SPONSOR_URL` in `speak/config.py`, `.github/FUNDING.yml`) show on the About page (GitHub Sponsors primary, Buy Me a Coffee secondary), the README and the repo's Sponsor button.
-
-## Privacy
-
-Microphone audio is held in memory only and sent to the app-owned local runtime on loopback. History stores transcript text only, and only when enabled. Network use: model downloads (Hugging Face) and the update check/download (GitHub releases; can be turned off).
-Optional system audio dimming is off by default. On Windows and macOS it lowers output volume by the chosen percentage only while the microphone is listening, then restores the previous level if the user has not changed it meanwhile. It requires no additional macOS permission.
+Module ownership and where to change things: the module index in [AGENTS.md](../AGENTS.md).

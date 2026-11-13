@@ -26,7 +26,7 @@ Then **open the PNGs with the `view` tool** (absolute path) and judge them: clip
 - Fake mic level: `w.dictate.mic.level_source = s.overlay.level_source = lambda: ...` so the waveform animates.
 - Steps run in a `QTimer` chain, 500 ms apart, so animations/layout settle. Add a `QTimer.singleShot(300, ...)` inside a step if something animates open (e.g. the Advanced section).
 
-To capture a new state, add a lambda to `STEPS` that sets it and one that calls `shot("name")`. If an attribute name has changed, grep `speak/ui/pages.py` and `window.py` for the current one.
+To capture a new state, add a lambda to `STEPS` that sets it and one that calls `shot("name")`. If an attribute name has changed, grep `speak/ui/pages/` and `window.py` for the current one.
 
 ## Capturing the real screen (overlay on a live app, packaged exe)
 

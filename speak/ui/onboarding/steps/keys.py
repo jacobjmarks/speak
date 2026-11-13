@@ -3,7 +3,7 @@ from ..widgets import ChoiceCard, ModeGlyph, OptionGroup
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel, QSlider, QWidget
 from .... import config, system_audio
-from ...pages import SettingRow, _label
+from ...controls import SettingRow, make_label
 from ...widgets import ShortcutButton, Toggle
 
 class KeysStep:
@@ -17,7 +17,7 @@ class KeysStep:
         self.shortcut.setMinimumWidth(200)
         self.shortcut.captured.connect(lambda combo: self.changed.emit({"hotkey": combo}))
         self.shortcut.recording.connect(self.shortcut_recording)
-        change_hint = _label("Click to change it", "hint")
+        change_hint = make_label("Click to change it", "hint")
         change_hint.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.shortcut, 0, Qt.AlignHCenter)
         layout.addWidget(change_hint)

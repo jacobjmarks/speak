@@ -6,7 +6,7 @@ from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLay
 from .... import config, tidy
 from ....benchmark import Result
 from ....controller import FINISHING
-from ...pages import SettingRow, _combo, _label
+from ...controls import SettingRow, make_combo, make_label
 from ...widgets import Toggle
 
 class TidyStep:
@@ -29,7 +29,7 @@ class TidyStep:
         self.model_options = Segmented(MODEL_CHOICES, self._model)
         self.model_options.picked.connect(self._on_model)
         self.model_row = SettingRow("Model size", " ", self.model_options)
-        self.device = _combo(config.CLEANUP_DEVICES, settings["cleanup_device"])
+        self.device = make_combo(config.CLEANUP_DEVICES, settings["cleanup_device"])
         self.device.currentIndexChanged.connect(
             lambda: self._config_changed({"cleanup_device": self.device.currentData()}))
         self.device_row = SettingRow("Runs on", " ", self.device)
@@ -57,7 +57,7 @@ class TidyStep:
         self.latency_label.setFixedSize(100, 34)
         self.latency_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.latency_label.setStyleSheet("font-size: 20pt; font-weight: 700;")
-        self.verdict_label = _label(self.SPEED_IDLE, "hint")
+        self.verdict_label = make_label(self.SPEED_IDLE, "hint")
         self.verdict_label.setFixedSize(60, 34)
         self.verdict_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.sample_button = QPushButton("Test speed", objectName="primary", cursor=Qt.PointingHandCursor)
@@ -82,9 +82,9 @@ class TidyStep:
         details = QVBoxLayout(self.details_box)
         details.setContentsMargins(0, 0, 0, 0)
         details.setSpacing(4)
-        self.text_label = _label("", "hint")
+        self.text_label = make_label("", "hint")
         self.text_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        self.details_label = _label("", "hint")
+        self.details_label = make_label("", "hint")
         details.addWidget(self.text_label)
         details.addWidget(self.details_label)
         self.details_box.hide()

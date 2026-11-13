@@ -4,8 +4,9 @@ from PySide6.QtCore import QEasingCurve, QObject, QPointF, QRectF, QSize, Qt, QV
 from PySide6.QtGui import QColor, QFontMetrics, QPainter, QPainterPath, QPen, QPolygonF
 from PySide6.QtWidgets import QAbstractButton, QButtonGroup, QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget
 from .. import theme
-from ..pages import _label
-from ..widgets import _Animated, draw_check, draw_mic
+from ..controls import make_label
+from ..paint import draw_check, draw_mic
+from ..widgets import Animated
 
 class StepDots(QWidget):
     """Progress as dots; the current one stretches into a pill."""
@@ -46,7 +47,7 @@ class StepDots(QWidget):
         p.end()
 
 
-class MicPulse(_Animated):
+class MicPulse(Animated):
     """Big mic that ripples with your voice, and turns into a check once it has heard you."""
 
     def __init__(self, level_source):
@@ -97,7 +98,7 @@ class MicPulse(_Animated):
         p.end()
 
 
-class CheckBurst(_Animated):
+class CheckBurst(Animated):
     """Success mark: disc springs in, then the tick draws itself."""
 
     def __init__(self):
@@ -153,10 +154,10 @@ class ChoiceCard(QAbstractButton):
         self.title_label = QLabel(title)
         self.title_label.setStyleSheet("font-size: 12pt; font-weight: 600;")
         layout.addWidget(self.title_label)
-        self.subtitle_label = _label(subtitle, "hint") if subtitle else None
+        self.subtitle_label = make_label(subtitle, "hint") if subtitle else None
         if self.subtitle_label:
             layout.addWidget(self.subtitle_label)
-        self.example_label = _label(example) if example else None
+        self.example_label = make_label(example) if example else None
         if self.example_label:
             layout.addSpacing(2)
             self.example_label.setMinimumHeight(2 * self.example_label.fontMetrics().lineSpacing())

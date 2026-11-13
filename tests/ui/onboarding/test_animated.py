@@ -9,7 +9,7 @@ from PySide6.QtWidgets import QWidget
 from speak import config
 from speak.ui.onboarding.common import Revealer
 from tests.ui import QtTestCase
-from tests.ui.onboarding_support import (STEP_NAMES, OnboardingCase, button, distinct_colours, jump_to, result,
+from tests.ui.onboarding.support import (STEP_NAMES, OnboardingCase, button, distinct_colours, jump_to, result,
                                          wait_for)
 
 

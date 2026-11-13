@@ -9,9 +9,10 @@ from PySide6.QtWidgets import QPushButton
 
 from speak import config, updates
 from speak.controller import State
-from speak.ui.app import Bridge, SpeakApp
+from speak.ui.bridge import Bridge
+from speak.ui.app import SpeakApp
 from speak.ui.banner import Banner
-from speak.ui.pages import SettingsPage
+from speak.ui.pages.settings import SettingsPage
 from tests.ui import QtTestCase
 
 
@@ -20,9 +21,9 @@ class UpdateInteractionTest(QtTestCase):
 
     def make_ui(self, update_mode):
         settings = {**config.DEFAULTS, "updates": update_mode}
-        with patch("speak.ui.pages.audio.input_devices", return_value=[]), \
-                patch("speak.ui.pages.platform_utils.launch_at_login_enabled", return_value=False), \
-                patch("speak.ui.pages.updates.updatable", return_value=True):
+        with patch("speak.audio.input_devices", return_value=[]), \
+                patch("speak.platform_utils.launch_at_login_enabled", return_value=False), \
+                patch("speak.updates.updatable", return_value=True):
             page = SettingsPage(settings)
         banner = Banner()
         banner.resize(680, banner.sizeHint().height())

@@ -3,7 +3,7 @@ from ..widgets import MicPulse
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QPushButton, QSizePolicy, QWidget
 from .... import audio
-from ...pages import MicCombo, _label
+from ...controls import MicCombo, make_label
 
 class MicStep:
     def _mic_step(self, settings: dict, can_rescan_mics) -> QWidget:
@@ -13,7 +13,7 @@ class MicStep:
         layout.addStretch(1)
         self.pulse = MicPulse(lambda: self._level)
         layout.addWidget(self.pulse, 0, Qt.AlignHCenter)
-        self.mic_status = _label("Say something", "lead")
+        self.mic_status = make_label("Say something", "lead")
         self.mic_status.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.mic_status)
         self.mic_combo = MicCombo(settings["mic_device"], can_rescan_mics)

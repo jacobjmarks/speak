@@ -2,7 +2,7 @@ from ..common import UPDATE_HINTS
 from ..widgets import ChoiceCard, OptionGroup
 from PySide6.QtWidgets import QWidget
 from .... import config
-from ...pages import SettingRow
+from ...controls import SettingRow
 from ...widgets import Toggle
 
 class UpdatesStep:

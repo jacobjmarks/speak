@@ -7,9 +7,10 @@ from PySide6.QtWidgets import QSizePolicy
 from ...controller import FINISHING
 from .. import theme
 from ..overlay import EDGE, Overlay
-from ..widgets import BARS, _Animated
+from ..paint import BARS
+from ..widgets import Animated
 
-class SpeedStage(_Animated):
+class SpeedStage(Animated):
     """The real indicator, driven by the speed test so you watch what dictating looks like while it's timed."""
 
     HEIGHT = 52
@@ -75,7 +76,7 @@ class SpeedStage(_Animated):
         p.end()
 
 
-class OverlayStage(_Animated):
+class OverlayStage(Animated):
     """A mock screen playing the real indicator: words arrive, "Finishing up", a check, then the text lands.
 
     The indicator is the app's own `Overlay` rendered offscreen, so its look can't drift from the real thing.

@@ -13,7 +13,7 @@ from speak.ui.onboarding import common
 from speak.ui.onboarding.widgets import (CheckBurst, Chip, ChoiceCard, MicPulse, ModeGlyph, OptionGroup, Segmented,
                                          StepDots, ThemeSwatch)
 from tests.ui import QtTestCase
-from tests.ui.onboarding_support import distinct_colours, jump_to
+from tests.ui.onboarding.support import distinct_colours, jump_to
 
 PALETTES = {"light": ui_theme.LIGHT, "dark": ui_theme.DARK}
 

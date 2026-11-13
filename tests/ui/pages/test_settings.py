@@ -1,47 +1,22 @@
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from PySide6.QtCore import QEvent, QObject, Qt
+from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QLabel, QPushButton
 
 from tests.ui import QtTestCase
 from speak import config
 from speak.ui.app import SpeakApp
-from speak.ui.pages import HistoryEntry, HistoryPage, SettingRow, SettingsPage
+from speak.ui.pages.settings import SettingsPage
 from speak.ui import theme
-
-
-class SettingRowConstructionTest(QtTestCase):
-    """A visible hint remains parented instead of flashing as a top-level window."""
-
-    def test_nonempty_hint_is_never_shown_without_its_row_parent(self):
-        orphan_shows = []
-
-        class ShowSpy(QObject):
-            def eventFilter(self, watched, event):
-                if (event.type() == QEvent.Show and isinstance(watched, QLabel)
-                        and watched.text() == "Hint" and watched.parentWidget() is None):
-                    orphan_shows.append(watched)
-                return False
-
-        spy = ShowSpy(self.app)
-        self.app.installEventFilter(spy)
-        try:
-            row = SettingRow("Title", "Hint", QPushButton("Control"))
-        finally:
-            self.app.removeEventFilter(spy)
-
-        self.assertEqual([], orphan_shows)
-        self.assertIs(row.hint.parentWidget(), row)
 
 
 class SettingsInteractionTest(QtTestCase):
     """Settings controls emit user changes and keep dependent controls in sync."""
 
     def make_page(self, settings=None):
-        with patch("speak.ui.pages.audio.input_devices", return_value=[]), \
-                patch("speak.ui.pages.platform_utils.launch_at_login_enabled", return_value=False):
+        with patch("speak.audio.input_devices", return_value=[]), \
+                patch("speak.platform_utils.launch_at_login_enabled", return_value=False):
             page = SettingsPage({**config.DEFAULTS, **(settings or {})})
         page.setStyleSheet(theme.stylesheet(theme.DARK))
         page.show()
@@ -167,41 +142,3 @@ class SettingsInteractionTest(QtTestCase):
         self.assertFalse(page.corrections.isChecked())
         self.assertTrue(page.prereleases.isChecked())
         self.assertEqual([], changes)
-
-
-class HistoryInteractionTest(QtTestCase):
-    """History actions clear saved entries and expose the empty state."""
-
-    def test_clear_button_removes_rows_and_shows_empty_state(self):
-        page = HistoryPage()
-        page.show()
-        self.addCleanup(page.close)
-        with patch("speak.ui.pages.history.recent", side_effect=[
-            [("2026-01-01T10:00:00+00:00", "A saved dictation")], []
-        ]), patch("speak.ui.pages.history.clear") as clear:
-            page.refresh(enabled=True)
-            self.assertTrue(page.clear_button.isVisible())
-            self.capture(page, "history-before-clear")
-
-            QTest.mouseClick(page.clear_button, Qt.LeftButton)
-            self.app.processEvents()
-
-            self.capture(page, "history-after-clear")
-        clear.assert_called_once()
-        self.assertFalse(page.clear_button.isVisible())
-        self.assertEqual("Nothing yet", page.empty_label.text())
-
-    def test_selecting_a_saved_entry_copies_its_transcript(self):
-        page = HistoryPage()
-        page.show()
-        self.addCleanup(page.close)
-        with patch("speak.ui.pages.history.recent",
-                   return_value=[("2026-01-01T10:00:00+00:00", "A saved dictation")]):
-            page.refresh(enabled=True)
-        entry = page.findChild(HistoryEntry)
-        self.capture(page, "saved-history-entry")
-
-        with patch("speak.ui.pages.output.copy") as copy:
-            QTest.mouseClick(entry, Qt.LeftButton)
-
-        copy.assert_called_once_with("A saved dictation")

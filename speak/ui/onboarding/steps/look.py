@@ -3,7 +3,7 @@ from ..stages import OverlayStage
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QVBoxLayout, QWidget
 from .... import config
-from ...pages import _label
+from ...controls import make_label
 
 class LookStep:
     def _look_step(self, settings: dict) -> QWidget:
@@ -25,7 +25,7 @@ class LookStep:
             col = QVBoxLayout(box)
             col.setContentsMargins(0, 0, 0, 0)
             col.setSpacing(6)
-            label = _label(caption, "section")
+            label = make_label(caption, "section")
             label.setAlignment(Qt.AlignCenter)
             col.addWidget(label)
             col.addWidget(chips, 0, Qt.AlignHCenter)

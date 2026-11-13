@@ -1,6 +1,6 @@
 ---
 name: speak-os-checks
-description: Test Speak's OS-level behaviour without a human - global hotkey hold/tap, key injection, paste + Enter into another window, single-instance locking, child-process cleanup, and the updater exe swap. Use when touching hotkey.py, output.py, platform_utils.py, ui/app.py single-instance code, runtimes.py, or updates.py.
+description: Test Speak's OS-level behaviour without a human - global hotkey hold/tap, key injection, paste + Enter into another window, single-instance locking, child-process cleanup, and the updater exe swap. Use when touching hotkey.py, output.py, platform_utils.py, ui/single_instance.py, runtimes.py, or updates.py.
 ---
 
 # OS-level checks from scripts
@@ -58,7 +58,7 @@ The target prints what it received; confirm the text arrived and the newline onl
 
 ## Single instance / stale lock
 
-Drive `speak.ui.app._single_instance(wait_ms)` with `config.APP_DIR` patched to a temp dir (so the real app isn't affected), using a tiny script per role that prints `owner / deferred / got show / exit`. Scenario: owner A runs 5 s; B launches (must print "deferred" and make A show); C with `--restarted` waits then takes over after A exits; a "crash" owner dies via `os._exit(1)` and the next instance must take over the stale lock. Compare printed timelines to the expected ones.
+Drive `speak.ui.single_instance.claim(wait_ms)` with `config.APP_DIR` patched to a temp dir (so the real app isn't affected), using a tiny script per role that prints `owner / deferred / got show / exit`. Scenario: owner A runs 5 s; B launches (must print "deferred" and make A show); C with `--restarted` waits then takes over after A exits; a "crash" owner dies via `os._exit(1)` and the next instance must take over the stale lock. Compare printed timelines to the expected ones.
 
 ## Child processes must die with the app
 

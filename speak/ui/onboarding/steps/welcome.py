@@ -1,6 +1,6 @@
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QPushButton, QWidget
-from ...pages import _label
+from ...controls import make_label
 from ...widgets import WaveStrip
 
 class WelcomeStep:
@@ -10,9 +10,9 @@ class WelcomeStep:
         self.logo = logo if logo is not None else QWidget()
         layout.addWidget(self.logo, 0, Qt.AlignHCenter)
         layout.addSpacing(10)
-        title = _label("Speak", "display")
+        title = make_label("Speak", "display")
         title.setAlignment(Qt.AlignCenter)
-        lead = _label("Hold a key and talk.\nYour words appear wherever you're typing.", "lead")
+        lead = make_label("Hold a key and talk.\nYour words appear wherever you're typing.", "lead")
         lead.setAlignment(Qt.AlignCenter)
         self.ambient = WaveStrip(lambda: 0.0)
         self.ambient.set_state("processing", "")

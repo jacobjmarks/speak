@@ -1,6 +1,6 @@
 """Render the main window and overlay in each state to PNGs, no real mic/models/hotkey needed.
 
-    python -m tools.screenshots [out_dir]      (default: %TEMP%\speak-shots)
+    python -m tools.screenshots [out_dir]      (default: %TEMP%\\speak-shots)
 
 Settings and history go to a throwaway dir, so your real ones are untouched.
 Then open the PNGs with the `view` tool to check the UI.

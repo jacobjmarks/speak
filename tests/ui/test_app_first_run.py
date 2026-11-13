@@ -16,7 +16,7 @@ from speak.runtimes import ModelDownloadError
 from speak.ui import theme as ui_theme
 from speak.ui.app import SpeakApp
 from tests.ui import QtTestCase
-from tests.ui.onboarding_support import GPU, button, fake_plan, result, wait_for
+from tests.ui.onboarding.support import GPU, button, fake_plan, result, wait_for
 
 
 class FirstRunAppTest(QtTestCase):
@@ -41,8 +41,8 @@ class FirstRunAppTest(QtTestCase):
                    patch("speak.ui.onboarding.steps.tidy.tidy.plan", side_effect=fake_plan),
                    patch("speak.ui.onboarding.page.tidy.gpus", return_value=[]),
                    patch("speak.ui.onboarding.steps.mic.audio.Microphone"),
-                   patch("speak.ui.pages.audio.input_devices", return_value=["Desk mic"]),
-                   patch("speak.ui.pages.platform_utils.launch_at_login_enabled", return_value=False),
+                   patch("speak.audio.input_devices", return_value=["Desk mic"]),
+                   patch("speak.platform_utils.launch_at_login_enabled", return_value=False),
                    patch("speak.ui.onboarding.common.ANIMATE", False),
                    patch("speak.ui.app.Dictation.cancel_benchmark"),
                    patch.object(SpeakApp, "_make_tray", return_value=None)]
