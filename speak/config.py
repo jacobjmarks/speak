@@ -29,6 +29,7 @@ DEFAULTS = {
     "history_enabled": False,
     "auto_paste": True,
     "press_enter": False,  # experimental: Enter after pasting, only if the same app is still in front
+    "press_enter_before": False,  # experimental: Enter before pasting, same app check
     "audio_dim_enabled": False,
     "audio_dim_percent": 20,
     "advanced_settings": False,

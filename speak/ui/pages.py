@@ -374,11 +374,20 @@ class SettingsPage(QScrollArea):
         self.enter = self._toggle(settings["press_enter"], "press_enter")
         self.enter.setEnabled(settings["auto_paste"])
         self.paste.toggled.connect(self.enter.setEnabled)
-        self.enter_row = self._row(rows, f"Press {'Return' if platform_utils.IS_MAC else 'Enter'} afterwards",
-                                   "Experimental. Sends messages in chat apps. Skipped if you switched apps",
+        self.enter_row = self._row(rows, f"Press {'Return' if platform_utils.IS_MAC else 'Enter'} after pasting",
+                                   "Experimental. Skipped if you switched apps",
                                    self.enter)
         if not platform_utils.IS_WINDOWS:
             self.enter_row.hide()
+
+        self.enter_before = self._toggle(settings["press_enter_before"], "press_enter_before")
+        self.enter_before.setEnabled(settings["auto_paste"])
+        self.paste.toggled.connect(self.enter_before.setEnabled)
+        self.enter_before_row = self._row(rows, f"Press {'Return' if platform_utils.IS_MAC else 'Enter'} before pasting",
+                                          "Experimental. Skipped if you switched apps",
+                                          self.enter_before)
+        if not platform_utils.IS_WINDOWS:
+            self.enter_before_row.hide()
 
         self.language = NoWheelComboBox(cursor=Qt.PointingHandCursor)
         self.language_delegate = LanguageItemDelegate(self.language)
@@ -655,6 +664,7 @@ class SettingsPage(QScrollArea):
         self.audio_dim_slider.setEnabled(settings["audio_dim_enabled"])
         self.audio_dim_value.setText(f'{settings["audio_dim_percent"]}%')
         self.enter.setEnabled(settings["auto_paste"])
+        self.enter_before.setEnabled(settings["auto_paste"])
         self._update_hint(settings["updates"])
         self._shortcut_mode_hint(settings["shortcut_mode"])
 

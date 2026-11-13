@@ -18,7 +18,7 @@ def dictation_for_processing():
     dictation._schedule_unload = lambda: None
     dictation.state = State.PROCESSING
     dictation.listener = Mock()
-    dictation.settings = {"history_enabled": False, "auto_paste": True, "press_enter": True}
+    dictation.settings = {"history_enabled": False, "auto_paste": True, "press_enter": True, "press_enter_before": False}
     dictation._target = 123
     return dictation
 
@@ -51,7 +51,7 @@ class DictationFlowTest(unittest.TestCase):
         plan = SimpleNamespace(model_id=None, level="fast", llm_mode="literal")
         events = []
 
-        def paste(text, should_enter):
+        def paste(text, should_enter, should_enter_before):
             events.append(("paste", text, should_enter()))
 
         with patch.object(tidy, "plan", return_value=plan), \
@@ -93,7 +93,7 @@ class DictationFlowTest(unittest.TestCase):
         plan = SimpleNamespace(model_id=None, level="off", llm_mode="off")
         enter_checks = []
 
-        def paste(text, should_enter):
+        def paste(text, should_enter, should_enter_before):
             self.assertEqual(text, "recognized words")
             dictation._cancel_event.set()
             enter_checks.append(should_enter())
@@ -107,6 +107,27 @@ class DictationFlowTest(unittest.TestCase):
         dictation.listener.on_cancelled.assert_called_once()
         dictation.listener.on_result.assert_not_called()
         self.assertEqual(dictation.state, State.IDLE)
+
+    def test_enter_before_paste_requires_the_target_app_to_still_be_in_front(self):
+        dictation = dictation_for_processing()
+        dictation.settings.update(press_enter=False, press_enter_before=True)
+        plan = SimpleNamespace(model_id=None, level="off", llm_mode="off")
+        checks = []
+
+        def paste(text, should_enter, should_enter_before):
+            checks.append(should_enter_before())
+
+        for foreground in (dictation._target, 999):
+            dictation.mic = Mock(frames=1)
+            dictation.session = Mock()
+            dictation.session.finish.return_value = "recognized words"
+            with patch.object(tidy, "plan", return_value=plan), \
+                    patch.object(cleanup, "finalize", return_value=("recognized words", "")), \
+                    patch("speak.controller.output.paste", side_effect=paste), \
+                    patch("speak.controller.platform_utils.foreground_window", return_value=foreground):
+                dictation._process()
+
+        self.assertEqual([True, False], checks)
 
     def test_history_failure_does_not_stop_the_paste(self):
         dictation = dictation_for_processing()
@@ -149,7 +170,7 @@ class DictationFlowTest(unittest.TestCase):
         plan = SimpleNamespace(model_id=None, level="off", llm_mode="off")
         pasting, release = threading.Event(), threading.Event()
 
-        def paste(text, should_enter):
+        def paste(text, should_enter, should_enter_before):
             pasting.set()
             release.wait(5)
 

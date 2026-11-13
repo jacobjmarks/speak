@@ -47,7 +47,7 @@ Entry point: `main.py` (repo root) or `python -m speak`; both call `speak.ui.app
 | Tray, close-to-tray, hotkey `shortcut_mode` auto/hold/toggle (`HOLD_SECONDS`) + capture guard, overlay-on-focus rule, update flow | `ui/app.py` |
 | Single instance (`_single_instance`, lock + local server; `--restarted` waits) | `ui/app.py` |
 | Idle unload of runtimes (`unload_after`, `_schedule_unload`), preload (`warm_up`) | `controller.py` |
-| Enter after paste (only if `platform_utils.foreground_window()` unchanged since start) | `controller.py`, `output.py` |
+| Enter before/after paste (only if `platform_utils.foreground_window()` unchanged since start) | `controller.py`, `output.py` |
 | Exe icon | `tools/make_icon.py` (called by `build.ps1`) |
 | Third-party licence notices bundled in the exe | `tools/make_notices.py` (called by `build.ps1`); new pip deps are picked up from `requirements.txt`, anything bundled another way needs a section |
 | What PyInstaller bundles for sounddevice | `tools/hooks/hook-sounddevice.py` |

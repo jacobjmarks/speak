@@ -383,11 +383,19 @@ class Dictation:
             return
         if self.settings["auto_paste"]:
             target = self._target
-            enter = lambda: (not self._cancel_event.is_set() and self.settings["press_enter"]
-                             and target is not None  # noqa: E731
-                             and platform_utils.foreground_window() == target)
+
+            def still_in_target() -> bool:
+                return (not self._cancel_event.is_set() and target is not None
+                        and platform_utils.foreground_window() == target)
+
+            def enter_after() -> bool:
+                return self.settings["press_enter"] and still_in_target()
+
+            def enter_before() -> bool:
+                return self.settings["press_enter_before"] and still_in_target()
+
             try:
-                output.paste(text, enter)
+                output.paste(text, enter_after, enter_before)
             except Exception:
                 note = note or "Paste unavailable; copy it from Speak"
         with self._lock:

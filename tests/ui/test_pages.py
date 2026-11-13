@@ -65,7 +65,7 @@ class SettingsInteractionTest(QtTestCase):
         window.settings.sync.assert_called_once_with(app.settings)
 
     def test_disabling_auto_paste_disables_enter_without_changing_enter_preference(self):
-        page = self.make_page({"auto_paste": True, "press_enter": True})
+        page = self.make_page({"auto_paste": True, "press_enter": True, "press_enter_before": True})
         changes = []
         page.changed.connect(changes.append)
 
@@ -74,6 +74,8 @@ class SettingsInteractionTest(QtTestCase):
         self.capture(page, "auto-paste-disabled")
         self.assertFalse(page.enter.isEnabled())
         self.assertTrue(page.enter.isChecked())
+        self.assertFalse(page.enter_before.isEnabled())
+        self.assertTrue(page.enter_before.isChecked())
         self.assertEqual([{"auto_paste": False}], changes)
 
     def test_audio_level_key_adjustment_emits_snapped_value_and_updates_label(self):

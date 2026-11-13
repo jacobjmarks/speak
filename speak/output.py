@@ -11,10 +11,12 @@ def copy(text: str) -> None:
     pyperclip.copy(text)
 
 
-def paste(text: str, press_enter: Callable[[], bool] = lambda: False) -> bool:
+def paste(text: str, press_enter: Callable[[], bool] = lambda: False,
+          press_enter_before: Callable[[], bool] = lambda: False) -> bool:
     """Paste via the clipboard, then restore the previous clipboard contents. Raises on failure.
 
-    After pasting, presses Enter if `press_enter()` (checked after the paste lands) is true; returns whether it did.
+    Before pasting, presses Enter if `press_enter_before()` is true.
+    After pasting, presses Enter if `press_enter()` (checked right after the paste) is true; returns whether it did.
     """
     import pyperclip
 
@@ -24,6 +26,9 @@ def paste(text: str, press_enter: Callable[[], bool] = lambda: False) -> bool:
     pyperclip.copy(text)
     if pyperclip.paste() != text:
         raise RuntimeError("Clipboard unavailable")
+    if press_enter_before():
+        hotkey.send("enter")
+        time.sleep(0.3)  # Gives the target time to handle Enter before the paste arrives.
     hotkey.send(paste_shortcut())
     time.sleep(0.3)
     entered = press_enter()
