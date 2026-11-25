@@ -9,6 +9,7 @@ from PySide6.QtWidgets import QPushButton
 
 from speak import config, updates
 from speak.controller import State
+from speak.ui import theme
 from speak.ui.bridge import Bridge
 from speak.ui.app import SpeakApp
 from speak.ui.banner import Banner
@@ -17,7 +18,28 @@ from tests.ui import QtTestCase
 
 
 class UpdateInteractionTest(QtTestCase):
-    """Update checks notify users, offer the release, and cancel dictation before applying it."""
+    """Update checks notify users, offer the release, and never interrupt dictation when applying it."""
+
+    def test_system_notification_announces_each_update_once_and_only_when_unfocused(self):
+        app, _page, _banner = self.make_ui("notify")
+        app.tray = Mock()
+        release = updates.Release("1.2.0", "https://example.invalid/release")
+        with patch("speak.ui.app.updates.can_install", return_value=True):
+            SpeakApp._on_update_found(app, release, False)
+            SpeakApp._on_update_found(app, release, False)
+            self.assertEqual(1, app.tray.showMessage.call_count)
+            self.assertIn("1.2.0 is available", app.tray.showMessage.call_args.args[1])
+
+            SpeakApp._on_update_ready(app, Path("Speak.exe.new"))
+            self.assertEqual(2, app.tray.showMessage.call_count)
+            self.assertIn("1.2.0 is ready", app.tray.showMessage.call_args.args[1])
+
+            app.tray.reset_mock()
+            app._toasted.clear()
+            app.window.isVisible = lambda: True
+            app.window.isActiveWindow = lambda: True
+            SpeakApp._on_update_found(app, release, False)
+            app.tray.showMessage.assert_not_called()
 
     def make_ui(self, update_mode):
         settings = {**config.DEFAULTS, "updates": update_mode}
@@ -41,13 +63,19 @@ class UpdateInteractionTest(QtTestCase):
                 notify=lambda key, text, level="info", action="", enabled=True:
                     banner.show_notice(key, text, level, action, enabled),
                 clear_notice=banner.clear,
+                set_status=Mock(),
+                isVisible=lambda: False,
+                isActiveWindow=lambda: False,
                 allow_close=False,
             ),
+            palette=theme.LIGHT,
             bridge=Bridge(),
             _downloading=False,
             _downloaded=None,
             _release=None,
             _restart=False,
+            _restart_when_idle=False,
+            _toasted=set(),
             tray=None,
             overlay=Mock(),
             dictation=Mock(state=State.IDLE),
@@ -58,6 +86,9 @@ class UpdateInteractionTest(QtTestCase):
         )
         app._download = lambda: SpeakApp._download(app)
         app._on_update_clicked = lambda: SpeakApp._on_update_clicked(app)
+        app._toast = lambda kind, version, message: SpeakApp._toast(app, kind, version, message)
+        app._restart_for_update = lambda: SpeakApp._restart_for_update(app)
+        app._on_state = lambda state: SpeakApp._on_state(app, state)
         app.quit = lambda: SpeakApp.quit(app)
         app.bridge.update_found.connect(lambda release, manual: SpeakApp._on_update_found(app, release, manual))
         app.bridge.update_ready.connect(lambda path: SpeakApp._on_update_ready(app, path))
@@ -105,7 +136,7 @@ class UpdateInteractionTest(QtTestCase):
         self.assertFalse(banner.isVisible())
         self.assertIsNone(app._release)
 
-    def test_automatic_update_cancels_dictation_and_installs_when_user_restarts(self):
+    def test_automatic_update_waits_for_dictation_to_finish_before_restarting(self):
         app, page, banner = self.make_ui("auto")
         release = updates.Release("1.2.0", "https://example.invalid/release")
         with patch("speak.ui.app.threading.Thread", side_effect=lambda target, **_: SimpleNamespace(start=target)), \
@@ -138,11 +169,35 @@ class UpdateInteractionTest(QtTestCase):
                         patch("speak.ui.app.platform_utils.repoint_launch_at_login") as repoint:
                     QTest.mouseClick(banner.findChild(QPushButton, "primary"), Qt.LeftButton)
 
+                    app.dictation.cancel.assert_not_called()
+                    app.app.quit.assert_not_called()
+                    restart.assert_not_called()
+                    self.assertEqual("Speak will restart when your dictation finishes.",
+                                     banner.findChild(type(page.update_status)).text())
+
+                    app.dictation.state = State.IDLE
+                    app._on_state(State.IDLE.value)
+
                     app.app.quit.assert_called_once()
-                    app.dictation.cancel.assert_called_once()
+                    app.dictation.cancel.assert_not_called()
                     app.dictation.shutdown.assert_called_once()
                     restart.assert_called_once_with(exe)
                     repoint.assert_called_once_with(exe, exe)
                     self.assertEqual("updated", exe.read_text(encoding="utf-8"))
                     self.assertEqual("current", Path(str(exe) + ".old").read_text(encoding="utf-8"))
                     self.assertIsNone(app._downloaded)
+
+    def test_restart_to_update_applies_immediately_when_not_dictating(self):
+        app, _page, _banner = self.make_ui("auto")
+        app._release = updates.Release("1.2.0", "https://example.invalid/release")
+        app._downloaded = Path("Speak.exe.new")
+        with patch("speak.ui.app.hotkey.unregister"), \
+                patch("speak.ui.app.updates.exe_path", return_value=Path("Speak.exe")), \
+                patch("speak.ui.app.updates.install", return_value=Path("Speak.exe")), \
+                patch("speak.ui.app.updates.restart") as restart, \
+                patch("speak.ui.app.platform_utils.repoint_launch_at_login"):
+            SpeakApp._on_update_clicked(app)
+
+        app.dictation.cancel.assert_not_called()
+        restart.assert_called_once_with(Path("Speak.exe"))
+

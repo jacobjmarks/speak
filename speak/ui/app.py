@@ -53,6 +53,8 @@ class SpeakApp(QObject):
         self._downloading = False
         self._downloaded = None    # verified exe waiting beside ours; swapped in on quit
         self._restart = False
+        self._restart_when_idle = False  # "Restart to update" clicked mid-dictation: wait for it to finish
+        self._toasted = set()      # (kind, version) already announced with a system notification
         self._onboarding = False   # first-run setup is showing: the global hotkey stays quiet
 
         b = self.bridge
@@ -167,6 +169,16 @@ class SpeakApp(QObject):
         else:
             self._set_update("Update" if updates.can_install(release) else "Download",
                              f"Speak {release.version} is available.")
+            self._toast("available", release.version, f"Speak {release.version} is available.")
+
+    def _toast(self, kind: str, version: str, message: str):
+        """Announce an update once per version with a system notification when Speak isn't in front."""
+        if (kind, version) in self._toasted or not self.tray:
+            return
+        if self.window.isVisible() and self.window.isActiveWindow():
+            return
+        self._toasted.add((kind, version))
+        self.tray.showMessage("Speak", message, QSystemTrayIcon.Information, 8000)
 
     def _set_update(self, label: str, message: str = "", enabled: bool = True):
         if label:
@@ -198,20 +210,28 @@ class SpeakApp(QObject):
         self._downloading = False
         self._downloaded = path
         if path:
-            self._set_update("Restart to update", f"Speak {self._release.version} is ready to install.")
+            version = self._release.version
+            self._set_update("Restart to update", f"Speak {version} is ready to install.")
+            self._toast("ready", version, f"Speak {version} is ready. It installs when you restart Speak.")
         else:
             self._set_update("Try again", "The update didn't download.")
 
     def _on_update_clicked(self):
         if self._downloaded:
             if self.dictation.state != State.IDLE:
-                self.dictation.cancel()
-            self._restart = True
-            self.quit()
+                self._restart_when_idle = True
+                self._set_update("Restarting…", "Speak will restart when your dictation finishes.", enabled=False)
+            else:
+                self._restart_for_update()
         elif updates.can_install(self._release):
             self._download()
         elif self._release:
             QDesktopServices.openUrl(QUrl(self._release.page))
+
+    def _restart_for_update(self):
+        self._restart_when_idle = False
+        self._restart = True
+        self.quit()
 
     def _on_probed(self):
         device = self.settings["cleanup_device"]
@@ -375,6 +395,9 @@ class SpeakApp(QObject):
         if self.tray:
             self.tray.setIcon(self._tray_icon(state == State.LISTENING.value))
             self.tray.setToolTip(f"Speak · {text}")
+        if state == State.IDLE and self._restart_when_idle and not refresh_only:
+            self._restart_for_update()
+            return
         if refresh_only or state == State.IDLE:
             return
         self.window.dictate.set_mode(state)
@@ -452,6 +475,7 @@ class SpeakApp(QObject):
         if not IS_MAC:  # on macOS a click already opens the menu
             tray.activated.connect(
                 lambda reason: self.show_window() if reason == QSystemTrayIcon.Trigger else None)
+        tray.messageClicked.connect(self.show_window)
         tray.show()
         self._tray_menu = menu
         return tray
