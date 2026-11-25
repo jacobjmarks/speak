@@ -1,4 +1,4 @@
-from ..common import AMBER, EXAMPLE_LITERAL, EXAMPLE_OFF, EXAMPLE_QUICK, EXAMPLE_SMART, MODEL_CHOICES, SAY, _ai_changes, _level, _seconds
+from ..common import AMBER, EXAMPLE_LITERAL, EXAMPLE_OFF, EXAMPLE_QUICK, EXAMPLE_SMART, SAY, _seconds
 from ..widgets import ChoiceCard, OptionGroup, Segmented
 from ..stages import SpeedStage
 from PySide6.QtCore import Qt
@@ -18,25 +18,26 @@ class TidyStep:
         layout.addWidget(say)
 
         self.tidy_options = OptionGroup(self)
-        self.level_cards = {"off": ChoiceCard("Off", "Exactly as said", example=f"“{EXAMPLE_OFF}”"),
-                            "fast": ChoiceCard("Quick", "Removes ums, instant", example=f"“{EXAMPLE_QUICK}”"),
-                            "ai": ChoiceCard("Smart", "…", example="…")}
+        styles = config.TIDY_STYLES
+        self.level_cards = {"off": ChoiceCard(*styles["off"], example=f"“{EXAMPLE_OFF}”"),
+                            "fast": ChoiceCard(*styles["fast"], example=f"“{EXAMPLE_QUICK}”"),
+                            "ai": ChoiceCard(styles["ai"][0], "…", example="…")}
         for card in self.level_cards.values():
             card.setMinimumHeight(140)
         cards = self._cards(self.tidy_options, self.level_cards, self._on_level)
         layout.addWidget(cards)
 
-        self.model_options = Segmented(MODEL_CHOICES, self._model)
+        self.model_options = Segmented(tidy.MODEL_SIZES, self._model)
         self.model_options.picked.connect(self._on_model)
-        self.model_row = SettingRow("Model size", " ", self.model_options)
+        self.model_row = SettingRow(config.MODEL_SIZE_LABEL, " ", self.model_options)
         self.device = make_combo(config.CLEANUP_DEVICES, settings["cleanup_device"])
         self.device.currentIndexChanged.connect(
             lambda: self._config_changed({"cleanup_device": self.device.currentData()}))
-        self.device_row = SettingRow("Runs on", " ", self.device)
+        self.device_row = SettingRow(config.DEVICE_LABEL, " ", self.device)
         self.corrections = Toggle()
         self.corrections.setChecked(settings["corrections"])
         self.corrections.toggled.connect(lambda on: self._config_changed({"corrections": on}))
-        self.corrections_row = SettingRow("Fix changes of mind", " ", self.corrections)
+        self.corrections_row = SettingRow(config.CORRECTIONS_LABEL, " ", self.corrections)
         self.options_card = self._settings_card(self.model_row, self.device_row, self.corrections_row)
         layout.addWidget(self.options_card)
 
@@ -93,21 +94,21 @@ class TidyStep:
 
 
     def _on_level(self, key: str):
-        self._config_changed({"tidy": key} if key != "ai" else _ai_changes(self._model))
+        self._config_changed({"tidy": key} if key != "ai" else tidy.ai_changes(self._model))
 
 
     def _on_model(self, choice: str):
         self._model = choice
-        self._config_changed(_ai_changes(choice))
+        self._config_changed(tidy.ai_changes(choice))
 
 
     def _ai_plan(self) -> tidy.Plan:
-        return tidy.plan({**self._tidy, **_ai_changes(self._model)})
+        return tidy.plan({**self._tidy, **tidy.ai_changes(self._model)})
 
 
     def _refresh_tidy(self):
         """Redraw everything that depends on the tidy choice: card texts, example, and which options apply."""
-        level = _level(self._tidy)
+        level = tidy.style(self._tidy)
         ai = self._ai_plan()
         large = ai.model_id == config.LARGE_MODEL
         where = "graphics card" if ai.device else "processor"
@@ -120,24 +121,16 @@ class TidyStep:
             card.setChecked(key == level)
             card.blockSignals(False)
         on = level == "ai"
-        na = "Not used with Off or Quick"
-        if self._model == "auto":
-            model_hint = f"Picks what suits this computer: {name} on your {where}"
-        elif self._model == "small":
-            model_hint = "Quick on any computer. Punctuation and capitals only"
-        elif large:
-            model_hint = f"Best results. {'About half a second' if ai.device else 'A few seconds'} here"
-        else:
-            model_hint = "Not enough free memory for Large, so Small is used"
+        na = config.TIDY_NOT_USED
+        model_hint = tidy.model_size_hint(self._tidy, self._model)
         self.model_options.set_value(self._model if on else "")
         self.model_row.hint.setText(model_hint if on else na)
         self.model_row.setEnabled(on)
-        self.device_row.hint.setText("Your graphics card is faster when you have one" if on else na)
+        self.device_row.hint.setText(config.DEVICE_HINT if on else na)
         self.device_row.setEnabled(on)
         fix = on and large
         self.corrections_row.hint.setText(
-            "“Tuesday, no wait, Wednesday” becomes “Wednesday”" if fix else
-            "Needs the Large model" if on else na)
+            config.CORRECTIONS_HINT if fix else config.CORRECTIONS_NEEDS_LARGE if on else na)
         self.corrections_row.setEnabled(fix)
         # What can't apply reads as off, so a greyed-out switch never looks like an unchangeable "on".
         self.corrections.blockSignals(True)

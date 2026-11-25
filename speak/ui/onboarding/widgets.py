@@ -1,12 +1,12 @@
 from .common import _passthrough
 from . import common
-from PySide6.QtCore import QEasingCurve, QObject, QPointF, QRectF, QSize, Qt, QVariantAnimation, Signal
-from PySide6.QtGui import QColor, QFontMetrics, QPainter, QPainterPath, QPen, QPolygonF
-from PySide6.QtWidgets import QAbstractButton, QButtonGroup, QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget
+from PySide6.QtCore import QEasingCurve, QPointF, QRectF, Qt, QVariantAnimation
+from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen, QPolygonF
+from PySide6.QtWidgets import QAbstractButton, QLabel, QSizePolicy, QVBoxLayout, QWidget
 from .. import theme
 from ..controls import make_label
 from ..paint import draw_check, draw_mic
-from ..widgets import Animated
+from ..widgets import Animated, Chip, OptionGroup, Segmented  # noqa: F401  (Chip, Segmented: shared, re-exported)
 
 class StepDots(QWidget):
     """Progress as dots; the current one stretches into a pill."""
@@ -214,111 +214,6 @@ class ChoiceCard(QAbstractButton):
             p.setBrush(Qt.NoBrush)
             p.drawRoundedRect(rect.adjusted(-1, -1, 1, 1), r + 1, r + 1)
         p.end()
-
-
-class OptionGroup(QObject):
-    picked = Signal(str)
-
-    def __init__(self, parent):
-        super().__init__(parent)
-        self.group = QButtonGroup(self)
-        self.group.setExclusive(True)
-        self.cards = {}
-
-    def add(self, key: str, card: QAbstractButton):
-        self.group.addButton(card)
-        self.cards[key] = card
-        card.clicked.connect(lambda _=False, k=key: self.picked.emit(k))
-
-    def set_value(self, key: str):
-        card = self.cards.get(key)
-        if card is not None:
-            card.setChecked(True)
-
-
-class Chip(QAbstractButton):
-    """One pill in a Segmented row, with an optional muted second line; fades when disabled."""
-
-    def __init__(self, text: str, sub: str = ""):
-        super().__init__()
-        self.setText(text)
-        self.sub = sub
-        self.palette_ = theme.LIGHT
-        self.setCheckable(True)
-        self.setCursor(Qt.PointingHandCursor)
-        self.setFocusPolicy(Qt.TabFocus)
-        self._height = 46 if sub else 34
-        self.setFixedHeight(self._height)
-        metrics = QFontMetrics(self.font())
-        self._width = max(metrics.horizontalAdvance(text), metrics.horizontalAdvance(sub) * 0.85) + 36
-
-    def sizeHint(self):
-        return QSize(int(self._width), self._height)
-
-    minimumSizeHint = sizeHint
-
-    def paintEvent(self, e):
-        pal = self.palette_
-        p = QPainter(self)
-        p.setRenderHint(QPainter.Antialiasing)
-        if not self.isEnabled():
-            p.setOpacity(0.4)
-        rect = QRectF(self.rect()).adjusted(1, 1, -1, -1)
-        checked = self.isChecked()
-        radius = rect.height() / 2 if not self.sub else 18
-        p.setPen(QPen(QColor(pal.accent if checked else pal.border), 1))
-        p.setBrush(QColor(pal.accent) if checked else QColor(pal.surface))
-        p.drawRoundedRect(rect, radius, radius)
-        p.setPen(QColor(pal.accent_text if checked else pal.text))
-        font = self.font()
-        font.setWeight(font.Weight.DemiBold if checked else font.Weight.Normal)
-        p.setFont(font)
-        if self.sub:
-            p.drawText(QRectF(rect.left(), rect.top() + 4, rect.width(), 20), Qt.AlignCenter, self.text())
-            small = self.font()
-            small.setPointSizeF(small.pointSizeF() * 0.85)
-            p.setFont(small)
-            muted = QColor(pal.accent_text if checked else pal.muted)
-            muted.setAlphaF(0.85 if checked else 1.0)
-            p.setPen(muted)
-            p.drawText(QRectF(rect.left(), rect.top() + 21, rect.width(), 18), Qt.AlignCenter, self.sub)
-        else:
-            p.drawText(rect, Qt.AlignCenter, self.text())
-        if self.hasFocus():
-            p.setPen(QPen(QColor(pal.accent), 2, Qt.DotLine))
-            p.setBrush(Qt.NoBrush)
-            p.drawRoundedRect(rect.adjusted(-1, -1, 1, 1), radius + 1, radius + 1)
-        p.end()
-
-
-class Segmented(QWidget):
-    """A row of exclusive chips: `picked(key)` on click, `set_value` for programmatic changes.
-
-    An option is a label, or a (label, muted second line) pair."""
-
-    picked = Signal(str)
-
-    def __init__(self, options: dict, current: str = ""):
-        super().__init__()
-        row = QHBoxLayout(self)
-        row.setContentsMargins(0, 0, 0, 0)
-        row.setSpacing(8)
-        self.group = OptionGroup(self)
-        self.chips = {}
-        for key, option in options.items():
-            chip = Chip(*([option] if isinstance(option, str) else option))
-            self.group.add(key, chip)
-            self.chips[key] = chip
-            row.addWidget(chip)
-        self.group.picked.connect(self.picked)
-        self.set_value(current)
-
-    def set_value(self, key: str):
-        """Select `key`; an unknown key (e.g. "") leaves nothing selected."""
-        self.group.group.setExclusive(False)
-        for chip_key, chip in self.chips.items():
-            chip.setChecked(chip_key == key)
-        self.group.group.setExclusive(True)
 
 
 class ModeGlyph(QWidget):

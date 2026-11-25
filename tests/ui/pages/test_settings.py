@@ -134,53 +134,87 @@ class SettingsInteractionTest(QtTestCase):
         changes = []
         page.changed.connect(changes.append)
 
-        page.sync({**config.DEFAULTS, "mic_device": "Headset", "language": "de-DE",
+        page.sync({**config.DEFAULTS, "mic_device": "Headset", "language": "de-DE", "tidy": "best",
                    "unload_after": "never", "corrections": False, "prereleases": True})
 
         self.assertEqual("Headset", page.mic.currentData())
         self.assertEqual("de-DE", page.language.currentData())
         self.assertEqual("never", page.unload.currentData())
         self.assertFalse(page.corrections.isChecked())
+        self.assertEqual(("ai", "large"), (page.tidy.value(), page.model_size.value()))
         self.assertTrue(page.prereleases.isChecked())
         self.assertEqual([], changes)
 
 
-class SettingsMoreOptionsTest(QtTestCase):
-    """Technical and experimental rows sit behind each section's More options, which remembers being open and
-    counts hidden rows changed from their defaults."""
+class SettingsTidyTest(QtTestCase):
+    """Tidy-up is set the same way as in first-run setup: Off / Quick / Smart, then a model size and device that only
+    apply to Smart, and corrections that need the Large model."""
 
     make_page = SettingsInteractionTest.make_page
 
-    def test_more_options_reveals_technical_rows_and_remembers_open_sections(self):
-        page = self.make_page({"expanded_sections": ["tidy"]})
+    def test_model_size_and_device_only_apply_to_smart(self):
+        page = self.make_page({"tidy": "fast"})
         changes = []
         page.changed.connect(changes.append)
-        self.assertFalse(page.asr_model.isVisible())
-        self.assertTrue(page.sections["tidy"].expanded)
+        self.assertEqual("fast", page.tidy.value())
+        self.assertFalse(page.model_size.isEnabled())
+        self.assertEqual(config.TIDY_NOT_USED, page.device_row.hint.text())
 
-        QTest.mouseClick(page.sections["speech"].more, Qt.LeftButton)
+        page.tidy.chips["ai"].click()
+        page.model_size.chips["large"].click()
 
-        self.capture(page, "speech-more-options")
-        self.assertTrue(page.asr_model.isVisible())
-        self.assertEqual([{"expanded_sections": ["speech", "tidy"]}], changes)
+        self.capture(page, "smart-large")
+        self.assertEqual([{"tidy": "auto", "cleanup_model": "auto"}, {"tidy": "best", "cleanup_model": "auto"}],
+                         changes)
+        self.assertTrue(page.model_size.isEnabled())
+        self.assertEqual(config.DEVICE_HINT, page.device_row.hint.text())
+
+    def test_corrections_read_as_off_and_explain_why_without_the_large_model(self):
+        page = self.make_page({"tidy": "auto", "corrections": True})
+
+        page.set_tidy_summary("Small model on your processor", large_model=False)
+
+        self.assertFalse(page.corrections.isEnabled())
+        self.assertFalse(page.corrections.isChecked())
+        self.assertEqual(config.CORRECTIONS_NEEDS_LARGE, page.corrections_row.hint.text())
+        page.set_tidy_summary("Large model on your graphics card", large_model=True)
+        self.assertTrue(page.corrections.isChecked())
+
+
+class SettingsMoreOptionsTest(QtTestCase):
+    """Two or more technical rows sit behind their section's More options, which remembers being open and counts
+    hidden rows changed from their defaults."""
+
+    def make_page(self, settings=None):
+        with patch.object(platform_utils, "IS_WINDOWS", True):  # the Enter options only exist on Windows
+            return SettingsInteractionTest.make_page(self, settings)
+
+    def test_more_options_reveals_technical_rows_and_remembers_open_sections(self):
+        page = self.make_page()
+        page.show_category("text")
+        changes = []
+        page.changed.connect(changes.append)
+        self.assertFalse(page.enter.isVisible())
+
+        QTest.mouseClick(page.sections["typing"].more, Qt.LeftButton)
+
+        self.capture(page, "typing-more-options")
+        self.assertTrue(page.enter.isVisible())
+        self.assertEqual([{"expanded_sections": ["typing"]}], changes)
 
     def test_changed_count_tracks_hidden_settings_that_differ_from_defaults(self):
-        page = self.make_page({"unload_after": "never", "press_enter": True})
-        speech, typing = page.sections["speech"].more, page.sections["typing"].more
-        self.assertEqual(1, speech.changed_count)
-        self.assertEqual(1 if platform_utils.IS_WINDOWS else 0, typing.changed_count)
-        self.capture(page, "changed-hidden-option")
+        page = self.make_page({"press_enter": True})
+        typing = page.sections["typing"].more
+        self.assertEqual(1, typing.changed_count)
 
-        page.unload.setCurrentIndex(page.unload.findData(config.DEFAULTS["unload_after"]))
-        self.assertEqual(0, speech.changed_count)
-
-        page.sync({**config.DEFAULTS, "cleanup_device": "cpu"})
-        self.assertEqual(1, page.sections["tidy"].more.changed_count)
-        self.assertEqual(0, typing.changed_count)
+        page.sync({**config.DEFAULTS, "press_enter_before": True, "press_enter": True})
+        self.assertEqual(2, typing.changed_count)
+        page.enter.click()
+        self.assertEqual(1, typing.changed_count)
 
     def test_rows_the_platform_cannot_use_are_neither_shown_nor_searchable(self):
         with patch.object(platform_utils, "IS_WINDOWS", False):
-            page = self.make_page()
+            page = SettingsInteractionTest.make_page(self)
         page.show_category("text")
 
         self.assertFalse(page.enter_row.isVisible())
@@ -191,32 +225,38 @@ class SettingsMoreOptionsTest(QtTestCase):
 class SettingsSearchTest(QtTestCase):
     """Search finds settings by their words or synonyms and jumps to them, opening More options when needed."""
 
-    make_page = SettingsInteractionTest.make_page
+    make_page = SettingsMoreOptionsTest.make_page
 
     def test_return_opens_first_match_in_its_category_and_highlights_it(self):
         page = self.make_page()
         changes = []
         page.changed.connect(changes.append)
 
-        QTest.keyClicks(page.search, "gpu")
+        QTest.keyClicks(page.search, "enter")
 
         self.assertIs(page.results_page, page.stack.currentWidget())
-        self.assertEqual(["Tidy-up device"], [r.row.title for r in page.results])
+        self.assertEqual(["Press Enter before pasting", "Press Enter after pasting"],
+                         [r.row.title for r in page.results])
         self.capture(page, "search-results")
 
         QTest.keyClick(page.search, Qt.Key_Return)
         self.app.processEvents()
 
-        row = page.cleanup_device.parentWidget()
         self.assertEqual("text", page.category)
         self.assertIs(page.pages["text"], page.stack.currentWidget())
-        self.assertTrue(page.sections["tidy"].expanded)
-        self.assertTrue(page.cleanup_device.isVisible())
-        self.assertIs(page.cleanup_device, page.focusWidget())
-        self.assertTrue(row.property("highlight"))
+        self.assertTrue(page.sections["typing"].expanded)
+        self.assertTrue(page.enter_before.isVisible())
+        self.assertIs(page.enter_before, page.focusWidget())
+        self.assertTrue(page.enter_before_row.property("highlight"))
         self.assertEqual("", page.search.text())
         self.assertEqual([], changes)  # revealing a row doesn't change the saved open sections
         self.capture(page, "search-revealed-row")
+
+    def test_synonyms_find_settings_named_differently(self):
+        page = self.make_page()
+
+        self.assertEqual(["Runs on"], [r.title for r in page.matches("gpu")])
+        self.assertEqual(config.AUDIO_DIM_LABEL, page.matches("volume")[0].title)
 
     def test_title_matches_rank_first_and_unknown_words_say_so(self):
         page = self.make_page()

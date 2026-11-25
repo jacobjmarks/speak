@@ -115,7 +115,7 @@ def plan(settings: dict) -> Plan:
     else:
         g = _gpu if preference != "cpu" else None
     if g and g.integrated and preference == "auto":
-        g = None  # forcing the GPU in More options still allows it
+        g = None  # choosing the GPU under "Runs on" still allows it
     gpu_for_large = g if g and g.free_mb >= _memory_required_mb(LARGE_MODEL) else None
     pinned = settings.get("cleanup_model")
     if pinned in CLEANUP_MODELS:
@@ -139,24 +139,56 @@ def plan(settings: dict) -> Plan:
         mode = "smart" if settings.get("corrections", True) else "literal"
         what = ("Punctuation, paragraphs, changes of mind." if mode == "smart" else
                 "Punctuation and paragraphs, every word kept.")
-        name = "Large AI"
+        name = "Large model"
     else:
         speed = "under a second"
         what = "Punctuation and capitals only."
         mode = "literal"
-        name = "Small AI"
+        name = "Small model"
     notes = []
-    if pinned in CLEANUP_MODELS:
-        notes.append("Model chosen in More options.")
-    elif device:
-        notes.append("Same as Best here." if level == "auto" else "Same as Automatic here.")
-    elif level == "best" and model != LARGE_MODEL:
-        notes.append("Not enough free memory for the large model.")
+    if level == "best" and model != LARGE_MODEL and pinned not in CLEANUP_MODELS:
+        notes.append("Not enough free memory for the Large model.")
     if preference == "gpu" and g is None:
-        notes.append("GPU was forced, but that graphics card was not found. Using your processor.")
+        notes.append("The chosen graphics card was not found, so your processor is used.")
     elif preference == "gpu" and gpu_for_model is None:
-        notes.append("GPU was forced, but it doesn't have enough free memory for this model. Using your processor.")
-    elif preference == "cpu":
-        notes.append("Processor forced in More options.")
+        notes.append("The graphics card doesn't have enough free memory for this model, so your processor is used.")
     note = (" " + " ".join(notes)) if notes else ""
     return Plan(level, model, mode, device, f"{name} on your {where}, {speed}. {what}{size}{note}")
+
+
+# Settings and first-run setup show tidy-up as a style (Off / Quick / Smart) and, for Smart, a model size.
+MODEL_SIZES = {"auto": ("Automatic", "Best fit"),
+               "small": ("Small", f"Uses ~{round(_memory_required_mb(SMALL_MODEL) / 1000)} GB"),
+               "large": ("Large", f"Uses ~{round(_memory_required_mb(LARGE_MODEL) / 1000)} GB")}
+
+
+def style(settings: dict) -> str:
+    """"off", "fast" (Quick) or "ai" (Smart)."""
+    return "ai" if settings["tidy"] in ("auto", "best") else settings["tidy"]
+
+
+def model_size(settings: dict) -> str:
+    if settings["tidy"] == "best" or settings.get("cleanup_model") == LARGE_MODEL:
+        return "large"
+    return "small" if settings.get("cleanup_model") == SMALL_MODEL else "auto"
+
+
+def ai_changes(size: str) -> dict:
+    """Settings behind a Smart model size: Automatic and Large are tidy levels, Small pins the small model."""
+    if size == "small":
+        return {"tidy": "auto", "cleanup_model": SMALL_MODEL}
+    return {"tidy": "best" if size == "large" else "auto", "cleanup_model": "auto"}
+
+
+def model_size_hint(settings: dict, size: str) -> str:
+    """What a Smart model size means on this computer."""
+    ai = plan({**settings, **ai_changes(size)})
+    large = ai.model_id == LARGE_MODEL
+    if size == "auto":
+        return (f"Picks what suits this computer: {'Large' if large else 'Small'} model on your "
+                f"{'graphics card' if ai.device else 'processor'}")
+    if size == "small":
+        return "Quick on any computer. Punctuation and capitals only"
+    if large:
+        return f"Best results. {'About half a second' if ai.device else 'A few seconds'} here"
+    return "Not enough free memory for Large, so Small is used"

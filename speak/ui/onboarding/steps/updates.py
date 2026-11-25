@@ -1,4 +1,3 @@
-from ..common import UPDATE_HINTS
 from ..widgets import ChoiceCard, OptionGroup
 from PySide6.QtWidgets import QWidget
 from .... import config
@@ -14,7 +13,7 @@ class UpdatesStep:
         layout.addWidget(heading)
         layout.addSpacing(6)
         self.updates_options = OptionGroup(self)
-        cards = {key: ChoiceCard(label, UPDATE_HINTS[key]) for key, label in config.UPDATE_MODES.items()}
+        cards = {key: ChoiceCard(label, config.UPDATE_MODE_HINTS[key]) for key, label in config.UPDATE_MODES.items()}
         for card in cards.values():
             card.setMinimumHeight(110)
         self.update_cards = list(cards.values())
@@ -24,7 +23,7 @@ class UpdatesStep:
         self.prereleases.setChecked(settings["prereleases"])
         self.prereleases.toggled.connect(lambda on: self.changed.emit({"prereleases": on}))
         self.prerelease_card = self._settings_card(
-            SettingRow("Try new versions early", "They arrive sooner and may have bugs", self.prereleases))
+            SettingRow(config.PRERELEASES_LABEL, config.PRERELEASES_HINT, self.prereleases))
         layout.addWidget(self.prerelease_card)
         layout.addStretch(2)
         self._reveals[self.APP] = [heading, *self.update_cards, self.prerelease_card]

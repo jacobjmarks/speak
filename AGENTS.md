@@ -80,8 +80,8 @@ Entry point: `main.py` (repo root) or `python -m speak`; both call `speak.ui.app
 
 - Users dictate into *other* apps; they open the window mainly to change a setting, between tasks. Defaults must be good; the window favours settings over the Dictate page.
 - One teal accent (`Palette.accent`) for selection, primary actions and live state only. Colours live only in `ui/theme.py`; badges tint their own hue (`make_badge`), never grey text on a coloured fill.
-- Copy is plain language: say what happens, not how ("Tidy up my words"). A disabled control says why in its hint. Settings use the same names, options and hints as onboarding for the same setting, so people can find what they picked during setup.
-- Technical or experimental rows go behind their section's "More options" (`advanced=True`); experimental rows also get `badge="Experimental"`. Never hide a changed value silently: More options counts them.
+- Copy is plain language: say what happens, not how ("Tidy up my words"). A disabled control says why in its hint. Settings use the same names, options and hints as onboarding for the same setting (shared constants in `config`, tidy style/model size helpers in `tidy.py`), so people can find what they picked during setup.
+- Technical or experimental rows go behind their section's "More options" (`advanced=True`), which only appears for two or more such rows (a lone one shows in place); experimental rows also get `badge="Experimental"`. Never hide a changed value silently: More options counts them.
 - Confirm destructive actions inline (see `HistoryPage`), not with a modal. Painted controls take keyboard focus (with a visible ring) and carry accessible names.
 
 ## Run / test

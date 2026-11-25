@@ -65,9 +65,9 @@ class ConfigTest(unittest.TestCase):
     def test_old_advanced_switch_opens_every_more_options_section_once(self):
         for stored, expected in (({"advanced_settings": True}, list(config.ADVANCED_SECTIONS)),
                                  ({"advanced_settings": False}, []),
-                                 ({"advanced_settings": True, "expanded_sections": ["tidy"]}, ["tidy"]),
-                                 ({"expanded_sections": ["updates", "gone", 3, "speech"]}, ["speech", "updates"]),
-                                 ({"expanded_sections": "speech"}, [])):
+                                 ({"advanced_settings": True, "expanded_sections": []}, []),
+                                 ({"expanded_sections": ["gone", 3, "typing"]}, ["typing"]),
+                                 ({"expanded_sections": "typing"}, [])):
             with self.subTest(stored=stored):
                 self.settings_file.write_text(json.dumps(stored), encoding="utf-8")
 

@@ -13,7 +13,7 @@ from PySide6.QtCore import QEasingCurve, QPointF, QPropertyAnimation, QRect, QRe
 from PySide6.QtGui import (QColor, QCursor, QFont, QFontMetrics, QGuiApplication, QLinearGradient,
                            QPainter, QPen)
 
-from .. import platform_utils
+from .. import config, platform_utils
 from . import theme
 from .paint import BARS, draw_check, draw_cross, draw_ring, draw_shimmer_text, draw_wave
 from .widgets import Animated
@@ -22,7 +22,7 @@ PILL_W, PILL_H = 168, 46
 CARD_W = 380
 LINE_W, LINE_H = 280, 30
 EDGE = 24  # gap from the screen edge for top/bottom positions
-MAX_LINES = 3
+MAX_LINES = config.LIVE_PREVIEW_LINES
 FULL_WINDOW_CHARS = 600  # far more than MAX_LINES lines hold, so only the newest words can ever be shown
 
 

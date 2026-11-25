@@ -7,7 +7,6 @@ from PySide6.QtTest import QTest
 
 from speak import config, hotkey
 from speak.ui import theme as ui_theme
-from speak.ui.onboarding import common
 from tests.ui.onboarding.support import GPU, STEP_NAMES, OnboardingCase, button, dark_variant, distinct_colours
 
 
@@ -265,7 +264,7 @@ class DoneStepTest(OnboardingCase):
         QTest.mouseClick(button(page, "Finish"), Qt.LeftButton)
 
         self.assertEqual(hotkey.display("f9"), page.keycap.text())
-        self.assertEqual(common.SHORTCUT_HINTS["toggle"], page.shortcut_hint.text())
+        self.assertEqual(config.SHORTCUT_MODE_HINTS["toggle"], page.shortcut_hint.text())
         self.assertEqual(["finish"], events)
 
     def test_skip_setup_is_emitted_from_any_step(self):

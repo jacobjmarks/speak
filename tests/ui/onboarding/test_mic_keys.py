@@ -5,8 +5,7 @@ from unittest.mock import patch
 from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
 
-from speak import hotkey
-from speak.ui.onboarding import common
+from speak import config, hotkey
 from tests.ui.onboarding.support import OnboardingCase, dark_variant, wait_for
 
 
@@ -138,7 +137,7 @@ class KeysStepTest(OnboardingCase):
             page.mode_options.cards[mode].click()
             self.capture(page, f"mode_{mode}")
             page.set_shortcut("f9", mode)
-            self.assertEqual(common.SHORTCUT_HINTS[mode], page.shortcut_hint.text())
+            self.assertEqual(config.SHORTCUT_MODE_HINTS[mode], page.shortcut_hint.text())
 
         self.assertEqual([{"shortcut_mode": m} for m in ("hold", "toggle", "auto")], changes)
         page.set_shortcut("f9", "unknown")

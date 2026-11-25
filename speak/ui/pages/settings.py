@@ -6,17 +6,16 @@ from PySide6.QtGui import QColor, QKeySequence, QPalette, QShortcut
 from PySide6.QtWidgets import (QBoxLayout, QButtonGroup, QComboBox, QFrame, QHBoxLayout, QLineEdit, QPushButton,
                                QScrollArea, QSizePolicy, QSlider, QSpacerItem, QStackedWidget, QVBoxLayout, QWidget)
 
-from ... import config, platform_utils, updates
+from ... import config, platform_utils, tidy, updates
 from ..controls import (LanguageItemDelegate, MicCombo, NoWheelComboBox, Page, SettingRow, SettingsSection,
                         explicitly_hidden, make_badge, make_combo, make_label)
-from ..widgets import ShortcutButton, Toggle
+from ..widgets import Segmented, ShortcutButton, Toggle
 
 CATEGORIES = {"dictation": "Dictation", "text": "Text & typing", "indicator": "Indicator & sound", "app": "App",
               "updates": "Updates"}
 CONTROL_WIDTH = 260  # dropdowns share one width so their edges line up down a section
 COMPACT_WIDTH = 720  # narrower than this, the sub-nav becomes a dropdown above the page
 ENTER = "Return" if platform_utils.IS_MAC else "Enter"
-CORRECTIONS_HINT = "“Tuesday, no, Wednesday” becomes “Wednesday”, even sentences later"
 ENTER_HINT = "Skipped if you switched apps"
 ENTER_OFF_HINT = "Needs “Type into the app I'm using”"
 
@@ -114,6 +113,7 @@ class SettingsPage(QWidget):
             section.toggled.connect(self._on_section_toggled)
         self._refresh_changed()
         self._sync_enter_hints(settings["auto_paste"])
+        self._refresh_tidy()
         self.show_category("dictation")
         QShortcut(QKeySequence.Find, self, context=Qt.WidgetWithChildrenShortcut, activated=self.focus_search)
 
@@ -240,21 +240,12 @@ class SettingsPage(QWidget):
                                            "hold tap toggle push to talk mode")
         self._shortcut_mode_hint(settings["shortcut_mode"])
 
-        speech = self._section(page, "Speech", "speech")
+        speech = self._section(page, "Speech")
         self.mic = MicCombo(settings["mic_device"], can_rescan_mics)
         self.mic.setMaximumWidth(CONTROL_WIDTH)
         self.mic.currentIndexChanged.connect(lambda: self._emit({"mic_device": self.mic.currentData()}))
         self._row(speech, "Microphone", "", self.mic, "mic_device", "mic input device audio headset")
         self._language(speech, settings)
-        self.asr_model = make_combo(config.ASR_MODELS, settings["model"])
-        self.asr_model.currentIndexChanged.connect(lambda: self._emit({"model": self.asr_model.currentData()}))
-        self._row(speech, "Speech model", "", self.asr_model, "model", "asr transcription recognition nemotron",
-                  advanced=True)
-        self.unload = make_combo(config.UNLOAD_AFTER, settings["unload_after"])
-        self.unload.currentIndexChanged.connect(lambda: self._emit({"unload_after": self.unload.currentData()}))
-        self._row(speech, "Free up memory when idle",
-                  "Unloads the speech and tidy-up models (1 to 4 GB). The next dictation then takes a few seconds "
-                  "to start", self.unload, "unload_after", "unload ram vram idle performance", advanced=True)
         page.addStretch(1)
 
     def _language(self, section: SettingsSection, settings: dict):
@@ -282,26 +273,25 @@ class SettingsPage(QWidget):
 
     def _text(self, settings: dict):
         page = self._page("text")
-        tidy = self._section(page, "Tidy-up", "tidy")
-        self.tidy = make_combo(config.TIDY_LEVELS, settings["tidy"])
-        self.tidy.currentIndexChanged.connect(lambda: self._emit({"tidy": self.tidy.currentData()}))
-        self.tidy_row = self._row(tidy, "Tidy up my words", " ", self.tidy, "tidy",
-                                  "cleanup punctuation capitals grammar ai llm")
-        self.corrections = self._toggle(settings["corrections"], "corrections")
-        self.corrections_row = self._row(tidy, "Fix changes of mind", CORRECTIONS_HINT, self.corrections,
-                                         "corrections", "self-correction correct mistakes")
-        models = {"auto": "Automatic (recommended)"}
-        models.update({k: v["label"] for k, v in config.CLEANUP_MODELS.items()})
-        self.cleanup_model = make_combo(models, settings["cleanup_model"])
-        self.cleanup_model.currentIndexChanged.connect(
-            lambda: self._emit({"cleanup_model": self.cleanup_model.currentData()}))
-        self._row(tidy, "Tidy-up model", "Automatic picks by tidy level and what your computer runs fast",
-                  self.cleanup_model, "cleanup_model", "llm qwen ai small large", advanced=True)
+        section = self._section(page, "Tidy-up")
+        self._model = tidy.model_size(settings)
+        self._large = True
+        self.tidy = Segmented({k: v[0] for k, v in config.TIDY_STYLES.items()}, tidy.style(settings))
+        self.tidy.picked.connect(self._on_tidy_style)
+        self.tidy_row = self._row(section, "Tidy up my words", " ", self.tidy, "tidy",
+                                  "cleanup punctuation capitals grammar ai llm off quick smart")
+        self.model_size = Segmented({k: v[0] for k, v in tidy.MODEL_SIZES.items()}, self._model)
+        self.model_size.picked.connect(self._on_model_size)
+        self.model_size_row = self._row(section, config.MODEL_SIZE_LABEL, " ", self.model_size, "cleanup_model",
+                                        "llm qwen ai small large automatic tidy-up model")
         self.cleanup_device = make_combo(config.CLEANUP_DEVICES, settings["cleanup_device"])
         self.cleanup_device.currentIndexChanged.connect(
             lambda: self._emit({"cleanup_device": self.cleanup_device.currentData()}))
-        self._row(tidy, "Tidy-up device", "Choose Automatic, CPU only, or a specific GPU", self.cleanup_device,
-                  "cleanup_device", "gpu cpu graphics card processor vulkan cuda performance", advanced=True)
+        self.device_row = self._row(section, config.DEVICE_LABEL, config.DEVICE_HINT, self.cleanup_device,
+                                    "cleanup_device", "gpu cpu graphics card processor device vulkan cuda performance")
+        self.corrections = self._toggle(settings["corrections"], "corrections")
+        self.corrections_row = self._row(section, config.CORRECTIONS_LABEL, config.CORRECTIONS_HINT, self.corrections,
+                                         "corrections", "self-correction correct mistakes no wait")
 
         typing = self._section(page, "Typing", "typing")
         self.paste = self._toggle(settings["auto_paste"], "auto_paste")
@@ -335,9 +325,8 @@ class SettingsPage(QWidget):
 
         sound = self._section(page, "Sound")
         self.audio_dim = self._toggle(settings["audio_dim_enabled"], "audio_dim_enabled", emit=False)
-        self.audio_dim_row = self._row(sound, "Dim system audio",
-                                       "Lowers output while listening, then restores it. Changes apply next time",
-                                       self.audio_dim, "audio_dim_enabled", "volume duck mute music lower quiet")
+        self.audio_dim_row = self._row(sound, config.AUDIO_DIM_LABEL, f"{config.AUDIO_DIM_HINT}. Changes apply next time",
+                                       self.audio_dim, "audio_dim_enabled", "dim system audio volume duck mute music")
         self.audio_dim_level = QWidget()
         level_layout = QHBoxLayout(self.audio_dim_level)
         level_layout.setContentsMargins(0, 0, 0, 0)
@@ -388,20 +377,24 @@ class SettingsPage(QWidget):
         self._row(general, "First-run setup", "Re-pick your microphone and test dictation speed", setup, None,
                   "onboarding wizard welcome speed test")
 
-        data = self._section(page, "History & data", "data")
+        data = self._section(page, "History & storage")
         self.history = self._toggle(settings["history_enabled"], "history_enabled")
         self._row(data, "Keep history", "Saved only on this device", self.history, "history_enabled",
                   "transcripts privacy save past")
+        self.unload = make_combo(config.UNLOAD_AFTER, settings["unload_after"])
+        self.unload.currentIndexChanged.connect(lambda: self._emit({"unload_after": self.unload.currentData()}))
+        self._row(data, "Free up memory when idle",
+                  "Unloads the speech and tidy-up models (1 to 4 GB). The next dictation then takes a few seconds "
+                  "to start", self.unload, "unload_after", "unload ram vram idle performance")
         folder = QPushButton("Open", cursor=Qt.PointingHandCursor)
         folder.clicked.connect(lambda: (config.APP_DIR.mkdir(parents=True, exist_ok=True),
                                         platform_utils.open_path(config.APP_DIR)))
-        self._row(data, "Data folder", "Models, logs and settings", folder, None, "files logs models location",
-                  advanced=True)
+        self._row(data, "Data folder", "Models, logs and settings", folder, None, "files logs models location")
         page.addStretch(1)
 
     def _updates(self, settings: dict):
         page = self._page("updates")
-        section = self._section(page, "", "updates")
+        section = self._section(page)
         self.updates = make_combo(config.UPDATE_MODES, settings["updates"])
         self.updates.currentIndexChanged.connect(lambda: self._emit({"updates": self.updates.currentData()}))
         self.updates_row = self._row(section, "Updates", " ", self.updates, "updates", "auto install check")
@@ -416,12 +409,12 @@ class SettingsPage(QWidget):
         check.setEnabled(updates.updatable())
         line.addWidget(self.update_status)
         line.addWidget(check)
+        self.prereleases = self._toggle(settings["prereleases"], "prereleases")
+        self._row(section, config.PRERELEASES_LABEL,
+                  f"{config.PRERELEASES_HINT}. Always on while you run a pre-release",
+                  self.prereleases, "prereleases", "pre-release beta preview")
         self._row(section, "Version", updates.display() + ("" if updates.updatable() else " (doesn't update)"),
                   version, None, "about release check now")
-        self.prereleases = self._toggle(settings["prereleases"], "prereleases")
-        self._row(section, "Pre-release versions",
-                  "Try new versions early; they may have bugs. Always on while you run a pre-release",
-                  self.prereleases, "prereleases", "beta preview early", "Beta", True)
         self._update_hint(settings["updates"])
         page.addStretch(1)
 
@@ -546,9 +539,7 @@ class SettingsPage(QWidget):
         self._update_hint(self.updates.currentData())
 
     def _update_hint(self, mode: str):
-        hint = {"auto": "Checks when Speak starts and every 24 hours. Installs when you quit or restart",
-                "notify": "Checks when Speak starts and every 24 hours, and shows a button. Nothing installs by itself",
-                "off": "Never checks. Use Check now below"}[mode]
+        hint = "Never checks. Use Check now below" if mode == "off" else config.UPDATE_MODE_HINTS[mode]
         if self._last_check and mode != "off":
             hint += f". Last checked {self._last_check:%H:%M}"
         self.updates_row.hint.setText(hint)
@@ -568,15 +559,38 @@ class SettingsPage(QWidget):
 
     def set_tidy_summary(self, summary: str, large_model: bool):
         self.tidy_row.hint.setText(summary)
-        self.corrections.setEnabled(large_model)
+        self._large = large_model
+        self._refresh_tidy()
+
+    def _on_tidy_style(self, key: str):
+        self._emit({"tidy": key} if key != "ai" else tidy.ai_changes(self._model))
+        self._refresh_tidy()
+
+    def _on_model_size(self, size: str):
+        self._model = size
+        self._emit(tidy.ai_changes(size))
+        self._refresh_tidy()
+
+    def _refresh_tidy(self):
+        """Same rules as first-run setup: model size and device only apply to Smart, corrections need Large."""
+        settings = self._settings
+        on = tidy.style(settings) == "ai"
+        fix = on and self._large
+        self.tidy.set_value(tidy.style(settings))
+        self.model_size.set_value(self._model if on else "")
+        self.model_size.setEnabled(on)
+        self.model_size_row.hint.setText(tidy.model_size_hint(settings, self._model) if on else config.TIDY_NOT_USED)
+        self.cleanup_device.setEnabled(on)
+        self.device_row.hint.setText(config.DEVICE_HINT if on else config.TIDY_NOT_USED)
+        self.corrections.setEnabled(fix)
         self.corrections_row.hint.setText(
-            CORRECTIONS_HINT if large_model else "Needs the large AI: Best, or Automatic with a good graphics card")
+            config.CORRECTIONS_HINT if fix else config.CORRECTIONS_NEEDS_LARGE if on else config.TIDY_NOT_USED)
+        self.corrections.blockSignals(True)  # what can't apply reads as off
+        self.corrections.setChecked(bool(settings["corrections"]) and fix)
+        self.corrections.blockSignals(False)
 
     def _shortcut_mode_hint(self, mode: str):
-        self.shortcut_mode_row.hint.setText({
-            "auto": "Hold while you speak, or tap once to start and again to stop",
-            "hold": "Hold while you speak; let go to finish",
-            "toggle": "Tap once to start, again to stop"}[mode])
+        self.shortcut_mode_row.hint.setText(config.SHORTCUT_MODE_HINTS[mode])
 
     def _toggle(self, value: bool, key: str, emit: bool = True) -> Toggle:
         toggle = Toggle()
@@ -612,9 +626,6 @@ class SettingsPage(QWidget):
         for widget, value in ((self.close_action, settings["close_action"]),
                               (self.cleanup_device, settings["cleanup_device"]),
                               (self.shortcut_mode, settings["shortcut_mode"]),
-                              (self.tidy, settings["tidy"]),
-                              (self.cleanup_model, settings["cleanup_model"]),
-                              (self.asr_model, settings["model"]),
                               (self.language, settings["language"]),
                               (self.unload, settings["unload_after"]),
                               (self.position, settings["overlay_position"]),
@@ -627,7 +638,6 @@ class SettingsPage(QWidget):
         self.shortcut.set_combo(settings["hotkey"])
         self.mic.set_device(settings["mic_device"])
         for toggle, value in ((self.history, settings["history_enabled"]),
-                              (self.corrections, settings["corrections"]),
                               (self.prereleases, settings["prereleases"]),
                               (self.paste, settings["auto_paste"]),
                               (self.enter, settings["press_enter"]),
@@ -647,6 +657,9 @@ class SettingsPage(QWidget):
         self._sync_enter_hints(settings["auto_paste"])
         self._update_hint(settings["updates"])
         self._shortcut_mode_hint(settings["shortcut_mode"])
+        if tidy.style(settings) == "ai":
+            self._model = tidy.model_size(settings)
+        self._refresh_tidy()
         self._refresh_changed()
 
     def _add_language_section(self, title: str):

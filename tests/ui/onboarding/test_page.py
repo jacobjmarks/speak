@@ -254,7 +254,7 @@ class OnboardingPageTest(OnboardingCase):
         QTest.mouseClick(button(page, "Finish"), Qt.LeftButton)
 
         self.assertEqual(["skip", "finish"], events)
-        self.assertIn("Settings page", page.more_note.text())
+        self.assertIn("later in Settings", page.more_note.text())
 
 
 class OnboardingPageDarkTest(OnboardingPageTest):

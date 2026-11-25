@@ -166,18 +166,16 @@ class FirstRunAppTest(QtTestCase):
         settings = app.window.settings
 
         self.page.tidy_options.cards["fast"].click()
-        self.assertEqual("fast", settings.tidy.currentData())
+        self.assertEqual("fast", settings.tidy.value())
+        self.assertEqual("", settings.model_size.value())  # model size only applies to Smart, as in setup
         self.page.tidy_options.cards["ai"].click()
+        self.assertEqual("ai", settings.tidy.value())
 
-        def tidy_and_model():
-            return settings.tidy.currentData(), settings.cleanup_model.currentData()
-
-        self.page.model_options.chips["small"].click()
-        self.assertEqual(("auto", config.SMALL_MODEL), tidy_and_model())
-        self.page.model_options.chips["large"].click()
-        self.assertEqual(("best", "auto"), tidy_and_model())
-        self.page.model_options.chips["auto"].click()
-        self.assertEqual(("auto", "auto"), tidy_and_model())
+        for size, stored in (("small", ("auto", config.SMALL_MODEL)), ("large", ("best", "auto")),
+                             ("auto", ("auto", "auto"))):
+            self.page.model_options.chips[size].click()
+            self.assertEqual(stored, (app.settings["tidy"], app.settings["cleanup_model"]))
+            self.assertEqual(size, settings.model_size.value())
         self.page.device.setCurrentIndex(self.page.device.findData("cpu"))
         self.assertEqual("cpu", settings.cleanup_device.currentData())
         self.page.corrections.setChecked(False)

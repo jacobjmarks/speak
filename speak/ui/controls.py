@@ -121,8 +121,9 @@ class SettingRow(QWidget):
 
 
 class SettingsSection(QWidget):
-    """A titled card of `SettingRow`s. Rows added with `advanced=True` sit behind a "More options" disclosure at the
-    foot of the card; dividers between visible rows are managed here, so hiding a row never leaves a stray line."""
+    """A titled card of `SettingRow`s. Two or more rows added with `advanced=True` sit behind a "More options" disclosure
+    at the foot of the card (a single one just shows); dividers between visible rows are managed here, so hiding a row
+    never leaves a stray line."""
 
     toggled = Signal(bool)
 
@@ -175,7 +176,12 @@ class SettingsSection(QWidget):
         self.more.blockSignals(True)
         self.more.setChecked(on)
         self.more.blockSignals(False)
-        self.advanced.setVisible(on)
+        self._show_advanced()
+
+    @property
+    def inline(self) -> bool:
+        """A lone technical row isn't worth a disclosure: it shows in place, after the others."""
+        return len([r for r in self.rows if r.advanced and not explicitly_hidden(r)]) == 1
 
     def set_changed(self, count: int):
         self.more.set_changed(count)
@@ -186,19 +192,23 @@ class SettingsSection(QWidget):
         return False
 
     def _on_toggled(self, on: bool):
-        self.advanced.setVisible(on)
+        self._show_advanced()
         self.toggled.emit(on)
+
+    def _show_advanced(self):
+        self.advanced.setVisible(self.inline or self.more.isChecked())
 
     def _refresh(self):
         basic = [r for r in self.rows if not r.advanced and not explicitly_hidden(r)]
         extra = [r for r in self.rows if r.advanced and not explicitly_hidden(r)]
         for i, row in enumerate(basic):
             row.set_divider(i > 0)
-        for row in extra:
-            row.set_divider(True)
+        for i, row in enumerate(extra):
+            row.set_divider(bool(basic) or i > 0)
         self.more.divider = bool(basic)
         self.more.set_summary(", ".join(r.title for r in extra))
-        self.more.setVisible(bool(extra))
+        self.more.setVisible(len(extra) > 1)
+        self._show_advanced()
         if basic or extra or self.parentWidget():
             self.setVisible(bool(basic or extra))
 

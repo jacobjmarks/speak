@@ -1,4 +1,3 @@
-from ..common import SHORTCUT_HINTS
 from ..widgets import ChoiceCard, ModeGlyph, OptionGroup
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel, QSlider, QWidget
@@ -25,7 +24,7 @@ class KeysStep:
 
         self.mode_options = OptionGroup(self)
         # Hold and tap first, so "Hold or tap" reads as the combination of the two.
-        cards = {key: ChoiceCard(config.SHORTCUT_MODES[key], SHORTCUT_HINTS[key], visual=ModeGlyph(key))
+        cards = {key: ChoiceCard(config.SHORTCUT_MODES[key], config.SHORTCUT_MODE_HINTS[key], visual=ModeGlyph(key))
                  for key in ("hold", "toggle", "auto")}
         self.mode_cards = list(cards.values())
         self.mode_options.set_value(settings["shortcut_mode"])
@@ -37,7 +36,7 @@ class KeysStep:
         self.dim_toggle = Toggle()
         self.dim_toggle.setChecked(settings["audio_dim_enabled"])
         self.dim_toggle.toggled.connect(self._on_dim_toggled)
-        dim_row = SettingRow("Quiet other sounds while I talk", "Lowers music and videos, then restores them",
+        dim_row = SettingRow(config.AUDIO_DIM_LABEL, config.AUDIO_DIM_HINT,
                              self.dim_toggle)
         self.dim_slider = QSlider(Qt.Horizontal)
         self.dim_slider.setAccessibleName("Reduce system audio by")

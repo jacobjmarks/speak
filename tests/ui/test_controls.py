@@ -30,26 +30,29 @@ class SettingRowConstructionTest(QtTestCase):
 
 
 class SettingsSectionLayoutTest(QtTestCase):
-    """A section draws dividers only between visible rows, shows More options only when it has visible technical
-    rows, and hides itself when nothing in it is visible."""
+    """A section draws dividers only between visible rows, puts two or more technical rows behind More options (a lone
+    one just shows), and hides itself when nothing in it is visible."""
 
-    def test_hiding_rows_moves_dividers_and_hides_empty_parts(self):
+    def make(self, *rows):
         holder = QWidget()
-        layout = QVBoxLayout(holder)
-        section = SettingsSection("Things")
-        layout.addWidget(section)
-        first, second = SettingRow("First", "", QPushButton()), SettingRow("Second", "", QPushButton())
-        extra = SettingRow("Extra", "", QPushButton())
-        for row, advanced in ((first, False), (second, False), (extra, True)):
+        QVBoxLayout(holder).addWidget(section := SettingsSection("Things"))
+        for row, advanced in rows:
             section.add(row, advanced)
         holder.show()
         self.addCleanup(holder.close)
+        return section
+
+    def test_hiding_rows_moves_dividers_and_hides_empty_parts(self):
+        first, second = SettingRow("First", "", QPushButton()), SettingRow("Second", "", QPushButton())
+        extra, other = SettingRow("Extra", "", QPushButton()), SettingRow("Other", "", QPushButton())
+        section = self.make((first, False), (second, False), (extra, True), (other, True))
         self.assertEqual([False, True], [bool(first.property("divider")), bool(second.property("divider"))])
         self.assertTrue(section.more.isVisible())
         self.assertFalse(extra.isVisible())
 
         first.hide()
         extra.hide()
+        other.hide()
 
         self.assertFalse(bool(second.property("divider")))
         self.assertFalse(section.more.isVisible())
@@ -57,3 +60,12 @@ class SettingsSectionLayoutTest(QtTestCase):
         second.hide()
 
         self.assertFalse(section.isVisible())
+
+    def test_a_single_technical_row_shows_in_place_without_more_options(self):
+        basic, extra = SettingRow("Basic", "", QPushButton()), SettingRow("Extra", "", QPushButton())
+
+        section = self.make((basic, False), (extra, True))
+
+        self.assertFalse(section.more.isVisible())
+        self.assertTrue(extra.isVisible())
+        self.assertTrue(bool(extra.property("divider")))

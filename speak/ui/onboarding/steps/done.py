@@ -24,7 +24,7 @@ class DoneStep:
         go.clicked.connect(self.finished)
         layout.addWidget(go, 0, Qt.AlignHCenter)
         layout.addSpacing(6)
-        self.more_note = make_label("More settings, including advanced options, are on the Settings page.", "hint")
+        self.more_note = make_label("You can change any of this later in Settings.", "hint")
         self.more_note.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.more_note)
         layout.addStretch(3)

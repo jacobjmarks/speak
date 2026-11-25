@@ -1,6 +1,5 @@
 from PySide6.QtCore import QEasingCurve, QParallelAnimationGroup, QPauseAnimation, QPoint, QPropertyAnimation, QSequentialAnimationGroup, Qt, QTimer
 from PySide6.QtWidgets import QGraphicsOpacityEffect, QWidget
-from ... import config, tidy
 
 HEARD_LEVEL = 0.04          # mic level (0..1) that counts as "heard you"
 AMBER = "#d9a441"
@@ -15,17 +14,6 @@ STAGE_FROZEN_WORDS = 9
 COLUMN_WIDTH = 820
 ANIMATE = True              # tests switch this off so screens are complete the moment they appear
 
-SHORTCUT_HINTS = {"auto": "Hold while you speak, or tap to start and stop",
-                  "hold": "Hold while you speak. Let go to finish",
-                  "toggle": "Tap to start. Tap again to stop"}
-UPDATE_HINTS = {"auto": "Checks daily and installs when you restart Speak",
-                "notify": "Checks daily and tells you. Nothing installs by itself",
-                "off": "Never checks. You can check by hand in Settings"}
-MODEL_CHOICES = {"auto": ("Automatic", "Best fit"),
-                 "small": ("Small", f"Uses ~{round(tidy._memory_required_mb(config.SMALL_MODEL) / 1000)} GB"),
-                 "large": ("Large", f"Uses ~{round(tidy._memory_required_mb(config.LARGE_MODEL) / 1000)} GB")}
-
-
 def _seconds(value: float) -> str:
     return "under 0.1 s" if value < 0.1 else f"{value:.1f} s"
 
@@ -34,23 +22,6 @@ def _passthrough(widget: QWidget):
     """Let clicks on a card's contents reach the card."""
     for child in widget.findChildren(QWidget):
         child.setAttribute(Qt.WA_TransparentForMouseEvents)
-
-
-def _ai_changes(choice: str) -> dict:
-    """Settings behind the AI model chips: Automatic and Large are tidy levels, Small pins the small model."""
-    if choice == "small":
-        return {"tidy": "auto", "cleanup_model": config.SMALL_MODEL}
-    return {"tidy": "best" if choice == "large" else "auto", "cleanup_model": "auto"}
-
-
-def _model_choice(settings: dict) -> str:
-    if settings["tidy"] == "best" or settings.get("cleanup_model") == config.LARGE_MODEL:
-        return "large"
-    return "small" if settings.get("cleanup_model") == config.SMALL_MODEL else "auto"
-
-
-def _level(settings: dict) -> str:
-    return "ai" if settings["tidy"] in ("auto", "best") else settings["tidy"]
 
 
 class Revealer:

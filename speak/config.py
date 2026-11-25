@@ -109,7 +109,12 @@ CLEANUP_MODELS = {
 SMALL_MODEL, LARGE_MODEL = "qwen25-q4km", "qwen3-4b-2507"
 
 SHORTCUT_MODES = {"auto": "Hold or tap", "hold": "Hold to talk", "toggle": "Tap to start and stop"}
-TIDY_LEVELS = {"off": "Off", "fast": "Fast · no AI", "auto": "Automatic · recommended", "best": "Best · always AI"}
+SHORTCUT_MODE_HINTS = {"auto": "Hold while you speak, or tap to start and stop",
+                       "hold": "Hold while you speak. Let go to finish",
+                       "toggle": "Tap to start. Tap again to stop"}
+TIDY_LEVELS = ("off", "fast", "auto", "best")  # stored values (see tidy.py); shown as TIDY_STYLES + model size
+# How Settings and first-run setup present tidy-up: a style, then (for Smart) tidy.MODEL_SIZES.
+TIDY_STYLES = {"off": ("Off", "Exactly as said"), "fast": ("Quick", "Removes ums, instant"), "ai": ("Smart", "AI tidy-up")}
 # Any other saved value is a llama.cpp device id (e.g. "Vulkan1") picked from the detected graphics cards.
 CLEANUP_DEVICES = {
     "auto": "Automatic (recommended)",
@@ -118,13 +123,26 @@ CLEANUP_DEVICES = {
 }
 CLOSE_ACTIONS = {"ask": "Ask me", "tray": f"Keep running in the {TRAY_NAME}", "exit": "Quit Speak"}
 OVERLAY_POSITIONS = {"cursor": "Below my cursor", "top": "Top of screen", "bottom": "Bottom of screen"}
-LIVE_PREVIEWS = {"line": "One sliding line", "full": "Full text", "off": "Off"}
+LIVE_PREVIEW_LINES = 3  # the overlay's "full" preview wraps and keeps only this many newest lines
+LIVE_PREVIEWS = {"line": "One sliding line", "full": f"Up to {LIVE_PREVIEW_LINES} lines", "off": "Off"}
 THEMES = ("System", "Light", "Dark")
 # Speech model ~1 GB RAM, large tidy model ~3 GB VRAM. Reloading costs ~2-4 s on the next dictation.
 UNLOAD_AFTER = {"0": "Right away (slower start)", "5": "After 5 minutes", "30": "After 30 minutes", "never": "Never"}
 UPDATE_MODES = {"auto": "Install automatically", "notify": "Just tell me", "off": "Don't check"}
+UPDATE_MODE_HINTS = {"auto": "Checks daily and installs when you restart Speak",
+                     "notify": "Checks daily and tells you. Nothing installs by itself",
+                     "off": "Never checks. You can check by hand in Settings"}
+
+# Names and hints used by both Settings and first-run setup, so a choice made during setup is easy to find again.
+AUDIO_DIM_LABEL, AUDIO_DIM_HINT = "Quiet other sounds while I talk", "Lowers music and videos, then restores them"
+PRERELEASES_LABEL, PRERELEASES_HINT = "Try new versions early", "They arrive sooner and may have bugs"
+MODEL_SIZE_LABEL = "Model size"
+DEVICE_LABEL, DEVICE_HINT = "Runs on", "Your graphics card is faster when you have one"
+CORRECTIONS_LABEL, CORRECTIONS_HINT = "Fix changes of mind", "“Tuesday, no wait, Wednesday” becomes “Wednesday”"
+CORRECTIONS_NEEDS_LARGE = "Needs the Large model"
+TIDY_NOT_USED = "Not used with Off or Quick"
 # Settings sections with a "More options" part (ui/pages/settings.py); `expanded_sections` holds the open ones.
-ADVANCED_SECTIONS = ("speech", "tidy", "typing", "data", "updates")
+ADVANCED_SECTIONS = ("typing",)
 
 
 def load_settings() -> dict:

@@ -6,7 +6,7 @@ from .steps.tidy import TidyStep
 from .steps.look import LookStep
 from .steps.updates import UpdatesStep
 from .steps.done import DoneStep
-from .common import COLUMN_WIDTH, Revealer, SHORTCUT_HINTS, _model_choice
+from .common import COLUMN_WIDTH, Revealer
 from .widgets import OptionGroup, StepDots
 from . import common
 from PySide6.QtCore import QPropertyAnimation, Qt, QTimer, Signal
@@ -44,7 +44,7 @@ class OnboardingPage(Page, WelcomeStep, ThemeStep, MicStep, KeysStep, TidyStep, 
         self._reveals = {}
         self._revealer = Revealer()
         self._tidy = {k: settings[k] for k in ("tidy", "cleanup_model", "cleanup_device", "corrections")}
-        self._model = _model_choice(settings)
+        self._model = tidy.model_size(settings)
         self._poll = QTimer(self, interval=60, timeout=self._read_level)
         self._retest = QTimer(self, singleShot=True, interval=900, timeout=self._retest_now)
 
@@ -211,7 +211,7 @@ class OnboardingPage(Page, WelcomeStep, ThemeStep, MicStep, KeysStep, TidyStep, 
 
     def set_shortcut(self, combo: str, mode: str):
         self.keycap.setText(hotkey.display(combo))
-        self.shortcut_hint.setText(SHORTCUT_HINTS.get(mode, ""))
+        self.shortcut_hint.setText(config.SHORTCUT_MODE_HINTS.get(mode, ""))
 
 
     def set_tidy_summary(self, summary: str, large_model: bool):
@@ -238,7 +238,7 @@ class OnboardingPage(Page, WelcomeStep, ThemeStep, MicStep, KeysStep, TidyStep, 
         """Reflect settings changed elsewhere (the app echoes every change back)."""
         self._tidy.update({k: settings[k] for k in self._tidy})
         if settings["tidy"] in ("auto", "best"):
-            self._model = _model_choice(settings)
+            self._model = tidy.model_size(settings)
         self.device.blockSignals(True)
         self.device.setCurrentIndex(max(0, self.device.findData(settings["cleanup_device"])))
         self.device.blockSignals(False)
