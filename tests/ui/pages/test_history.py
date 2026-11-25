@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
+from PySide6.QtWidgets import QLabel
 
 from tests.ui import QtTestCase
 from speak.ui.pages.history import HistoryEntry, HistoryPage, day_label
@@ -66,7 +67,7 @@ class HistoryInteractionTest(QtTestCase):
             page.refresh(enabled=True)
         self.capture(page, "history-grouped")
 
-        labels = [w.text() for w in page.entries.findChildren(type(page.empty_label)) if w.objectName() == "section"]
+        labels = [w.text() for w in page.entries.findChildren(QLabel) if w.objectName() == "sectionhead"]
         self.assertEqual(["Today", "Yesterday", day_label((now - timedelta(days=9)).date(), date.today())], labels)
         self.assertEqual(4, len(page.findChildren(HistoryEntry)))
         self.assertEqual("09:05", page.findChild(HistoryEntry).when.text())

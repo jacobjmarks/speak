@@ -4,7 +4,7 @@ from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QHBoxLayout, QPushButton, QVBoxLayout, QWidget
 
 from ... import config, platform_utils, updates
-from ..controls import Page, make_card, make_label
+from ..controls import LinkLabel, Page, make_card, make_label
 
 
 def _open_url(url: str):
@@ -27,7 +27,7 @@ class AboutPage(Page):
                                           "muted"))
         self.layout_.addSpacing(6)
 
-        self.layout_.addWidget(make_label("Support Speak", "section"))
+        self.layout_.addWidget(make_label("Support Speak", "sectionhead"))
         card, rows = make_card()
         rows.setContentsMargins(18, 16, 18, 16)
         rows.setSpacing(12)
@@ -48,12 +48,12 @@ class AboutPage(Page):
         self.layout_.addWidget(card)
         self.layout_.addSpacing(6)
 
-        self.layout_.addWidget(make_label("Open source", "section"))
-        links = make_label('Speak is built on open-source software and open models.<br>'
-                           '<a href="source">Source code</a> &nbsp;·&nbsp; <a href="notices">Open-source notices</a>'
-                           ' &nbsp;·&nbsp; <a href="issues">Report a problem</a>', "muted")
-        links.setTextFormat(Qt.RichText)
+        self.layout_.addWidget(make_label("Open source", "sectionhead"))
+        links = LinkLabel('Speak is built on open-source software and open models.<br>'
+                          '<a href="source">Source code</a> &nbsp;·&nbsp; <a href="notices">Open-source notices</a>'
+                          ' &nbsp;·&nbsp; <a href="issues">Report a problem</a>', "muted")
         links.linkActivated.connect(self._open_link)
+
         self.layout_.addWidget(links)
         self.layout_.addStretch(1)
 

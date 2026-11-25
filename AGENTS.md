@@ -23,20 +23,20 @@ Speak is a local desktop dictation app. A global hotkey (hold or tap) records th
 | `ui/app.py` | PySide6 `SpeakApp`: tray, hotkey wiring, close behaviour, update flow, dictation → window/overlay, `main()` |
 | `ui/bridge.py` | `Bridge`: `Listener` callbacks (worker threads) re-emitted as Qt signals on the UI thread; coalesces live text |
 | `ui/single_instance.py` | `claim(wait_ms)`: `QLockFile` + `QLocalServer` so a second launch shows the running window and exits |
-| `ui/window.py` | `MainWindow` (sidebar with painted nav glyphs + pages; Ctrl+1..4 and Ctrl+, switch pages), `app_icon()`, first-close `CloseDialog` |
+| `ui/window.py` | `MainWindow`: sidebar (Find a setting, Dictate, History, every settings category, status, About) beside the page stack; `show_page`, `show_settings(category)`, `open_setting(key)`; Ctrl+1..4, Ctrl+, and Ctrl+F; `app_icon()`, first-close `CloseDialog` |
 | `ui/banner.py` | `Banner`: keyed in-window notices (errors, permission warnings, updates); use `window.notify(key, text, level, action)`. User-facing text must be plain language |
-| `ui/pages/dictate.py` | `DictatePage`: mic button, wave, live/final transcript, Copy |
-| `ui/pages/history.py` | `HistoryPage`: opt-in transcript list grouped by day, click to copy, clear all (inline confirm) |
-| `ui/pages/settings.py` | `SettingsPage`: category sub-nav + search (Ctrl+F) beside one page per category (`CATEGORIES`); each `SettingsSection` hides technical/experimental rows behind "More options" (open state in `expanded_sections`, counts changed hidden rows); compact dropdown under `COMPACT_WIDTH`; every control emits `changed` with a partial settings dict |
+| `ui/pages/dictate.py` | `DictatePage`: shortcut + status card (small mic button, wave), latest transcript with Copy, related-settings links |
+| `ui/pages/history.py` | `HistoryPage`: opt-in transcripts in one card per day, click/Enter to copy, clear all (inline confirm) |
+| `ui/pages/settings.py` | `SettingsPage`: one page per category (`CATEGORIES`, chosen from the window sidebar) plus search results; owns the sidebar's `search` field; `reveal(row)` jumps to a setting; sections put 2+ technical/experimental rows behind "More options" (open state in `expanded_sections`, counts changed hidden rows); tidy-up mirrors onboarding (style, model size, runs on); every control emits `changed` with a partial settings dict |
 | `ui/pages/about.py` | `AboutPage`: version, sponsor links, licence/notices |
 | `ui/pages/setup.py` | `SetupPage`: macOS first-run permissions, shown until all are granted |
-| `ui/controls.py` | Shared page building blocks: `Page`, `make_card`/`make_label`/`make_combo`/`make_badge`, `SettingRow` (key, keywords, badge, `flash`), `SettingsSection` (dividers + More options), `MicCombo`, `LanguageItemDelegate` |
+| `ui/controls.py` | Shared page building blocks: `Page`, `make_card`/`make_label`/`make_combo`/`make_badge`/`make_header` ("Settings › Category" crumb), `LinkRow`, `LinkLabel`, `SettingRow` (key, keywords, badge, `flash`), `SettingsSection` (dividers + More options), `MicCombo`, `LanguageItemDelegate` |
 | `ui/onboarding/` | `OnboardingPage`: animated 8-step first-run flow (welcome, theme, mic check + retry, shortcut/mode/dimming, tidy level + model + speed test, overlay preview via real `Overlay.snapshot`, updates + pre-releases, done); changes apply live; changing tidy options cancels the running test (`Dictation.cancel_benchmark`) and re-tests; rerun from Settings |
 | `benchmark.py` | `run(...)`: times a recording through ASR + tidy; `Result.verdict` plain-language rating |
 | `ui/overlay.py` | Floating pill: waveform / phase word / check; position (cursor/top/bottom); live text (line/full/off) |
-| `ui/widgets.py` | Painted widgets: `MicButton`, `WaveStrip`, `Spinner`, `Toggle`, `Disclosure`, `ShortcutButton`; base class `Animated` |
-| `ui/paint.py` | Drawing helpers shared by widgets, overlay and onboarding: glyphs (`draw_mic/check/cross/ring/clock/sliders/info/chevron`), `draw_wave`, `draw_shimmer_text`, `BARS` |
-| `ui/theme.py` | Light/dark palettes + the app style sheet (all colours live here) |
+| `ui/widgets.py` | Painted widgets: `MicButton` (any size), `WaveStrip`, `Spinner`, `Toggle` (`with_state_label` adds On/Off), `Segmented`/`Chip`/`OptionGroup` (shared with onboarding), `Disclosure`, `Glyph`, `ShortcutButton`; base class `Animated` |
+| `ui/paint.py` | Drawing helpers shared by widgets, overlay and onboarding: glyphs (`draw_mic/check/cross/ring/clock/info/search/keyboard/lines/pill/window/refresh/copy/chevron`), `draw_wave`, `draw_shimmer_text`, `BARS` |
+| `ui/theme.py` | Light/dark palettes, `current` palette, + the app style sheet (all colours live here) |
 
 Entry point: `main.py` (repo root) or `python -m speak`; both call `speak.ui.app.main()`. `--background` starts hidden in the tray.
 
@@ -78,7 +78,7 @@ Entry point: `main.py` (repo root) or `python -m speak`; both call `speak.ui.app
 
 ## UI conventions
 
-- Users dictate into *other* apps; they open the window mainly to change a setting, between tasks. Defaults must be good; the window favours settings over the Dictate page.
+- Users dictate into *other* apps; they open the window mainly to change a setting, between tasks. Defaults must be good; the window favours settings over the Dictate page. The look follows native OS settings panes: neutral ground, small-radius panels of rows, a sidebar listing every settings category.
 - One teal accent (`Palette.accent`) for selection, primary actions and live state only. Colours live only in `ui/theme.py`; badges tint their own hue (`make_badge`), never grey text on a coloured fill.
 - Copy is plain language: say what happens, not how ("Tidy up my words"). A disabled control says why in its hint. Settings use the same names, options and hints as onboarding for the same setting (shared constants in `config`, tidy style/model size helpers in `tidy.py`), so people can find what they picked during setup.
 - Technical or experimental rows go behind their section's "More options" (`advanced=True`), which only appears for two or more such rows (a lone one shows in place); experimental rows also get `badge="Experimental"`. Never hide a changed value silently: More options counts them.

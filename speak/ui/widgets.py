@@ -5,10 +5,10 @@ import threading
 import time
 from collections import deque
 
-from PySide6.QtCore import (Property, QEasingCurve, QObject, QPointF, QPropertyAnimation, QRectF, QSize, Qt,
+from PySide6.QtCore import (Property, QEasingCurve, QEvent, QObject, QPointF, QPropertyAnimation, QRectF, QSize, Qt,
                             QTimer, Signal)
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPen
-from PySide6.QtWidgets import QAbstractButton, QButtonGroup, QHBoxLayout, QPushButton, QSizePolicy, QWidget
+from PySide6.QtWidgets import QAbstractButton, QButtonGroup, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QWidget
 
 from .. import hotkey, permissions
 from . import theme
@@ -61,6 +61,25 @@ class Spinner(Animated):
         draw_ring(p, r, self._color, w, self.phase, self.percent)
 
 
+# ---------- glyph ----------
+
+class Glyph(QWidget):
+    """A paint.py glyph as a widget, drawn in the palette's text (or muted) colour."""
+
+    def __init__(self, draw, size: int = 18, muted: bool = False, parent=None):
+        super().__init__(parent)
+        self.draw, self.muted = draw, muted
+        self.setFixedSize(size, size)
+        self.palette_ = None  # None follows theme.current
+
+    def paintEvent(self, e):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        pal = self.palette_ or theme.current
+        self.draw(p, QPointF(self.width() / 2, self.height() / 2), self.width() * 0.9,
+                  QColor(pal.muted if self.muted else pal.text))
+
+
 # ---------- toggle switch ----------
 
 class Toggle(QAbstractButton):
@@ -76,6 +95,30 @@ class Toggle(QAbstractButton):
         self._anim = QPropertyAnimation(self, b"knob", self, duration=160, easingCurve=QEasingCurve.OutCubic)
         self.toggled.connect(self._animate)
         self.palette_ = theme.LIGHT
+        self.state_label = None  # optional "On"/"Off" label kept in step, see `with_state_label`
+
+    def with_state_label(self) -> QWidget:
+        """The switch with an "On"/"Off" word before it, as native settings panes show."""
+        holder = QWidget()
+        row = QHBoxLayout(holder)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(10)
+        self.state_label = QLabel("", objectName="hint")
+        row.addWidget(self.state_label)
+        row.addWidget(self)
+        self.toggled.connect(lambda _: self._sync_label())
+        self._sync_label()
+        return holder
+
+    def _sync_label(self):
+        if self.state_label is not None:
+            self.state_label.setText("On" if self.isChecked() else "Off")
+            self.state_label.setEnabled(self.isEnabled())
+
+    def changeEvent(self, e):
+        super().changeEvent(e)
+        if e.type() == QEvent.EnabledChange:
+            self._sync_label()
 
     def _get_knob(self):
         return self._pos
@@ -95,6 +138,7 @@ class Toggle(QAbstractButton):
         super().setChecked(on)
         self._anim.stop()
         self._pos = 1.0 if on else 0.0
+        self._sync_label()
         self.update()
 
     def sizeHint(self):
@@ -104,26 +148,30 @@ class Toggle(QAbstractButton):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
         pal = self.palette_
-        off, on = QColor(pal.border), QColor(pal.accent)
         t = self._pos
-        knob = QColor("#ffffff")
-        if self.isEnabled():
-            track = QColor(int(off.red() + (on.red() - off.red()) * t),
-                           int(off.green() + (on.green() - off.green()) * t),
-                           int(off.blue() + (on.blue() - off.blue()) * t))
+        if self.isEnabled():  # outlined when off, filled with the accent when on
+            track = _mix(pal.surface, pal.accent, t)
+            edge = _mix(pal.muted, pal.accent, t)
+            knob = _mix(pal.muted, pal.accent_text, t)
         else:  # unavailable reads as neutral whatever its position, so it never looks switched on
-            track = QColor(pal.surface_alt)
-            knob = QColor(pal.border)
+            track, edge, knob = QColor(pal.surface_alt), QColor(pal.border), QColor(pal.border)
         if self.hasFocus():
             p.setPen(QPen(QColor(pal.accent), 2))
             p.setBrush(Qt.NoBrush)
             p.drawRoundedRect(QRectF(1, 1, 46, 26), 13, 13)
-        p.setPen(Qt.NoPen if self.isEnabled() else QPen(QColor(pal.border), 1))
+        p.setPen(QPen(edge, 1))
         p.setBrush(track)
-        p.drawRoundedRect(QRectF(2.5, 2.5, 43, 23), 11.5, 11.5)
+        p.drawRoundedRect(QRectF(4.5, 4.5, 39, 19), 9.5, 9.5)
         p.setPen(Qt.NoPen)
         p.setBrush(knob)
-        p.drawEllipse(QRectF(5 + t * 20, 5, 18, 18))
+        r = 6 + t
+        p.drawEllipse(QPointF(14 + t * 20, 14), r, r)
+
+
+def _mix(a: str, b: str, t: float) -> QColor:
+    ca, cb = QColor(a), QColor(b)
+    return QColor(int(ca.red() + (cb.red() - ca.red()) * t), int(ca.green() + (cb.green() - ca.green()) * t),
+                  int(ca.blue() + (cb.blue() - ca.blue()) * t))
 
 
 # ---------- choice chips (settings and onboarding) ----------
@@ -250,23 +298,16 @@ class Disclosure(QAbstractButton):
         self.setCursor(Qt.PointingHandCursor)
         self.setFocusPolicy(Qt.TabFocus)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.setFixedHeight(48)
         self.changed_count = 0
-        self.summary = ""  # names of the hidden rows, shown under the label while closed
+        self.summary = ""  # names of the hidden rows, shown on the right while closed
         self.divider = False
         self.palette_ = theme.LIGHT
-        self._fit()
-
-    def checkStateSet(self):  # runs for every setChecked, even with signals blocked
-        super().checkStateSet()
-        self._fit()
 
     def set_summary(self, text: str) -> None:
         self.summary = text
-        self._fit()
+        self.setToolTip(text)
         self.update()
-
-    def _fit(self):
-        self.setFixedHeight(62 if self.summary and not self.isChecked() else 46)
 
     def set_changed(self, count: int) -> None:
         self.changed_count = count
@@ -274,7 +315,7 @@ class Disclosure(QAbstractButton):
         self.update()
 
     def sizeHint(self):
-        return QSize(240, self.height())
+        return QSize(240, 48)
 
     def enterEvent(self, e):
         super().enterEvent(e)
@@ -291,30 +332,23 @@ class Disclosure(QAbstractButton):
         rect = QRectF(self.rect())
         if self.divider:
             p.fillRect(QRectF(0, 0, rect.width(), 1), QColor(pal.border))
-        if self.hasFocus():
-            p.setPen(QPen(QColor(pal.accent), 2))
-            p.setBrush(Qt.NoBrush)
-            p.drawRoundedRect(rect.adjusted(2, 4, -2, -3), 9, 9)
         hot = self.underMouse() or self.hasFocus()
-        font = self.font()
-        font.setWeight(QFont.DemiBold)
-        p.setFont(font)
-        p.setPen(QColor(pal.text if hot else pal.muted))
-        metrics = QFontMetrics(font)
-        line = QRectF(rect.left(), 0, rect.width(), 46)
-        p.drawText(line.adjusted(10, 0, 0, 0), Qt.AlignVCenter | Qt.AlignLeft, self.text())
+        if hot:
+            p.setPen(QPen(QColor(pal.accent), 2) if self.hasFocus() else Qt.NoPen)
+            p.setBrush(QColor(pal.surface_alt))
+            p.drawRoundedRect(rect.adjusted(2, 4, -2, -3), 6, 6)
+        p.setFont(self.font())
+        p.setPen(QColor(pal.text))
+        metrics = QFontMetrics(self.font())
+        x = 10 + metrics.horizontalAdvance(self.text())
+        p.drawText(rect.adjusted(10, 0, 0, 0), Qt.AlignVCenter | Qt.AlignLeft, self.text())
         small = QFont(self.font())
-        small.setPointSizeF(max(7.0, font.pointSizeF() - 1.5))
-        if self.summary and not self.isChecked():
-            p.setFont(small)
-            p.setPen(QColor(pal.muted))
-            text = QFontMetrics(small).elidedText(self.summary, Qt.ElideRight, int(rect.width() - 60))
-            p.drawText(QRectF(10, 34, rect.width() - 60, 18), Qt.AlignVCenter | Qt.AlignLeft, text)
+        small.setPointSizeF(max(7.0, self.font().pointSizeF() - 1.5))
         if self.changed_count:
             small.setWeight(QFont.DemiBold)
             label = f"{self.changed_count} changed"
             width = QFontMetrics(small).horizontalAdvance(label) + 14
-            pill = QRectF(10 + metrics.horizontalAdvance(self.text()) + 10, line.center().y() - 9, width, 18)
+            pill = QRectF(x + 10, rect.center().y() - 9, width, 18)
             tint = QColor(pal.accent)
             tint.setAlphaF(0.16)
             p.setPen(Qt.NoPen)
@@ -323,8 +357,15 @@ class Disclosure(QAbstractButton):
             p.setFont(small)
             p.setPen(QColor(pal.accent))
             p.drawText(pill, Qt.AlignCenter, label)
-        draw_chevron(p, QPointF(rect.right() - 20, line.center().y()), 12, QColor(pal.text if hot else pal.muted),
-                     up=self.isChecked())
+            x = pill.right()
+            small.setWeight(QFont.Normal)
+        if self.summary and not self.isChecked():
+            p.setFont(small)
+            p.setPen(QColor(pal.muted))
+            room = QRectF(x + 16, 0, rect.right() - 44 - (x + 16), rect.height())
+            text = QFontMetrics(small).elidedText(self.summary, Qt.ElideRight, int(room.width()))
+            p.drawText(room, Qt.AlignVCenter | Qt.AlignRight, text)
+        draw_chevron(p, QPointF(rect.right() - 22, rect.center().y()), 12, QColor(pal.text), up=self.isChecked())
 
 
 # ---------- mic button ----------
@@ -334,10 +375,11 @@ class MicButton(Animated):
 
     clicked = Signal()
 
-    def __init__(self, level_source, parent=None):
+    def __init__(self, level_source, parent=None, size: int = 180):
         super().__init__(parent)
-        self.setFixedSize(180, 180)
+        self.setFixedSize(size, size)
         self.setCursor(Qt.PointingHandCursor)
+        self.setAccessibleName("Start or stop dictation")
         self.level_source = level_source
         self.mode = "idle"
         self.percent = None
@@ -370,7 +412,8 @@ class MicButton(Animated):
         pal = self.palette_
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
-        c = QPointF(self.width() / 2, self.height() / 2)
+        p.scale(self.width() / 180, self.height() / 180)  # drawn at 180 px, scaled to the button's size
+        c = QPointF(90, 90)
         base_r = 54
         accent = QColor(pal.accent)
         since = self.phase - self._mode_t

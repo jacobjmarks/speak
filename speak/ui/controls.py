@@ -6,7 +6,8 @@ from PySide6.QtWidgets import (QBoxLayout, QComboBox, QFrame, QHBoxLayout, QLabe
                                QStyledItemDelegate, QVBoxLayout, QWidget)
 
 from .. import audio
-from .widgets import Disclosure
+from .paint import draw_chevron
+from .widgets import Disclosure, Glyph
 
 
 def make_card() -> tuple:
@@ -50,6 +51,71 @@ def _repolish(widget: QWidget):
     widget.style().polish(widget)
 
 
+class LinkLabel(QLabel):
+    """Rich-text label with links that follow theme changes (QLabel keeps the link colour it was first laid out with)."""
+
+    def __init__(self, text: str = "", name: str = ""):
+        super().__init__(text, objectName=name)
+        self.setTextFormat(Qt.RichText)
+        self.setWordWrap(True)
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() == QEvent.PaletteChange:
+            text = self.text()
+            self.setText("")
+            self.setText(text)
+
+
+def make_header(title: str, crumb: str = "") -> tuple:
+    """Page title, optionally after a muted parent crumb ("Settings › Dictation"). Returns (widget, title label)."""
+    header = QWidget()
+    row = QHBoxLayout(header)
+    row.setContentsMargins(0, 0, 0, 0)
+    row.setSpacing(12)
+    if crumb:
+        row.addWidget(QLabel(crumb, objectName="crumb"))
+        row.addWidget(QLabel("›", objectName="crumb"))
+    label = QLabel(title, objectName="title")
+    row.addWidget(label)
+    row.addStretch(1)
+    return header, label
+
+
+class LinkRow(QFrame):
+    """A row that leads somewhere else: glyph, title, current value, and a chevron. Click, Return or Space opens it."""
+    activated = Signal()
+
+    def __init__(self, draw, title: str):
+        super().__init__(objectName="link", cursor=Qt.PointingHandCursor)
+        self.setFocusPolicy(Qt.StrongFocus)
+        self.setAccessibleName(title)
+        row = QHBoxLayout(self)
+        row.setContentsMargins(10, 8, 10, 8)
+        row.setSpacing(14)
+        row.addWidget(Glyph(draw, 18))
+        text = QVBoxLayout()
+        text.setSpacing(1)
+        title_label = make_label(title)
+        title_label.setWordWrap(False)
+        text.addWidget(title_label)
+        self.value = make_label("", "hint")
+        self.value.setWordWrap(False)
+        text.addWidget(self.value)
+        row.addLayout(text, 1)
+        row.addWidget(Glyph(lambda p, c, s, col: draw_chevron(p, c, s * 0.7, col, right=True), 16))
+
+    def mouseReleaseEvent(self, event):
+        if self.rect().contains(event.position().toPoint()):
+            self.activated.emit()
+
+    def keyPressEvent(self, event):
+        if event.key() in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Space):
+            self.activated.emit()
+        else:
+            super().keyPressEvent(event)
+
+
 class SettingRow(QWidget):
     """Title + hint on the left, control on the right; stacks under 440 px. `key` names the setting it edits and
     `keywords` add search terms beyond the visible text."""
@@ -85,6 +151,7 @@ class SettingRow(QWidget):
         self.hint.setVisible(bool(hint))
         self.layout_.addWidget(control, 0, Qt.AlignVCenter)
         self.control = control
+        self.focus_widget = control  # what search focuses; differs when the control is wrapped
         self._compact = None
         self._unflash = QTimer(self, singleShot=True, interval=1600, timeout=lambda: self._set_flag("highlight", False))
 
@@ -137,7 +204,7 @@ class SettingsSection(QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(8)
         if title:
-            outer.addWidget(make_label(title, "section"))
+            outer.addWidget(make_label(title, "sectionhead"))
         self.card = QFrame(objectName="card")
         card = QVBoxLayout(self.card)
         card.setContentsMargins(8, 4, 8, 4)

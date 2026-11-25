@@ -91,7 +91,6 @@ class SpeakApp(QObject):
         w.onboarding.test_cancelled.connect(self.dictation.cancel_benchmark)
         w.onboarding.shortcut_recording.connect(self._on_shortcut_recording)
         w.dictate.toggle_requested.connect(self.dictation.toggle)
-        w.history.open_settings.connect(lambda: w.show_page(2))
         w.settings.changed.connect(self._update)
         w.settings.shortcut_changed.connect(lambda combo: self._update({"hotkey": combo}))
         w.settings.shortcut_recording.connect(self._on_shortcut_recording)
@@ -108,7 +107,7 @@ class SpeakApp(QObject):
             self._register_hotkey()
             if onboarding_needed:
                 self._start_onboarding()
-        w.dictate.set_shortcut(self.settings["hotkey"], self.settings["shortcut_mode"])
+        w.dictate.set_settings(self.settings)
         w.history.refresh(self.settings["history_enabled"])
         self._refresh_tidy()
         threading.Thread(target=lambda: (tidy._probed.wait(30), b.probed.emit()), daemon=True).start()
@@ -132,8 +131,7 @@ class SpeakApp(QObject):
             self._apply_theme()
         if "hotkey" in changes:
             self._register_hotkey()
-        if {"hotkey", "shortcut_mode"} & changes.keys():
-            self.window.dictate.set_shortcut(self.settings["hotkey"], self.settings["shortcut_mode"])
+        self.window.dictate.set_settings(self.settings)
         if "history_enabled" in changes:
             self.window.history.refresh(self.settings["history_enabled"])
         if {"tidy", "cleanup_model", "cleanup_device", "corrections"} & changes.keys():
@@ -262,6 +260,7 @@ class SpeakApp(QObject):
 
     def _apply_theme(self):
         self.palette = theme.resolve(self.settings["theme"])
+        theme.current = self.palette
         self.app.setStyleSheet(theme.stylesheet(self.palette))
         links = self.app.palette()
         links.setColor(QPalette.Link, QColor(self.palette.accent))

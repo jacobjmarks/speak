@@ -1,18 +1,20 @@
-"""Main window (sidebar + pages), app icon, and the first-close prompt."""
+"""Main window (sidebar with "Find a setting", Dictate, History, every settings category and About, beside the
+pages), app icon, and the first-close prompt."""
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QBrush, QColor, QIcon, QKeySequence, QLinearGradient, QPainter, QPen, QPixmap, QShortcut
-from PySide6.QtWidgets import (QButtonGroup, QDialog, QHBoxLayout, QLabel, QMainWindow, QPushButton, QStackedWidget,
-                               QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QButtonGroup, QDialog, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QPushButton,
+                               QStackedWidget, QVBoxLayout, QWidget)
 
 from ..platform_utils import IS_MAC, TRAY_NAME, hide_title_text, system_app_icon_png
 from . import theme
 from .banner import Banner
 from .onboarding import OnboardingPage
-from .paint import draw_clock, draw_info, draw_mic, draw_sliders
+from .paint import (draw_clock, draw_info, draw_keyboard, draw_lines, draw_mic, draw_pill, draw_refresh,
+                    draw_search, draw_window)
 from .pages.about import AboutPage
 from .pages.dictate import DictatePage
 from .pages.history import HistoryPage
-from .pages.settings import SettingsPage
+from .pages.settings import CATEGORIES, SettingsPage
 from .pages.setup import SetupPage
 
 BRAND = "#245b56"
@@ -85,7 +87,10 @@ def menu_bar_icon() -> QIcon:
     return icon
 
 
-NAV_GLYPHS = (draw_mic, draw_clock, draw_sliders, draw_info)
+DICTATE, HISTORY, SETTINGS, ABOUT = range(4)  # pages in the main stack
+SIDEBAR_WIDTH = 236
+CATEGORY_GLYPHS = {"dictation": draw_keyboard, "text": draw_lines, "indicator": draw_pill, "app": draw_window,
+                   "updates": draw_refresh}
 
 
 def nav_icon(glyph, muted: str, selected: str) -> QIcon:
@@ -101,6 +106,26 @@ def nav_icon(glyph, muted: str, selected: str) -> QIcon:
         p.end()
         icon.addPixmap(pm, QIcon.Normal, state)
     return icon
+
+
+class NavButton(QPushButton):
+    """Sidebar entry: glyph and label; the selected one gets a fill and a short accent pill at its left edge."""
+
+    def __init__(self, label: str):
+        super().__init__(f"  {label.replace('&', '&&')}", objectName="nav", checkable=True,
+                         cursor=Qt.PointingHandCursor)
+        self.setAccessibleName(label)
+        self.setIconSize(QSize(18, 18))
+        self.accent = QColor(theme.LIGHT.accent)
+
+    def paintEvent(self, e):
+        super().paintEvent(e)
+        if self.isChecked():
+            p = QPainter(self)
+            p.setRenderHint(QPainter.Antialiasing)
+            p.setPen(Qt.NoPen)
+            p.setBrush(self.accent)
+            p.drawRoundedRect(QRectF(1, self.height() / 2 - 8, 3, 16), 1.5, 1.5)
 
 
 class Logo(QWidget):
@@ -156,49 +181,68 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        sidebar = QWidget(objectName="sidebar")
-        sidebar.setFixedWidth(180)
-        side = QVBoxLayout(sidebar)
-        side.setContentsMargins(14, 22 + (24 if IS_MAC else 0), 14, 16)  # clear of the traffic-light buttons
-        side.setSpacing(4)
-        brand = QHBoxLayout()
-        brand.setSpacing(10)
-        brand.addWidget(Logo(), 0, Qt.AlignVCenter)
-        name = QLabel("Speak")
-        name.setStyleSheet("font-size: 15pt; font-weight: 600; letter-spacing: 0.3px;")
-        brand.addWidget(name, 1, Qt.AlignVCenter)
-        side.addLayout(brand)
-        side.addSpacing(26)
-
         self.stack = QStackedWidget()
         self.dictate = DictatePage(level_source)
         self.history = HistoryPage()
         self.settings = SettingsPage(settings, can_rescan_mics)
         self.about = AboutPage(Logo(56))
-        self.nav = QButtonGroup(self)
-        for i, (label, page) in enumerate((("Dictate", self.dictate), ("History", self.history),
-                                           ("Settings", self.settings), ("About", self.about))):
+        for page in (self.dictate, self.history, self.settings, self.about):  # DICTATE, HISTORY, SETTINGS, ABOUT
             self.stack.addWidget(page)
-            button = QPushButton(f"  {label}", objectName="nav", checkable=True, cursor=Qt.PointingHandCursor)
-            button.setAccessibleName(label)
-            button.setIconSize(QSize(18, 18))
-            keys = QKeySequence(f"Ctrl+{i + 1}")
-            button.setToolTip(f"{label}  ({keys.toString(QKeySequence.NativeText)})")
-            QShortcut(keys, self, activated=lambda index=i: self._shortcut_page(index))
-            self.nav.addButton(button, i)
-            side.addWidget(button)
-        QShortcut(QKeySequence("Ctrl+,"), self, activated=lambda: self._shortcut_page(2))
-        self.nav.button(0).setChecked(True)
-        self.nav.idClicked.connect(self.show_page)
-        self.set_palette(theme.LIGHT)
-        side.addStretch(1)
 
+        sidebar = QWidget(objectName="sidebar")
+        sidebar.setFixedWidth(SIDEBAR_WIDTH)
+        side = QVBoxLayout(sidebar)
+        side.setContentsMargins(12, 18 + (24 if IS_MAC else 0), 12, 14)  # clear of the traffic-light buttons
+        side.setSpacing(2)
+        brand = QHBoxLayout()
+        brand.setContentsMargins(6, 0, 0, 0)
+        brand.setSpacing(10)
+        brand.addWidget(Logo(28), 0, Qt.AlignVCenter)
+        brand.addWidget(QLabel("Speak", objectName="brand"), 1, Qt.AlignVCenter)
+        side.addLayout(brand)
+        side.addSpacing(16)
+        self.search_icon = self.settings.search.addAction(QIcon(), QLineEdit.LeadingPosition)
+        side.addWidget(self.settings.search)
+        side.addSpacing(12)
+
+        self.nav = QButtonGroup(self)
+        self.nav_buttons = {}  # nav key -> button: pages by index name, settings categories by key
+        self._nav_glyphs = {}
+
+        def nav_button(key, label, glyph, on_click):
+            button = NavButton(label)
+            button.clicked.connect(on_click)
+            self.nav.addButton(button)
+            self.nav_buttons[key] = button
+            self._nav_glyphs[key] = glyph
+            return button
+
+        side.addWidget(nav_button(DICTATE, "Dictate", draw_mic, lambda: self.show_page(DICTATE)))
+        side.addWidget(nav_button(HISTORY, "History", draw_clock, lambda: self.show_page(HISTORY)))
+        side.addWidget(QLabel("Settings", objectName="navgroup"))
+        for key, label in CATEGORIES.items():
+            side.addWidget(nav_button(key, label, CATEGORY_GLYPHS[key], lambda _=False, k=key: self.show_settings(k)))
+        side.addStretch(1)
         status = QHBoxLayout()
+        status.setContentsMargins(12, 0, 0, 6)
         self.status_dot = StatusDot()
         self.status_text = QLabel("Ready", objectName="hint")
         status.addWidget(self.status_dot)
         status.addWidget(self.status_text, 1)
         side.addLayout(status)
+        side.addWidget(nav_button(ABOUT, "About", draw_info, lambda: self.show_page(ABOUT)))
+
+        for i, (label, keys) in enumerate((("Dictate", "Ctrl+1"), ("History", "Ctrl+2"), ("Settings", "Ctrl+3"),
+                                           ("About", "Ctrl+4"))):
+            QShortcut(QKeySequence(keys), self, activated=lambda index=i: self._shortcut_page(index))
+        QShortcut(QKeySequence("Ctrl+,"), self, activated=lambda: self._shortcut_page(SETTINGS))
+        QShortcut(QKeySequence.Find, self, activated=self._find)
+        self.settings.category_shown.connect(self._on_category_shown)
+        self.settings.searching.connect(self._on_searching)
+        self.dictate.open_setting.connect(self.open_setting)
+        self.history.open_settings.connect(lambda: self.open_setting("history_enabled"))
+        self.set_palette(theme.LIGHT)
+        self.show_page(DICTATE)
 
         layout.addWidget(sidebar)
         content = QWidget()
@@ -220,6 +264,7 @@ class MainWindow(QMainWindow):
         self.screens.addWidget(self.setup)
         self.screens.addWidget(self.onboarding)
         self.setCentralWidget(self.screens)
+        self.nav_buttons[DICTATE].setFocus()  # not a caret in Find a setting; Ctrl+F or a click puts it there
 
     def show_setup(self, active: bool):
         self.screens.setCurrentIndex(1 if active else 0)
@@ -230,18 +275,47 @@ class MainWindow(QMainWindow):
         self.screens.setCurrentIndex(2 if active else 0)
 
     def show_page(self, index: int):
-        self.nav.button(index).setChecked(True)
+        """DICTATE, HISTORY, SETTINGS (its current category) or ABOUT."""
+        if index != SETTINGS:
+            self.settings.clear_search()
         self.stack.setCurrentIndex(index)
+        self.nav_buttons[self.settings.category if index == SETTINGS else index].setChecked(True)
         if self.stack.currentWidget() is self.history:
             self.history.refresh(self.history.enabled)
+
+    def show_settings(self, category: str):
+        self.settings.show_category(category)
+        self.show_page(SETTINGS)
+
+    def open_setting(self, key: str):
+        """Jump to one setting, e.g. from Dictate's related settings."""
+        self.show_page(SETTINGS)
+        self.settings.reveal(self.settings.row_for(key))
+
+    def _on_category_shown(self, key: str):
+        if self.stack.currentWidget() is self.settings:
+            self.nav_buttons[key].setChecked(True)
+
+    def _on_searching(self):
+        self.stack.setCurrentWidget(self.settings)
+        self.nav.setExclusive(False)  # no page is current while results show
+        for button in self.nav.buttons():
+            button.setChecked(False)
+        self.nav.setExclusive(True)
+
+    def _find(self):
+        if self.screens.currentIndex() == 0:
+            self.settings.focus_search()
 
     def _shortcut_page(self, index: int):
         if self.screens.currentIndex() == 0:  # not while setup or onboarding covers the window
             self.show_page(index)
 
     def set_palette(self, palette):
-        for i, glyph in enumerate(NAV_GLYPHS):
-            self.nav.button(i).setIcon(nav_icon(glyph, palette.muted, palette.accent))
+        for key, button in self.nav_buttons.items():
+            button.setIcon(nav_icon(self._nav_glyphs[key], palette.text, palette.text))
+            button.accent = QColor(palette.accent)
+        self.search_icon.setIcon(nav_icon(draw_search, palette.muted, palette.muted))
 
     def notify(self, key: str, text: str, level: str = "info", action: str = "", enabled: bool = True,
                timeout: float = 0.0):
@@ -253,6 +327,7 @@ class MainWindow(QMainWindow):
     def set_status(self, text: str, color: str):
         self.status_text.setText(text)
         self.status_dot.set_color(color)
+        self.dictate.set_status(text, color)
 
     def showEvent(self, event):
         super().showEvent(event)

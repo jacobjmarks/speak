@@ -47,17 +47,17 @@ Use the window's page navigation API, not an ad hoc sequence of window operation
 w = s.window
 w.show_page(0)  # Dictate
 w.show_page(1)  # History
-w.show_page(2)  # Settings
+w.show_page(2)  # Settings (its current category)
 w.show_page(3)  # About
 ```
 
 For settings, drive the real controls on the page object rather than poking the model directly:
 
 ```python
-w.show_page(2)
-w.settings.show_category("text")           # dictation, text, indicator, app, updates
+w.show_settings("text")                    # dictation, text, indicator, app, updates
+w.open_setting("tidy")                     # jump to one setting by its settings key
 w.settings.sections["tidy"].more.click()   # open a section's More options
-w.settings.search.setText("gpu")           # search; w.settings.reveal(row) jumps to a row
+w.settings.search.setText("gpu")           # the sidebar's Find a setting
 ```
 
 If an interaction is in a nested section or a dynamically shown widget, toggle the relevant UI element, then call `QApplication.processEvents()` or `QTimer.singleShot(...)` so the UI settles before asserting.

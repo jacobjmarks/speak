@@ -1,20 +1,19 @@
-"""Settings page: a category sub-nav with search beside one scrolling page per category. Each category holds titled
-sections; technical and experimental options sit behind a section's "More options". Every control emits `changed`
-with a partial settings dict."""
+"""Settings page: one scrolling page per category (picked from the main window's sidebar) plus search results. Each
+category holds titled sections; two or more technical or experimental options sit behind a section's "More options".
+Every control emits `changed` with a partial settings dict."""
 from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QKeySequence, QPalette, QShortcut
-from PySide6.QtWidgets import (QBoxLayout, QButtonGroup, QComboBox, QFrame, QHBoxLayout, QLineEdit, QPushButton,
-                               QScrollArea, QSizePolicy, QSlider, QSpacerItem, QStackedWidget, QVBoxLayout, QWidget)
+from PySide6.QtGui import QColor, QPalette
+from PySide6.QtWidgets import (QComboBox, QFrame, QHBoxLayout, QLineEdit, QPushButton,
+                               QScrollArea, QSizePolicy, QSlider, QStackedWidget, QVBoxLayout, QWidget)
 
 from ... import config, platform_utils, tidy, updates
 from ..controls import (LanguageItemDelegate, MicCombo, NoWheelComboBox, Page, SettingRow, SettingsSection,
-                        explicitly_hidden, make_badge, make_combo, make_label)
+                        explicitly_hidden, make_badge, make_combo, make_header, make_label)
 from ..widgets import Segmented, ShortcutButton, Toggle
 
 CATEGORIES = {"dictation": "Dictation", "text": "Text & typing", "indicator": "Indicator & sound", "app": "App",
               "updates": "Updates"}
 CONTROL_WIDTH = 260  # dropdowns share one width so their edges line up down a section
-COMPACT_WIDTH = 720  # narrower than this, the sub-nav becomes a dropdown above the page
 ENTER = "Return" if platform_utils.IS_MAC else "Enter"
 ENTER_HINT = "Skipped if you switched apps"
 ENTER_OFF_HINT = "Needs “Type into the app I'm using”"
@@ -84,6 +83,9 @@ class SettingsPage(QWidget):
     check_updates = Signal()
     rerun_setup = Signal()
 
+    category_shown = Signal(str)  # a category page is in front (the main window marks it in the sidebar)
+    searching = Signal()          # search results are in front
+
     def __init__(self, settings: dict, can_rescan_mics=lambda: False):
         super().__init__()
         self._settings = dict(settings)
@@ -91,15 +93,18 @@ class SettingsPage(QWidget):
         self.sections = {}  # section id -> SettingsSection with a "More options" part
         self.pages = {}     # category key -> its scroll area
         self.category = "dictation"
-        self._compact = None
         self._building = ""
+        # Lives in the main window's sidebar ("Find a setting"); this page runs the search.
+        self.search = SearchField(objectName="search", placeholderText="Find a setting", clearButtonEnabled=True)
+        self.search.setAccessibleName("Find a setting")
+        self.search.textChanged.connect(self._on_search)
+        self.search.submitted.connect(self._open_first_result)
+        self.search.down.connect(self._focus_first_result)
 
-        self.root = QBoxLayout(QBoxLayout.LeftToRight, self)
-        self.root.setContentsMargins(0, 0, 0, 0)
-        self.root.setSpacing(0)
-        self._build_nav()
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
         self.stack = QStackedWidget()
-        self.root.addWidget(self.stack, 1)
+        root.addWidget(self.stack)
 
         self._dictation(settings, can_rescan_mics)
         self._text(settings)
@@ -115,95 +120,33 @@ class SettingsPage(QWidget):
         self._sync_enter_hints(settings["auto_paste"])
         self._refresh_tidy()
         self.show_category("dictation")
-        QShortcut(QKeySequence.Find, self, context=Qt.WidgetWithChildrenShortcut, activated=self.focus_search)
 
     # ----- layout -----
 
-    def _build_nav(self):
-        self.nav_column = QWidget(objectName="subnavColumn")
-        self.nav_layout = QBoxLayout(QBoxLayout.TopToBottom, self.nav_column)
-        self.nav_layout.setSpacing(4)
-        self.nav_title = make_label("Settings", "title")
-        self.nav_layout.addWidget(self.nav_title)
-        self.nav_layout.addSpacing(10)
-        self.search = SearchField(objectName="search", placeholderText="Search settings", clearButtonEnabled=True)
-        self.search.setAccessibleName("Search settings")
-        self.search.textChanged.connect(self._on_search)
-        self.search.submitted.connect(self._open_first_result)
-        self.search.down.connect(self._focus_first_result)
-        self.nav_layout.addWidget(self.search)
-        self.category_combo = make_combo(CATEGORIES, "dictation")
-        self.category_combo.setAccessibleName("Settings category")
-        self.category_combo.setMaximumWidth(220)
-        self.category_combo.currentIndexChanged.connect(lambda: self.show_category(self.category_combo.currentData()))
-        self.nav_layout.addWidget(self.category_combo)
-        self.nav_buttons = QWidget()
-        buttons = QVBoxLayout(self.nav_buttons)
-        buttons.setContentsMargins(0, 10, 0, 0)
-        buttons.setSpacing(2)
-        self.category_group = QButtonGroup(self)
-        for key, label in CATEGORIES.items():
-            button = QPushButton(label.replace("&", "&&"), objectName="subnav", checkable=True,
-                                 cursor=Qt.PointingHandCursor)
-            button.clicked.connect(lambda _=False, k=key: self.show_category(k))
-            self.category_group.addButton(button)
-            buttons.addWidget(button)
-            setattr(self, f"{key}_button", button)
-        self.nav_layout.addWidget(self.nav_buttons)
-        self._nav_spacer = QSpacerItem(0, 0, QSizePolicy.Minimum, QSizePolicy.Expanding)
-        self.nav_layout.addItem(self._nav_spacer)
-        self.root.addWidget(self.nav_column)
-
-    def _set_compact(self, compact: bool):
-        if compact == self._compact:
-            return
-        self._compact = compact
-        self.root.setDirection(QBoxLayout.TopToBottom if compact else QBoxLayout.LeftToRight)
-        self.nav_layout.setDirection(QBoxLayout.LeftToRight if compact else QBoxLayout.TopToBottom)
-        self.nav_layout.setContentsMargins(*((24, 16, 24, 4) if compact else (24, 28, 8, 20)))
-        self.nav_layout.setSpacing(10 if compact else 4)
-        self.nav_layout.setStretchFactor(self.search, 1 if compact else 0)
-        self.nav_title.setVisible(not compact)
-        self.nav_buttons.setVisible(not compact)
-        self.category_combo.setVisible(compact)
-        if compact:
-            self._nav_spacer.changeSize(0, 0, QSizePolicy.Fixed, QSizePolicy.Fixed)
-            self.nav_column.setMinimumWidth(0)
-            self.nav_column.setMaximumWidth(16777215)
-        else:
-            self._nav_spacer.changeSize(0, 0, QSizePolicy.Minimum, QSizePolicy.Expanding)
-            self.nav_column.setFixedWidth(208)
-        self.nav_layout.invalidate()
-        for scroll in (*self.pages.values(), self.results_page):
-            scroll.widget().layout_.setContentsMargins(*((24, 12, 24, 28) if compact else (16, 28, 32, 28)))
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        self._set_compact(self.width() < COMPACT_WIDTH)
-
-    def showEvent(self, event):
-        self._set_compact(self.width() < COMPACT_WIDTH)
-        super().showEvent(event)
-
-    def _page(self, key: str) -> QVBoxLayout:
+    def _scroll_page(self, crumb_title: str) -> tuple:
         scroll = QScrollArea(widgetResizable=True)
         scroll.setFrameShape(QFrame.NoFrame)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         body = Page()
         body.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
-        body.layout_.setSpacing(10)
-        body.layout_.addWidget(make_label(CATEGORIES[key], "pagehead"))
-        body.layout_.addSpacing(8)
+        body.layout_.setSpacing(8)
+        header, title = make_header(crumb_title, "Settings")
+        body.layout_.addWidget(header)
+        body.layout_.addSpacing(10)
         scroll.setWidget(body)
         self.stack.addWidget(scroll)
+        return scroll, body.layout_, title
+
+    def _page(self, key: str) -> QVBoxLayout:
+        scroll, layout, _ = self._scroll_page(CATEGORIES[key])
         self.pages[key] = scroll
         self._building = key
-        return body.layout_
+        return layout
 
     def _section(self, page: QVBoxLayout, title: str = "", section_id: str = "") -> SettingsSection:
         section = SettingsSection(title, CATEGORIES[self._building], section_id)
         if page.count() > 2:
-            page.addSpacing(14)
+            page.addSpacing(18)
         page.addWidget(section)
         if section_id:
             self.sections[section_id] = section
@@ -213,7 +156,11 @@ class SettingsPage(QWidget):
              badge: str = "", advanced: bool = False) -> SettingRow:
         if isinstance(control, QComboBox):
             control.setMinimumWidth(CONTROL_WIDTH)
+        switch = control if isinstance(control, Toggle) else None
+        if switch:
+            control = switch.with_state_label()
         row = SettingRow(title, hint, control, badge=badge, keywords=keywords, key=key)
+        row.focus_widget = switch or control
         row.category = self._building
         section.add(row, advanced)
         self.rows.append(row)
@@ -397,7 +344,8 @@ class SettingsPage(QWidget):
         section = self._section(page)
         self.updates = make_combo(config.UPDATE_MODES, settings["updates"])
         self.updates.currentIndexChanged.connect(lambda: self._emit({"updates": self.updates.currentData()}))
-        self.updates_row = self._row(section, "Updates", " ", self.updates, "updates", "auto install check")
+        self.updates_row = self._row(section, "When there's an update", " ", self.updates, "updates",
+                                     "updates auto install check")
         self._last_check = None
         version = QWidget()
         line = QHBoxLayout(version)
@@ -419,39 +367,32 @@ class SettingsPage(QWidget):
         page.addStretch(1)
 
     def _build_results(self):
-        scroll = QScrollArea(widgetResizable=True)
-        scroll.setFrameShape(QFrame.NoFrame)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        body = Page()
-        body.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
-        body.layout_.setSpacing(2)
-        self.results_title = make_label("", "pagehead")
-        body.layout_.addWidget(self.results_title)
-        body.layout_.addSpacing(8)
+        self.results_page, layout, self.results_title = self._scroll_page("")
+        layout.setSpacing(2)
         self.results_layout = QVBoxLayout()
         self.results_layout.setSpacing(2)
-        body.layout_.addLayout(self.results_layout)
+        layout.addLayout(self.results_layout)
         self.no_results = make_label("", "muted")
-        body.layout_.addWidget(self.no_results)
-        body.layout_.addStretch(1)
-        scroll.setWidget(body)
-        self.results_page = scroll
-        self.stack.addWidget(scroll)
+        layout.addWidget(self.no_results)
+        layout.addStretch(1)
         self.results = []
 
     # ----- navigation and search -----
 
     def show_category(self, key: str):
         self.category = key
-        getattr(self, f"{key}_button").setChecked(True)
-        self.category_combo.blockSignals(True)
-        self.category_combo.setCurrentIndex(self.category_combo.findData(key))
-        self.category_combo.blockSignals(False)
+        self.clear_search()
+        self.stack.setCurrentWidget(self.pages[key])
+        self.category_shown.emit(key)
+
+    def clear_search(self):
         if self.search.text():
             self.search.blockSignals(True)
             self.search.clear()
             self.search.blockSignals(False)
-        self.stack.setCurrentWidget(self.pages[key])
+
+    def row_for(self, key: str) -> SettingRow:
+        return next(r for r in self.rows if r.key == key)
 
     def focus_search(self):
         self.search.setFocus(Qt.ShortcutFocusReason)
@@ -472,8 +413,7 @@ class SettingsPage(QWidget):
             result.deleteLater()
         self.results = []
         if not text.strip():
-            getattr(self, f"{self.category}_button").setChecked(True)
-            self.stack.setCurrentWidget(self.pages[self.category])
+            self.show_category(self.category)
             return
         found = self.matches(text)
         for row in found:
@@ -484,11 +424,8 @@ class SettingsPage(QWidget):
         self.results_title.setText(f"{len(found)} result{'' if len(found) == 1 else 's'}" if found else "No results")
         self.no_results.setText(f"No settings match “{text.strip()}”. Try a different word." if not found else "")
         self.no_results.setVisible(not found)
-        self.category_group.setExclusive(False)  # no category is current while results show
-        for button in self.category_group.buttons():
-            button.setChecked(False)
-        self.category_group.setExclusive(True)
         self.stack.setCurrentWidget(self.results_page)
+        self.searching.emit()
 
     def _open_first_result(self):
         if self.results:
@@ -504,7 +441,7 @@ class SettingsPage(QWidget):
         if row.advanced and not row.section.expanded:
             row.section.set_expanded(True)
         scroll = self.pages[row.category]
-        row.control.setFocus(Qt.OtherFocusReason)
+        row.focus_widget.setFocus(Qt.OtherFocusReason)
 
         def land():
             scroll.ensureWidgetVisible(row, 0, 48)

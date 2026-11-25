@@ -9,38 +9,65 @@ from PySide6.QtWidgets import QDialog, QPushButton
 from tests.ui import QtTestCase
 from speak import config
 from speak.ui import theme as ui_theme
-from speak.ui.window import CloseDialog, MainWindow
+from speak.ui.window import DICTATE, CloseDialog, MainWindow
 
 
 class MainWindowInteractionTest(QtTestCase):
-    """Sidebar navigation selects the requested user-facing page."""
+    """The sidebar holds Find a setting, Dictate, History, every settings category and About; it always marks where
+    the user is, and settings can be reached from other pages."""
 
-    def test_selecting_settings_navigation_opens_settings_page(self):
+    def make_window(self):
         with patch("speak.audio.input_devices", return_value=[]), \
                 patch("speak.platform_utils.launch_at_login_enabled", return_value=False):
             window = MainWindow({**config.DEFAULTS}, lambda: 0.0)
         window.setStyleSheet(ui_theme.stylesheet(ui_theme.DARK))
         window.show()
         self.addCleanup(window.close)
+        return window
 
-        QTest.mouseClick(window.nav.button(2), Qt.LeftButton)
+    def test_selecting_a_settings_category_opens_that_category(self):
+        window = self.make_window()
+
+        QTest.mouseClick(window.nav_buttons["text"], Qt.LeftButton)
 
         self.capture(window, "settings-navigation")
-        self.assertIs(window.stack.currentWidget(), window.settings)
-        self.assertTrue(window.nav.button(2).isChecked())
+        self.assertIs(window.settings, window.stack.currentWidget())
+        self.assertIs(window.settings.pages["text"], window.settings.stack.currentWidget())
+        self.assertTrue(window.nav_buttons["text"].isChecked())
+
+    def test_finding_a_setting_shows_results_then_marks_the_category_it_opens(self):
+        window = self.make_window()
+
+        QTest.keyClicks(window.settings.search, "memory")
+
+        self.assertIs(window.settings, window.stack.currentWidget())
+        self.assertIsNone(window.nav.checkedButton())
+        self.capture(window, "find-a-setting")
+        QTest.keyClick(window.settings.search, Qt.Key_Return)
+        self.assertTrue(window.nav_buttons["app"].isChecked())
+
+        QTest.mouseClick(window.nav_buttons[DICTATE], Qt.LeftButton)
+        self.assertIs(window.dictate, window.stack.currentWidget())
+
+    def test_related_settings_on_dictate_open_the_setting(self):
+        window = self.make_window()
+
+        window.dictate.links["tidy"].activated.emit()
+        self.app.processEvents()
+
+        self.assertIs(window.settings, window.stack.currentWidget())
+        self.assertTrue(window.nav_buttons["text"].isChecked())
+        self.assertTrue(window.settings.tidy_row.property("highlight"))
 
     def test_page_shortcuts_switch_pages_but_not_while_onboarding_covers_the_window(self):
-        with patch("speak.audio.input_devices", return_value=[]), \
-                patch("speak.platform_utils.launch_at_login_enabled", return_value=False):
-            window = MainWindow({**config.DEFAULTS}, lambda: 0.0)
-        self.addCleanup(window.close)
+        window = self.make_window()
         shortcuts = {s.key().toString(): s for s in window.findChildren(QShortcut)}
 
         shortcuts["Ctrl+2"].activated.emit()
         self.assertIs(window.history, window.stack.currentWidget())
         shortcuts["Ctrl+,"].activated.emit()
         self.assertIs(window.settings, window.stack.currentWidget())
-        self.assertTrue(window.nav.button(2).isChecked())
+        self.assertTrue(window.nav_buttons[window.settings.category].isChecked())
 
         window.show_onboarding(True)
         shortcuts["Ctrl+1"].activated.emit()

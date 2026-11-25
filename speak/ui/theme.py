@@ -20,10 +20,13 @@ class Palette:
     warn: str
 
 
-LIGHT = Palette("#f6f5f1", "#ffffff", "#eeece6", "#e2dfd6", "#1d2523", "#6b7370",
-                "#2a6b64", "#ffffff", "#c2413a", "#2f8f5b", "#8a5a0e")
-DARK = Palette("#151a19", "#1e2524", "#262e2d", "#323b39", "#eef1ef", "#9aa5a1",
-               "#5fc2b5", "#0d1b19", "#ef6a62", "#5cc98d", "#e3b35c")
+LIGHT = Palette("#f3f4f2", "#fdfdfc", "#e9ece8", "#e1e4e0", "#1a1f1d", "#5a6460",
+                "#2a6b64", "#ffffff", "#b23a33", "#2f8f5b", "#8a5a0e")
+DARK = Palette("#1b201f", "#242a29", "#2e3533", "#353d3b", "#eceff0", "#a0aaa6",
+               "#6cc4b7", "#0d1b19", "#ef6a62", "#5cc98d", "#e3b35c")
+
+
+current = LIGHT  # the palette in use; widgets created after a theme change read it (see SpeakApp._apply_theme)
 
 
 def resolve(theme: str) -> Palette:
@@ -52,7 +55,7 @@ def stylesheet(p: Palette) -> str:
     QMainWindow, QWidget#root {{ background: {p.bg}; }}
     QWidget#page {{ background: transparent; }}
     QLabel {{ background: transparent; }}
-    QLabel#title {{ font-size: 18pt; font-weight: 600; }}
+    QLabel#title {{ font-size: 20pt; font-weight: 600; }}
     QLabel#display {{ font-size: 30pt; font-weight: 700; }}
     QLabel#heading {{ font-size: 22pt; font-weight: 600; }}
     QLabel#lead {{ font-size: 13pt; color: {p.muted}; }}
@@ -63,41 +66,39 @@ def stylesheet(p: Palette) -> str:
     QLabel#muted, QLabel#hint {{ color: {p.muted}; }}
     QLabel#hint {{ font-size: 9pt; }}
     QLabel:disabled, QLabel#hint:disabled {{ color: {p.border}; }}
-    QFrame#card {{ background: {p.surface}; border: 1px solid {p.border}; border-radius: 14px; }}
-    QFrame#divider {{ background: {p.border}; max-height: 1px; border: none; }}
-    QFrame#banner {{ background: {_tint(p.accent)}; border: 1px solid {p.accent}; border-radius: 12px; }}
+    QFrame#card {{ background: {p.surface}; border: 1px solid {p.border}; border-radius: 8px; }}
+    QFrame#divider {{ background: {p.border}; min-height: 1px; max-height: 1px; border: none; }}
+    QFrame#banner {{ background: {_tint(p.accent)}; border: 1px solid {p.accent}; border-radius: 8px; }}
     QFrame#banner[level="error"] {{ background: {_tint(p.danger)}; border-color: {p.danger}; }}
     QFrame#banner QLabel {{ font-weight: 500; }}
 
-    QWidget#sidebar {{ background: {p.surface}; border-right: 1px solid {p.border}; }}
-    QPushButton#nav {{ text-align: left; padding: 8px 12px; border-radius: 10px; border: 1px solid transparent;
-                       background: transparent; color: {p.muted}; font-weight: 500; }}
-    QPushButton#nav:hover {{ background: {p.surface_alt}; color: {p.text}; }}
-    QPushButton#nav:checked {{ background: {p.surface_alt}; color: {p.accent}; font-weight: 600; }}
-
-    QWidget#subnavColumn {{ background: transparent; }}
-    QPushButton#subnav {{ text-align: left; padding: 8px 12px; border-radius: 10px; border: 1px solid transparent;
-                          background: transparent; color: {p.muted}; font-weight: 500; }}
-    QPushButton#subnav:hover {{ background: {p.surface_alt}; color: {p.text}; }}
-    QPushButton#subnav:checked {{ background: {p.surface}; color: {p.accent}; font-weight: 600;
-                                  border: 1px solid {p.border}; }}
-    QLineEdit#search {{ background: {p.surface}; border: 1px solid {p.border}; border-radius: 10px;
-                        padding: 7px 10px; selection-background-color: {p.accent};
+    QWidget#sidebar {{ background: {p.bg}; }}
+    QPushButton#nav {{ text-align: left; padding: 7px 10px; border-radius: 6px; border: 1px solid transparent;
+                       background: transparent; color: {p.text}; }}
+    QPushButton#nav:hover {{ background: {p.surface_alt}; }}
+    QPushButton#nav:checked {{ background: {p.surface_alt}; font-weight: 600; }}
+    QLabel#navgroup {{ font-size: 9pt; font-weight: 600; color: {p.muted}; padding: 12px 0 4px 12px; }}
+    QLabel#brand {{ font-size: 12pt; font-weight: 700; }}
+    QLabel#crumb {{ font-size: 20pt; color: {p.muted}; }}
+    QLabel#sectionhead {{ font-size: 10.5pt; font-weight: 600; }}
+    QFrame#link {{ background: transparent; border-radius: 6px; }}
+    QFrame#link:hover, QFrame#link:focus {{ background: {p.surface_alt}; }}
+    QLineEdit#search {{ background: {p.surface}; border: 1px solid {p.border}; border-radius: 6px;
+                        padding: 6px 8px; selection-background-color: {p.accent};
                         selection-color: {p.accent_text}; }}
     QLineEdit#search:focus {{ border-color: {p.accent}; }}
-    QLabel#pagehead {{ font-size: 15pt; font-weight: 600; }}
     QLabel#badge {{ font-size: 8pt; font-weight: 600; padding: 1px 7px; border-radius: 8px;
                     color: {p.warn}; background: {_tint(p.warn, 0.16)}; }}
     QLabel#badge[tone="info"] {{ color: {p.accent}; background: {_tint(p.accent, 0.14)}; }}
-    QWidget#row {{ border-radius: 10px; }}
+    QWidget#row {{ border-radius: 6px; }}
     QWidget#row[divider="true"] {{ border-top: 1px solid {p.border}; border-radius: 0; }}
-    QWidget#row[highlight="true"] {{ background: {_tint(p.accent, 0.16)}; border-radius: 10px;
+    QWidget#row[highlight="true"] {{ background: {_tint(p.accent, 0.16)}; border-radius: 6px;
                                      border-top: 1px solid transparent; }}
-    QFrame#result {{ background: transparent; border: 1px solid transparent; border-radius: 10px; }}
+    QFrame#result {{ background: transparent; border: 1px solid transparent; border-radius: 6px; }}
     QFrame#result:hover {{ background: {p.surface_alt}; }}
     QFrame#result:focus {{ background: {p.surface_alt}; border-color: {p.accent}; }}
 
-    QPushButton {{ background: {p.surface_alt}; border: 1px solid {p.border}; border-radius: 10px;
+    QPushButton {{ background: {p.surface}; border: 1px solid {p.border}; border-radius: 6px;
                    padding: 7px 14px; }}
     QPushButton:hover, QPushButton:focus {{ border-color: {p.accent}; }}
     QPushButton:disabled {{ color: {p.muted}; }}
@@ -111,7 +112,7 @@ def stylesheet(p: Palette) -> str:
                             padding: 7px 16px; min-width: 150px; }}
     QPushButton#shortcut[recording="true"] {{ border: 2px solid {p.accent}; color: {p.accent}; }}
 
-    QComboBox {{ background: {p.surface_alt}; border: 1px solid {p.border}; border-radius: 10px;
+    QComboBox {{ background: {p.surface}; border: 1px solid {p.border}; border-radius: 6px;
                  padding: 6px 12px; min-width: 190px; }}
     QComboBox:hover, QComboBox:focus {{ border-color: {p.accent}; }}
     QComboBox:disabled {{ color: {p.muted}; }}
@@ -131,8 +132,8 @@ def stylesheet(p: Palette) -> str:
 
     QTextEdit, QPlainTextEdit {{ background: transparent; border: none; font-size: 12pt;
                                  selection-background-color: {p.accent}; selection-color: {p.accent_text}; }}
-    QFrame#entry {{ background: transparent; border-radius: 10px; }}
-    QFrame#entry:hover {{ background: {p.surface_alt}; }}
+    QFrame#entry {{ background: transparent; border-radius: 6px; }}
+    QFrame#entry:hover, QFrame#entry:focus {{ background: {p.surface_alt}; }}
 
     QScrollArea {{ background: transparent; border: none; }}
     QScrollBar:vertical {{ background: transparent; width: 10px; margin: 2px; }}

@@ -81,8 +81,7 @@ def shot(name, widget=None):
 
 
 def settings(category):
-    w.show_page(2)
-    w.settings.show_category(category)
+    w.show_settings(category)
 
 
 def onboarding_step(index):
@@ -124,8 +123,8 @@ STEPS = [
     lambda: shot("17-settings-search"),
     lambda: w.settings.search.setText("zzz"),
     lambda: shot("18-settings-search-empty"),
-    lambda: (w.settings.search.clear(), w.resize(640, 480)),
-    lambda: shot("19-settings-compact"),
+    lambda: (w.settings.search.clear(), settings("text"), w.resize(640, 480)),
+    lambda: shot("19-settings-smallest-window"),
     lambda: w.resize(1000, 760),
     lambda: (fake_history(), s._update({"history_enabled": True}), w.show_page(1)),
     lambda: shot("20-history"),

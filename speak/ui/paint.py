@@ -64,12 +64,89 @@ def draw_info(p: QPainter, center: QPointF, size: float, color: QColor) -> None:
     p.restore()
 
 
-def draw_chevron(p: QPainter, center: QPointF, size: float, color: QColor, up: bool = False) -> None:
+def draw_search(p: QPainter, center: QPointF, size: float, color: QColor) -> None:
+    p.save()
+    _stroke(p, color, size)
+    r = size * 0.27
+    lens = QPointF(center.x() - size * 0.08, center.y() - size * 0.08)
+    p.drawEllipse(lens, r, r)
+    p.drawLine(QPointF(lens.x() + r * 0.72, lens.y() + r * 0.72), QPointF(center.x() + size * 0.36, center.y() + size * 0.36))
+    p.restore()
+
+
+def draw_keyboard(p: QPainter, center: QPointF, size: float, color: QColor) -> None:
+    p.save()
+    _stroke(p, color, size)
+    w, h = size * 0.82, size * 0.56
+    p.drawRoundedRect(QRectF(center.x() - w / 2, center.y() - h / 2, w, h), size * 0.08, size * 0.08)
+    p.drawLine(QPointF(center.x() - w * 0.25, center.y() + h * 0.18), QPointF(center.x() + w * 0.25, center.y() + h * 0.18))
+    p.setPen(Qt.NoPen)
+    p.setBrush(color)
+    for i in range(4):
+        p.drawEllipse(QPointF(center.x() - w * 0.3 + i * w * 0.2, center.y() - h * 0.14), size * 0.045, size * 0.045)
+    p.restore()
+
+
+def draw_lines(p: QPainter, center: QPointF, size: float, color: QColor) -> None:
+    """Text lines: the text & typing glyph."""
+    p.save()
+    _stroke(p, color, size)
+    for dy, length in ((-0.26, 0.76), (0.0, 0.76), (0.26, 0.48)):
+        y = center.y() + dy * size
+        p.drawLine(QPointF(center.x() - size * 0.38, y), QPointF(center.x() - size * 0.38 + length * size, y))
+    p.restore()
+
+
+def draw_pill(p: QPainter, center: QPointF, size: float, color: QColor) -> None:
+    """The indicator pill with a dot: the indicator & sound glyph."""
+    p.save()
+    _stroke(p, color, size)
+    w, h = size * 0.84, size * 0.42
+    p.drawRoundedRect(QRectF(center.x() - w / 2, center.y() - h / 2, w, h), h / 2, h / 2)
+    p.setPen(Qt.NoPen)
+    p.setBrush(color)
+    p.drawEllipse(QPointF(center.x() - w * 0.24, center.y()), size * 0.08, size * 0.08)
+    p.restore()
+
+
+def draw_window(p: QPainter, center: QPointF, size: float, color: QColor) -> None:
+    p.save()
+    _stroke(p, color, size)
+    w, h = size * 0.8, size * 0.64
+    rect = QRectF(center.x() - w / 2, center.y() - h / 2, w, h)
+    p.drawRoundedRect(rect, size * 0.08, size * 0.08)
+    p.drawLine(QPointF(rect.left(), rect.top() + h * 0.3), QPointF(rect.right(), rect.top() + h * 0.3))
+    p.restore()
+
+
+def draw_refresh(p: QPainter, center: QPointF, size: float, color: QColor) -> None:
+    p.save()
+    _stroke(p, color, size)
+    r = size * 0.34
+    p.drawArc(QRectF(center.x() - r, center.y() - r, 2 * r, 2 * r), 60 * 16, 290 * 16)
+    tip = QPointF(center.x() + r * 0.5, center.y() - r * 0.87)
+    p.drawPolyline([QPointF(tip.x() - size * 0.02, tip.y() - size * 0.17), tip, QPointF(tip.x() - size * 0.17, tip.y() + size * 0.05)])
+    p.restore()
+
+
+def draw_copy(p: QPainter, center: QPointF, size: float, color: QColor) -> None:
+    p.save()
+    _stroke(p, color, size * 0.9)
+    s = size * 0.46
+    p.drawRoundedRect(QRectF(center.x() - s * 0.35, center.y() - s * 0.35, s, s), size * 0.07, size * 0.07)
+    p.drawPolyline([QPointF(center.x() - s * 0.65, center.y() + s * 0.35), QPointF(center.x() - s * 0.65, center.y() - s * 0.65),
+                    QPointF(center.x() + s * 0.35, center.y() - s * 0.65)])
+    p.restore()
+
+
+def draw_chevron(p: QPainter, center: QPointF, size: float, color: QColor, up: bool = False,
+                 right: bool = False) -> None:
     p.save()
     _stroke(p, color, size * 1.4)
+    p.translate(center)
+    p.rotate(-90 if right else 0)
     d = size * 0.3 * (-1 if up else 1)
-    p.drawPolyline([QPointF(center.x() - size * 0.45, center.y() - d * 0.6), QPointF(center.x(), center.y() + d * 0.6),
-                    QPointF(center.x() + size * 0.45, center.y() - d * 0.6)])
+    p.drawPolyline([QPointF(-size * 0.45, -d * 0.6), QPointF(0, d * 0.6), QPointF(size * 0.45, -d * 0.6)])
     p.restore()
 
 

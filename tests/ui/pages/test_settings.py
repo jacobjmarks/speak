@@ -26,7 +26,7 @@ class SettingsInteractionTest(QtTestCase):
 
     def test_turning_on_history_persists_setting_and_refreshes_history_view(self):
         page = self.make_page()
-        window = SimpleNamespace(history=Mock(), settings=Mock(), onboarding=Mock())
+        window = SimpleNamespace(history=Mock(), settings=Mock(), onboarding=Mock(), dictate=Mock())
         app = SimpleNamespace(settings={**config.DEFAULTS}, dictation=Mock(), window=window)
         page.changed.connect(lambda changes: SpeakApp._update(app, changes))
 
@@ -268,24 +268,8 @@ class SettingsSearchTest(QtTestCase):
         self.assertEqual([], page.results)
         self.assertTrue(page.no_results.isVisible())
         self.assertIn("zzz", page.no_results.text())
-        self.assertIsNone(page.category_group.checkedButton())
+        shown = []
+        page.category_shown.connect(shown.append)
         QTest.keyClick(page.search, Qt.Key_Escape)
         self.assertIs(page.pages["dictation"], page.stack.currentWidget())
-        self.assertTrue(page.dictation_button.isChecked())
-
-    def test_narrow_page_swaps_category_list_for_a_dropdown(self):
-        page = self.make_page()
-        page.resize(600, 480)
-        self.app.processEvents()
-
-        self.assertFalse(page.nav_buttons.isVisible())
-        self.assertTrue(page.category_combo.isVisible())
-        page.category_combo.setCurrentIndex(page.category_combo.findData("updates"))
-
-        self.capture(page, "compact-settings")
-        self.assertIs(page.pages["updates"], page.stack.currentWidget())
-
-        page.resize(1000, 700)
-        self.app.processEvents()
-        self.assertTrue(page.updates_button.isChecked())
-        self.assertTrue(page.nav_buttons.isVisible())
+        self.assertEqual(["dictation"], shown)

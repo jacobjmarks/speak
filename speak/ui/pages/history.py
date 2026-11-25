@@ -5,25 +5,43 @@ from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QPushButton, QScrollArea, QVBoxLayout, QWidget
 
 from ... import history, output
-from ..controls import Page, make_label
+from ..controls import LinkLabel, Page, make_card, make_header, make_label
+from ..paint import draw_copy
+from ..widgets import Glyph
 
 
 class HistoryEntry(QFrame):
+    """One saved dictation: time, text and a copy glyph. Click, Return or Space copies it."""
+
     def __init__(self, when: str, text: str):
         super().__init__(objectName="entry", cursor=Qt.PointingHandCursor)
         self.text = text
         self.setToolTip("Click to copy")
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(14, 10, 14, 10)
-        layout.setSpacing(3)
+        self.setFocusPolicy(Qt.StrongFocus)
+        self.setAccessibleName(f"{when}: {text}")
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(10, 9, 10, 9)
+        layout.setSpacing(16)
         self.when = make_label(when, "hint")
+        self.when.setFixedWidth(64)
+        self.when.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         self._when_text = when
-        layout.addWidget(self.when)
+        layout.addWidget(self.when, 0, Qt.AlignTop)
         body = make_label(text)
         body.setTextInteractionFlags(Qt.NoTextInteraction)
-        layout.addWidget(body)
+        layout.addWidget(body, 1)
+        layout.addWidget(Glyph(draw_copy, 16, muted=True), 0, Qt.AlignTop)
 
     def mouseReleaseEvent(self, e):
+        self.copy()
+
+    def keyPressEvent(self, e):
+        if e.key() in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Space):
+            self.copy()
+        else:
+            super().keyPressEvent(e)
+
+    def copy(self):
         output.copy(self.text)
         self.when.setText("Copied ✓")
         QTimer.singleShot(1000, self, lambda: self.when.setText(self._when_text))
@@ -42,9 +60,12 @@ class HistoryPage(Page):
 
     def __init__(self):
         super().__init__()
+        self.layout_.setSpacing(10)
+        title, _ = make_header("History")
+        self.layout_.addWidget(title)
         header = QHBoxLayout()
         header.setSpacing(8)
-        header.addWidget(make_label("History", "title"), 1)
+        header.addWidget(make_label("Saved only on this device. Click an entry to copy it.", "muted"), 1)
         self.clear_button = QPushButton("Clear all", objectName="danger", cursor=Qt.PointingHandCursor)
         self.clear_button.clicked.connect(lambda: self._confirming(True))
         header.addWidget(self.clear_button)
@@ -64,20 +85,20 @@ class HistoryPage(Page):
         self.layout_.addLayout(header)
 
         self.scroll = QScrollArea(widgetResizable=True)
+        self.scroll.setFrameShape(QFrame.NoFrame)
         self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.entries = QWidget(objectName="page")
         self.entries_layout = QVBoxLayout(self.entries)
         self.entries_layout.setContentsMargins(0, 0, 6, 0)
-        self.entries_layout.setSpacing(4)
+        self.entries_layout.setSpacing(6)
         self.scroll.setWidget(self.entries)
         self.layout_.addWidget(self.scroll, 1)
 
         self.empty = QWidget()
         empty_layout = QVBoxLayout(self.empty)
         empty_layout.addStretch(1)
-        self.empty_label = make_label("", "muted")
+        self.empty_label = LinkLabel("", "muted")
         self.empty_label.setAlignment(Qt.AlignCenter)
-        self.empty_label.setTextFormat(Qt.RichText)
         self.empty_label.linkActivated.connect(lambda _: self.open_settings.emit())
         empty_layout.addWidget(self.empty_label)
         empty_layout.addStretch(2)
@@ -91,7 +112,7 @@ class HistoryPage(Page):
             item = self.entries_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
-        today, heading = date.today(), None
+        today, heading, card = date.today(), None, None
         for created, text in rows:
             try:
                 stamp = datetime.fromisoformat(created).astimezone()
@@ -100,10 +121,15 @@ class HistoryPage(Page):
                 day, when = "Earlier", created
             if day != heading:
                 heading = day
-                label = make_label(day, "section")
-                label.setContentsMargins(14, 12 if self.entries_layout.count() else 0, 0, 2)
+                label = make_label(day, "sectionhead")
+                label.setContentsMargins(0, 14 if self.entries_layout.count() else 4, 0, 2)
                 self.entries_layout.addWidget(label)
-            self.entries_layout.addWidget(HistoryEntry(when, text))
+                frame, card = make_card()
+                card.setContentsMargins(6, 4, 6, 4)
+                self.entries_layout.addWidget(frame)
+            elif card.count():
+                card.addWidget(QFrame(objectName="divider"))
+            card.addWidget(HistoryEntry(when, text))
         self.entries_layout.addStretch(1)
         has_rows = bool(rows)
         self.scroll.setVisible(has_rows)
