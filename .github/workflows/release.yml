@@ -54,6 +54,13 @@ jobs:
           if ($env:VERSION -cnotmatch $semver) { throw 'Version must be semver without a v, e.g. 1.0.0 or 1.0.0-rc.1' }
           "prerelease=$(if ($Matches[4]) { 'true' } else { 'false' })" >> $env:GITHUB_OUTPUT
 
+      - name: Check release credentials
+        shell: pwsh
+        env:
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          if (-not $env:RELEASE_TOKEN) { throw 'Set the RELEASE_TOKEN repository secret before running a release' }
+
       - name: Resolve commit
         id: commit
         shell: pwsh
@@ -106,7 +113,7 @@ jobs:
     with:
       platform: ${{ inputs.platform }}
       version: ${{ inputs.version }}
-      ref: ${{ inputs.ref }}
+      ref: ${{ needs.prepare.outputs.sha }}
 
   publish:
     needs: [prepare, build]
@@ -123,6 +130,7 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          token: ${{ secrets.RELEASE_TOKEN }}
           tag_name: v${{ inputs.version }}
           name: Speak ${{ inputs.version }}
           target_commitish: ${{ needs.prepare.outputs.sha }}
