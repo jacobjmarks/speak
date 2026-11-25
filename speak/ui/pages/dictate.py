@@ -155,14 +155,11 @@ class DictatePage(Page):
         self.mic.palette_ = self.wave.palette_ = palette
 
     def set_mode(self, mode: str, percent=None, word: str = ""):
-        """`word` is the current phase ("Getting ready", "Finishing up") shown over the wave."""
+        """The status label carries the phase word ("Getting ready"); the wave shows only the percentage, if any."""
         self._revert.stop()
         self.mic.set_mode(mode, percent)
-        if word and percent is not None:
-            word += f" · {int(percent)}%"
-        if mode in ("preparing", "processing") and not word and self.wave.mode == mode:
-            word = self.wave.text  # keep the last phase word on a bare state change
-        self.wave.set_state(mode, word)
+        self.wave.set_state(mode, f"{int(percent)}%" if percent is not None and mode in ("preparing", "processing")
+                            else "")
         if mode in ("done", "error"):
             self._revert.start(1200)
             QTimer.singleShot(1250, self, lambda: self.mic.mode == "idle" and self.wave.set_state("idle", ""))

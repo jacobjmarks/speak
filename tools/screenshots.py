@@ -95,14 +95,19 @@ def step_names():
 
 STEPS = [
     lambda: shot("1-idle"),
-    lambda: (w.dictate.set_mode("listening"), s.overlay.set_mode("listening"),
+    lambda: (w.dictate.set_mode("listening"), w.set_status("Listening", s.palette.danger),
+             w.dictate.set_live("so I was thinking we could meet on Tuesday no actually Wednesday"),
+             s.overlay.set_mode("listening"),
              s.overlay.set_text("so I was thinking we could meet on Tuesday no actually Wednesday")),
     lambda: (shot("2-listening"), shot("3-overlay-listening", s.overlay)),
-    lambda: (w.dictate.set_mode("processing"), s.overlay.set_mode("processing")),
+    lambda: (w.dictate.set_mode("processing"), w.set_status("Thinking", s.palette.accent),
+             s.overlay.set_mode("processing")),
     lambda: (shot("4-processing"), shot("5-overlay-processing", s.overlay)),
-    lambda: (w.dictate.set_mode("preparing", 42), s.overlay.set_mode("preparing", 42), s.overlay.set_text("")),
+    lambda: (w.dictate.set_mode("preparing", 42, "Downloading the speech model"),
+             w.set_status("Downloading the speech model", s.palette.muted),
+             s.overlay.set_mode("preparing", 42), s.overlay.set_text("")),
     lambda: (shot("6-download"), shot("7-overlay-download", s.overlay)),
-    lambda: s._on_result("So I was thinking we could meet on Wednesday.", ""),
+    lambda: (s._on_result("So I was thinking we could meet on Wednesday.", ""), w.set_status("Ready", s.palette.success)),
     lambda: (shot("8-done"), shot("9-overlay-done", s.overlay)),
     # settings: each category, a changed hidden option, open More options, search, a narrow window
     lambda: settings("dictation"),
