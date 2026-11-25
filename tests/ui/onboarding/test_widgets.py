@@ -69,6 +69,7 @@ class PaintedWidgetTest(QtTestCase):
 
     def test_choice_card_looks_different_when_hovered_selected_or_focused(self):
         def check(name, card):
+            card.clearFocus()  # window activation may already have given the lone card its focus ring
             plain = image(card)
             hover(card)
             hovered = image(card)
