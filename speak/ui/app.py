@@ -111,6 +111,7 @@ class SpeakApp(QObject):
         self._refresh_tidy()
         threading.Thread(target=lambda: (tidy._probed.wait(30), b.probed.emit()), daemon=True).start()
         updates.cleanup()
+        platform_utils.refresh_launch_at_login()
         if not background and self.settings["unload_after"] != "0":  # login start: load on first use instead
             self.dictation.warm_up()
         self._update_timer = QTimer(self, interval=24 * 3600 * 1000, timeout=self._check_updates)
@@ -526,9 +527,11 @@ class SpeakApp(QObject):
             self.tray.hide()
         if self._downloaded:
             try:
-                updates.install(self._downloaded, updates.exe_path())
+                exe = updates.exe_path()
+                installed = updates.install(self._downloaded, exe)
+                platform_utils.repoint_launch_at_login(exe, installed)
                 if self._restart:
-                    updates.restart(updates.exe_path())
+                    updates.restart(installed)
             except OSError:
                 pass
             self._downloaded = None

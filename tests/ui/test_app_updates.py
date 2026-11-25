@@ -134,13 +134,15 @@ class UpdateInteractionTest(QtTestCase):
                 app.dictation.state = State.LISTENING
                 with patch("speak.ui.app.hotkey.unregister"), \
                         patch("speak.ui.app.updates.exe_path", return_value=exe), \
-                        patch("speak.ui.app.updates.restart") as restart:
+                        patch("speak.ui.app.updates.restart") as restart, \
+                        patch("speak.ui.app.platform_utils.repoint_launch_at_login") as repoint:
                     QTest.mouseClick(banner.findChild(QPushButton, "primary"), Qt.LeftButton)
 
                     app.app.quit.assert_called_once()
                     app.dictation.cancel.assert_called_once()
                     app.dictation.shutdown.assert_called_once()
                     restart.assert_called_once_with(exe)
+                    repoint.assert_called_once_with(exe, exe)
                     self.assertEqual("updated", exe.read_text(encoding="utf-8"))
                     self.assertEqual("current", Path(str(exe) + ".old").read_text(encoding="utf-8"))
                     self.assertIsNone(app._downloaded)

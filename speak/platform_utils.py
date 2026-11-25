@@ -1,8 +1,12 @@
 """OS-specific helpers. Keep every platform branch in this module."""
 import os
+import plistlib
+import re
+import shlex
 import subprocess
 import sys
 from pathlib import Path
+from typing import Optional
 
 IS_WINDOWS = sys.platform == "win32"
 IS_MAC = sys.platform == "darwin"
@@ -203,49 +207,111 @@ def _autostart_file() -> Path:
     return Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "autostart" / "speak.desktop"
 
 
+_RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
+# Task Manager's Startup tab records "disabled" here; the Run value itself stays
+_APPROVED_KEY = r"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run"
+
+
+def _desktop_arg(arg: str) -> str:
+    """Quote one argument for a freedesktop `Exec=` line."""
+    if not re.search(r"[\s\"'\\$`]", arg):
+        return arg
+    return '"' + re.sub(r'(["`$\\])', r"\\\1", arg) + '"'
+
+
+def _login_target() -> Optional[Path]:
+    """The exe/script the login entry launches, or None if there is no (readable) entry."""
+    try:
+        if IS_WINDOWS:
+            import winreg
+
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, _RUN_KEY) as key:
+                command = winreg.QueryValueEx(key, "Speak")[0]
+            return Path(command[1:].split('"', 1)[0] if command.startswith('"') else command.split()[0])
+        if IS_MAC:
+            return Path(plistlib.loads(_autostart_file().read_bytes())["ProgramArguments"][0])
+        for line in _autostart_file().read_text(encoding="utf-8").splitlines():
+            if line.startswith("Exec="):
+                return Path(shlex.split(line[5:])[0])
+    except (OSError, ValueError, KeyError, IndexError, plistlib.InvalidFileException):
+        pass
+    return None
+
+
+def _write_login_entry(command: list) -> None:
+    if IS_WINDOWS:
+        import winreg
+
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, _RUN_KEY, 0, winreg.KEY_SET_VALUE) as key:
+            winreg.SetValueEx(key, "Speak", 0, winreg.REG_SZ, subprocess.list2cmdline(command))
+        return
+    path = _autostart_file()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if IS_MAC:
+        path.write_bytes(plistlib.dumps({"Label": "com.speak.app", "ProgramArguments": command, "RunAtLoad": True}))
+    else:
+        exec_line = " ".join(_desktop_arg(arg) for arg in command)
+        path.write_text(f"[Desktop Entry]\nType=Application\nName=Speak\nExec={exec_line}\n", encoding="utf-8")
+
+
 def launch_at_login_enabled() -> bool:
+    """True if Speak will really start at login (on Windows, not switched off in Task Manager's Startup tab)."""
     if IS_WINDOWS:
         import winreg
 
         try:
-            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run") as key:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, _RUN_KEY) as key:
                 winreg.QueryValueEx(key, "Speak")
-            return True
         except OSError:
             return False
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, _APPROVED_KEY) as key:
+                state = winreg.QueryValueEx(key, "Speak")[0]
+            return not (isinstance(state, bytes) and state and state[0] & 1)
+        except OSError:
+            return True
     return _autostart_file().exists()
 
 
 def set_launch_at_login(enabled: bool) -> None:
-    command = _launch_command() + ["--background"]
     if IS_WINDOWS:
         import winreg
 
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", 0,
-                            winreg.KEY_SET_VALUE) as key:
-            if enabled:
-                winreg.SetValueEx(key, "Speak", 0, winreg.REG_SZ, subprocess.list2cmdline(command))
-            else:
-                try:
+        if not enabled:
+            try:
+                with winreg.OpenKey(winreg.HKEY_CURRENT_USER, _RUN_KEY, 0, winreg.KEY_SET_VALUE) as key:
                     winreg.DeleteValue(key, "Speak")
-                except OSError:
-                    pass
-        return
-    path = _autostart_file()
-    if not enabled:
-        path.unlink(missing_ok=True)
-        return
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if IS_MAC:
-        args = "".join(f"<string>{arg}</string>" for arg in command)
-        path.write_text(
-            '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict>'
-            f"<key>Label</key><string>com.speak.app</string><key>ProgramArguments</key><array>{args}</array>"
-            "<key>RunAtLoad</key><true/></dict></plist>\n",
-            encoding="utf-8",
-        )
+            except OSError:
+                pass
+            return
+        _write_login_entry(_launch_command() + ["--background"])
+        try:  # clear a "disabled" mark from Task Manager, or Windows would ignore the new entry
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, _APPROVED_KEY, 0, winreg.KEY_SET_VALUE) as key:
+                winreg.DeleteValue(key, "Speak")
+        except OSError:
+            pass
+    elif enabled:
+        _write_login_entry(_launch_command() + ["--background"])
     else:
-        path.write_text(f"[Desktop Entry]\nType=Application\nName=Speak\nExec={' '.join(command)}\n", encoding="utf-8")
+        _autostart_file().unlink(missing_ok=True)
+
+
+def refresh_launch_at_login() -> None:
+    """Packaged app: if the login entry points at an exe that is gone (moved or renamed), point it at this one.
+
+    Runs on each start, so relocating the exe heals the entry the next time it is launched by hand. It never
+    touches an entry whose target still exists (another copy owns it) or an entry the user switched off.
+    """
+    target = _login_target()
+    if getattr(sys, "frozen", False) and target and not target.exists():
+        _write_login_entry(_launch_command() + ["--background"])
+
+
+def repoint_launch_at_login(old: Path, new: Path) -> None:
+    """If the login entry launches `old`, launch `new` instead (an update installed under a new name)."""
+    target = _login_target()
+    if target and os.path.normcase(target) == os.path.normcase(old):
+        _write_login_entry([str(new), "--background"])
 
 
 def relaunch() -> None:

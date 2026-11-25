@@ -39,6 +39,7 @@ class UpdatesTest(unittest.TestCase):
         release = updates.pick(releases, updates.parse("1.0.0"), suffix="-windows-x64.exe")
 
         self.assertEqual("1.4.0", release.version)
+        self.assertEqual("Speak-1.4.0-windows-x64.exe", release.asset_name)
 
     def test_download_checks_digest_and_reports_progress(self):
         content = b"verified update"
@@ -87,6 +88,22 @@ class UpdatesTest(unittest.TestCase):
 
             self.assertFalse(Path(str(exe) + ".new.part").exists())
             self.assertFalse(Path(str(exe) + ".new").exists())
+
+    def test_install_keeps_incoming_release_name_and_removes_old_name_next_start(self):
+        with tempfile.TemporaryDirectory() as directory:
+            exe = Path(directory) / "Speak-1.0.0-windows-x64.exe"
+            new = Path(directory) / "Speak-1.1.0-windows-x64.exe.new"
+            exe.write_text("current", encoding="utf-8")
+            new.write_text("update", encoding="utf-8")
+
+            installed = updates.install(new, exe)
+
+            self.assertEqual(Path(directory) / "Speak-1.1.0-windows-x64.exe", installed)
+            self.assertEqual("update", installed.read_text(encoding="utf-8"))
+            self.assertFalse(exe.exists())
+            with patch.object(updates, "exe_path", return_value=installed):
+                updates.cleanup()
+            self.assertEqual([installed], list(Path(directory).iterdir()))
 
     def test_failed_update_swap_restores_current_executable(self):
         with tempfile.TemporaryDirectory() as directory:

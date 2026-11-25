@@ -7,9 +7,10 @@ stable releases unless the user opts in to pre-releases; pre-release builds also
 (alpha.1 -> rc.1 -> 1.0.0). Each OS only considers releases that carry its own package (`package_suffix`); a release
 without one is not an update for that OS. Only the public GitHub API is contacted.
 
-Install: the new exe downloads beside the running one as "<exe>.new" (sha256 checked against GitHub's
-asset digest); `install` renames the running exe to ".old" (Windows allows renaming a running exe) and moves
-the new one into place. The ".old" file is deleted on the next start.
+Install: the new exe downloads beside the running one as "<release file name>.new" (sha256 checked against
+GitHub's asset digest); `install` renames the running exe to "<release file name>.old" (Windows allows renaming a
+running exe) and moves the new one in under the release's own file name, so portable copies keep the incoming
+name (Speak-1.2.0-windows-x64.exe). The ".old" file is deleted on the next start.
 """
 import hashlib
 import json
@@ -55,6 +56,7 @@ class Release:
     page: str
     asset_url: str = ""
     digest: str = ""  # "sha256:<hex>" or ""
+    asset_name: str = ""
 
 
 SEMVER = re.compile(r"v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)"
@@ -118,7 +120,7 @@ def pick(releases: list, current: tuple, allow_prerelease: bool = False,
             continue
         best = number
         found = Release(tag.removeprefix("v"), release.get("html_url") or RELEASES_PAGE,
-                        asset.get("browser_download_url", ""), asset.get("digest") or "")
+                        asset.get("browser_download_url", ""), asset.get("digest") or "", asset["name"])
     return found
 
 
@@ -144,8 +146,9 @@ def can_install(release: Release) -> bool:
 
 
 def download(release: Release, progress: Callable[[int], None] = lambda percent: None) -> Path:
-    target = exe_path().with_name(exe_path().name + ".new")
-    partial = target.with_name(target.name + ".part")
+    exe = exe_path()
+    target = exe.with_name((release.asset_name or exe.name) + ".new")
+    partial = exe.with_name(exe.name + ".new.part")
     digest = hashlib.sha256()
     with _get(release.asset_url, timeout=30) as response, open(partial, "wb") as out:
         total = int(response.headers.get("Content-Length") or 0)
@@ -164,16 +167,18 @@ def download(release: Release, progress: Callable[[int], None] = lambda percent:
     return target
 
 
-def install(new: Path, exe: Path) -> None:
-    """Swap `new` into place of `exe` (which may be running)."""
-    old = exe.with_name(exe.name + ".old")
+def install(new: Path, exe: Path) -> Path:
+    """Replace `exe` (which may be running) with `new` ("<name>.new"); returns the installed exe, "<name>"."""
+    installed = new.with_name(new.name.removesuffix(".new"))
+    old = installed.with_name(installed.name + ".old")
     old.unlink(missing_ok=True)
     os.replace(exe, old)
     try:
-        os.replace(new, exe)
+        os.replace(new, installed)
     except OSError:
         os.replace(old, exe)
         raise
+    return installed
 
 
 def restart(exe: Path) -> None:
