@@ -41,6 +41,17 @@ class UpdateInteractionTest(QtTestCase):
             SpeakApp._on_update_found(app, release, False)
             app.tray.showMessage.assert_not_called()
 
+    def test_prerelease_offer_explains_itself_when_prereleases_setting_is_off(self):
+        app, _page, _banner = self.make_ui("notify")
+        app.tray = Mock()
+        with patch("speak.ui.app.updates.can_install", return_value=True):
+            SpeakApp._on_update_found(app, updates.Release("1.2.0-rc.1", "https://example.invalid/r"), False)
+            self.assertIn("you're on a pre-release", app.tray.showMessage.call_args.args[1].lower())
+
+            app.tray.reset_mock()
+            SpeakApp._on_update_found(app, updates.Release("1.2.0", "https://example.invalid/r"), False)
+            self.assertNotIn("pre-release", app.tray.showMessage.call_args.args[1])
+
     def make_ui(self, update_mode):
         settings = {**config.DEFAULTS, "updates": update_mode}
         with patch("speak.audio.input_devices", return_value=[]), \

@@ -167,9 +167,11 @@ class SpeakApp(QObject):
         elif self.settings["updates"] == "auto" and updates.can_install(release):
             self._download()
         else:
-            self._set_update("Update" if updates.can_install(release) else "Download",
-                             f"Speak {release.version} is available.")
-            self._toast("available", release.version, f"Speak {release.version} is available.")
+            message = f"Speak {release.version} is available."
+            if not self.settings["prereleases"] and updates.is_prerelease(updates.parse(release.version)):
+                message += " You're on a pre-release, so newer pre-releases are offered too."
+            self._set_update("Update" if updates.can_install(release) else "Download", message)
+            self._toast("available", release.version, message)
 
     def _toast(self, kind: str, version: str, message: str):
         """Announce an update once per version with a system notification when Speak isn't in front."""
