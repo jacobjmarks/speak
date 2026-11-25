@@ -1,4 +1,5 @@
 name: Release
+run-name: Release v${{ inputs.version }} · ${{ inputs.platform }} · ${{ inputs.ref }}
 
 on:
   workflow_dispatch:
