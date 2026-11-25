@@ -28,6 +28,10 @@ def _explain(exc: Exception) -> str:
     return "Something went wrong. Please try again, or restart Speak."
 
 
+def _cleanup_model_cached(plan) -> bool:
+    return (MODELS_DIR / "cleanup" / CLEANUP_MODELS[plan.model_id]["file"]).exists()
+
+
 class State(str, Enum):
     IDLE = "idle"
     PREPARING = "preparing"
@@ -128,7 +132,7 @@ class Dictation:
                     return  # speech model not downloaded yet
                 self.asr_server.ensure(self.settings["model"], lambda *_: None)
                 plan = tidy.plan(self.settings)
-                if plan.model_id and (MODELS_DIR / "cleanup" / CLEANUP_MODELS[plan.model_id]["file"]).exists():
+                if plan.model_id and _cleanup_model_cached(plan):
                     self._ensure_cleanup(plan, lambda *_: None)
             except Exception:
                 pass
@@ -247,11 +251,22 @@ class Dictation:
             cleanup.warm(self.cleanup_server.port, plan.llm_mode)
 
     def _ensure_runtimes(self, progress):
-        tidy._probed.wait(15)
+        """Start the speech runtime (the only one needed to listen). Tidy-up loads while the user speaks."""
         self.asr_server.ensure(self.settings["model"], progress)
+        tidy._probed.wait(15)
         plan = tidy.plan(self.settings)
-        if plan.model_id:
-            self._ensure_cleanup(plan, progress)
+        if not plan.model_id:
+            return
+        if _cleanup_model_cached(plan):
+            threading.Thread(target=self._preload_cleanup, args=(plan,), daemon=True).start()
+        else:
+            self._ensure_cleanup(plan, progress)  # first run: download with visible progress
+
+    def _preload_cleanup(self, plan):
+        try:
+            self._ensure_cleanup(plan, lambda *_: None)
+        except Exception as exc:
+            log.info("Tidy-up preload failed; will retry when dictation finishes", exc_info=exc)  # _process retries
 
     def _prepare(self):
         try:

@@ -107,7 +107,7 @@ class ManagedServer:
                     pass
                 if on_wait is not None:
                     on_wait(self._output_since(log_start))
-                time.sleep(0.5)
+                time.sleep(0.1)
             self._stop_locked()
             raise TimeoutError(f"{self.name} did not become ready within {int(timeout)} seconds.")
 

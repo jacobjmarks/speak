@@ -1,6 +1,8 @@
 import sqlite3
+import tempfile
 import threading
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -188,6 +190,92 @@ class DictationFlowTest(unittest.TestCase):
 
         self.assertTrue(lock_free)
         dictation.listener.on_result.assert_called_once_with("recognized words", "")
+
+
+class RuntimeStartupTest(unittest.TestCase):
+    """Listening only waits for the speech runtime; an already-downloaded tidy-up model loads in the background."""
+
+    def setUp(self):
+        models = tempfile.TemporaryDirectory()
+        self.addCleanup(models.cleanup)
+        self.models = Path(models.name)
+        (self.models / "cleanup").mkdir()
+        patches = [
+            patch("speak.controller.MODELS_DIR", self.models),
+            patch("speak.controller.CLEANUP_MODELS", {"tidy": {"file": "tidy.gguf"}}),
+            patch.object(tidy, "probe"),
+            patch.object(tidy, "_probed"),
+            patch("speak.controller.Microphone"),
+            patch("speak.controller.AsrSession"),
+        ]
+        for p in patches:
+            p.start()
+            self.addCleanup(p.stop)
+        self.plan = SimpleNamespace(model_id="tidy")
+        plan_patch = patch.object(tidy, "plan", return_value=self.plan)
+        plan_patch.start()
+        self.addCleanup(plan_patch.stop)
+        self.dictation = Dictation({"model": "asr", "mic_device": "", "language": "en", "audio_dim_enabled": False,
+                                    "unload_after": "never"}, Mock())
+        self.dictation.asr_server = Mock(port=1)
+
+    def cache_tidy_model(self):
+        (self.models / "cleanup" / "tidy.gguf").touch()
+
+    def test_listening_starts_while_a_downloaded_tidy_model_is_still_loading(self):
+        self.cache_tidy_model()
+        loading, listening, release = threading.Event(), threading.Event(), threading.Event()
+        self.dictation.listener.on_state.side_effect = lambda state: listening.set() if state == State.LISTENING else None
+
+        def ensure_cleanup(plan, progress):
+            loading.set()
+            release.wait(5)
+
+        with patch.object(self.dictation, "_ensure_cleanup", side_effect=ensure_cleanup) as ensure:
+            worker = threading.Thread(target=self.dictation._prepare)
+            worker.start()
+            reached_listening = listening.wait(2)  # while the tidy-up load is still blocked
+            release.set()
+            worker.join(5)
+
+        self.assertTrue(reached_listening)
+        self.assertTrue(loading.wait(5))
+        self.assertEqual(ensure.call_count, 1)
+        self.assertIs(ensure.call_args.args[0], self.plan)
+        self.dictation.mic.start.assert_called_once()
+
+    def test_missing_tidy_model_downloads_before_listening_with_progress(self):
+        progress = Mock()
+        with patch.object(self.dictation, "_ensure_cleanup") as ensure:
+            self.dictation._ensure_runtimes(progress)
+
+        self.dictation.asr_server.ensure.assert_called_once_with("asr", progress)
+        ensure.assert_called_once_with(self.plan, progress)
+
+    def test_tidy_up_off_starts_only_the_speech_runtime(self):
+        self.plan.model_id = None
+        with patch.object(self.dictation, "_ensure_cleanup") as ensure:
+            self.dictation._ensure_runtimes(Mock())
+
+        self.dictation.asr_server.ensure.assert_called_once()
+        ensure.assert_not_called()
+
+    def test_failed_background_load_is_logged_not_raised(self):
+        with patch.object(self.dictation, "_ensure_cleanup", side_effect=RuntimeError("server exited")), \
+                self.assertLogs("speak.controller", "INFO") as logs:
+            self.dictation._preload_cleanup(self.plan)
+
+        self.assertIn("preload failed", logs.output[0])
+
+    def test_speech_runtime_failure_aborts_before_any_tidy_up_start(self):
+        self.cache_tidy_model()
+        self.dictation.asr_server.ensure.side_effect = RuntimeError("asr exited")
+        with patch.object(self.dictation, "_ensure_cleanup") as ensure, self.assertLogs("speak.controller", "ERROR"):
+            self.dictation._prepare()
+
+        ensure.assert_not_called()
+        self.assertEqual(self.dictation.state, State.IDLE)
+        self.dictation.listener.on_error.assert_called_once()
 
 
 if __name__ == "__main__":
