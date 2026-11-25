@@ -29,6 +29,11 @@ def _asr_model_cached() -> bool:
     return any("cleanup" not in p.parts for p in MODELS_DIR.rglob("*.gguf"))
 
 
+def user_asr_model() -> Optional[Path]:
+    """A speech model .gguf the user pasted straight into the models folder (not downloaded by Speak)."""
+    return next(iter(sorted(MODELS_DIR.glob("*.gguf"))), None)
+
+
 def check_model_host() -> None:
     """Fail fast, with a readable message, when the model host is unreachable (downloads otherwise retry for minutes)."""
     try:
@@ -160,10 +165,12 @@ class AsrServer(ManagedServer):
         super().__init__("NeMo-Speech ASR", ASR_LOG, "/ready")
 
     def ensure(self, model: str, progress: Progress):
-        if self.running(model):
+        local_model = user_asr_model()
+        key = (model, str(local_model)) if local_model else model
+        if self.running(key):
             return
         progress("Getting ready", None)
-        if not _asr_model_cached():
+        if local_model is None and not _asr_model_cached():
             check_model_host()
         root = asr_root()
         executable = root / "bin" / exe_name("nemo-speech")
@@ -176,11 +183,11 @@ class AsrServer(ManagedServer):
                 progress("Downloading", min(99, int(done * 100 / float(total[-1]))))
 
         self.start(
-            model,
+            key,
             executable,
             # Max lookahead: words judged with ~0.25 s of what follows. Better accuracy on clean speech,
             # same finish time; live text updates every 320 ms instead of 160 ms.
-            ["serve", "--asr-model", model, "--no-ui", "--asr.streaming.rnnt_right_context=-1"],
+            ["serve", "--asr-model", str(local_model or model), "--no-ui", "--asr.streaming.rnnt_right_context=-1"],
             cwd=root,
             env={"NEMO_SPEECH_MODEL_DIR": str(MODELS_DIR)},
             on_wait=on_wait,
