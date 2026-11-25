@@ -115,7 +115,7 @@ def plan(settings: dict) -> Plan:
     else:
         g = _gpu if preference != "cpu" else None
     if g and g.integrated and preference == "auto":
-        g = None  # forcing the GPU in Advanced still allows it
+        g = None  # forcing the GPU in More options still allows it
     gpu_for_large = g if g and g.free_mb >= _memory_required_mb(LARGE_MODEL) else None
     pinned = settings.get("cleanup_model")
     if pinned in CLEANUP_MODELS:
@@ -147,7 +147,7 @@ def plan(settings: dict) -> Plan:
         name = "Small AI"
     notes = []
     if pinned in CLEANUP_MODELS:
-        notes.append("Model chosen in Advanced.")
+        notes.append("Model chosen in More options.")
     elif device:
         notes.append("Same as Best here." if level == "auto" else "Same as Automatic here.")
     elif level == "best" and model != LARGE_MODEL:
@@ -157,6 +157,6 @@ def plan(settings: dict) -> Plan:
     elif preference == "gpu" and gpu_for_model is None:
         notes.append("GPU was forced, but it doesn't have enough free memory for this model. Using your processor.")
     elif preference == "cpu":
-        notes.append("Processor forced in Advanced.")
+        notes.append("Processor forced in More options.")
     note = (" " + " ".join(notes)) if notes else ""
     return Plan(level, model, mode, device, f"{name} on your {where}, {speed}. {what}{size}{note}")

@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import patch
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QShortcut
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QDialog, QPushButton
 
@@ -27,6 +28,23 @@ class MainWindowInteractionTest(QtTestCase):
         self.capture(window, "settings-navigation")
         self.assertIs(window.stack.currentWidget(), window.settings)
         self.assertTrue(window.nav.button(2).isChecked())
+
+    def test_page_shortcuts_switch_pages_but_not_while_onboarding_covers_the_window(self):
+        with patch("speak.audio.input_devices", return_value=[]), \
+                patch("speak.platform_utils.launch_at_login_enabled", return_value=False):
+            window = MainWindow({**config.DEFAULTS}, lambda: 0.0)
+        self.addCleanup(window.close)
+        shortcuts = {s.key().toString(): s for s in window.findChildren(QShortcut)}
+
+        shortcuts["Ctrl+2"].activated.emit()
+        self.assertIs(window.history, window.stack.currentWidget())
+        shortcuts["Ctrl+,"].activated.emit()
+        self.assertIs(window.settings, window.stack.currentWidget())
+        self.assertTrue(window.nav.button(2).isChecked())
+
+        window.show_onboarding(True)
+        shortcuts["Ctrl+1"].activated.emit()
+        self.assertIs(window.settings, window.stack.currentWidget())
 
 
 class CloseDialogInteractionTest(QtTestCase):

@@ -47,7 +47,8 @@ LIVE_TEXT = "hi sam the meeting is at three no wait four o'clock on thursday can
 def main():
     app = QApplication(sys.argv)
     config.SETTINGS_FILE.write_text(
-        json.dumps({**config.DEFAULTS, "theme": "Light", "close_action": "tray", "history_enabled": True}),
+        json.dumps({**config.DEFAULTS, "theme": "Light", "close_action": "tray", "history_enabled": True,
+                    "onboarding_done": True}),
         encoding="utf-8",
     )
     speak = SpeakApp(app, background=False)

@@ -5,8 +5,9 @@ from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
 
 from tests.ui import QtTestCase
-from speak import config
+from speak import config, platform_utils
 from speak.ui.app import SpeakApp
+from speak.ui.pages import settings as settings_page
 from speak.ui.pages.settings import SettingsPage
 from speak.ui import theme
 
@@ -51,6 +52,7 @@ class SettingsInteractionTest(QtTestCase):
         self.assertTrue(page.enter.isChecked())
         self.assertFalse(page.enter_before.isEnabled())
         self.assertTrue(page.enter_before.isChecked())
+        self.assertEqual(settings_page.ENTER_OFF_HINT, page.enter_row.hint.text())
         self.assertEqual([{"auto_paste": False}], changes)
 
     def test_audio_level_key_adjustment_emits_snapped_value_and_updates_label(self):
@@ -79,7 +81,7 @@ class SettingsInteractionTest(QtTestCase):
         self.assertEqual([{"shortcut_mode": "toggle"}], changes)
 
     def test_language_dropdown_selects_any_model_language_and_is_not_editable(self):
-        page = self.make_page({"advanced_settings": True})
+        page = self.make_page()
         changes = []
         page.changed.connect(changes.append)
 
@@ -116,17 +118,16 @@ class SettingsInteractionTest(QtTestCase):
         self.app.processEvents()
         self.capture(page.language.parentWidget(), "language-selected")
 
-    def test_advanced_toggle_reveals_technical_settings_and_emits_preference(self):
-        page = self.make_page()
-        changes = []
-        page.changed.connect(changes.append)
-        self.assertFalse(page.asr_model.parentWidget().isVisible())
+    def test_reduce_by_row_appears_only_while_dimming_is_on(self):
+        page = self.make_page({"audio_dim_enabled": False})
+        page.show_category("indicator")
+        self.assertFalse(page.audio_dim_level_row.isVisible())
 
-        QTest.mouseClick(page.advanced_toggle, Qt.LeftButton)
+        page.audio_dim.click()
 
-        self.capture(page, "advanced-settings")
-        self.assertTrue(page.asr_model.parentWidget().isVisible())
-        self.assertEqual([{"advanced_settings": True}], changes)
+        self.assertTrue(page.audio_dim_level_row.isVisible())
+        self.assertTrue(page.audio_dim_slider.isEnabled())
+
 
     def test_sync_reflects_every_setting_changed_elsewhere_without_emitting(self):
         page = self.make_page()
@@ -142,3 +143,109 @@ class SettingsInteractionTest(QtTestCase):
         self.assertFalse(page.corrections.isChecked())
         self.assertTrue(page.prereleases.isChecked())
         self.assertEqual([], changes)
+
+
+class SettingsMoreOptionsTest(QtTestCase):
+    """Technical and experimental rows sit behind each section's More options, which remembers being open and
+    counts hidden rows changed from their defaults."""
+
+    make_page = SettingsInteractionTest.make_page
+
+    def test_more_options_reveals_technical_rows_and_remembers_open_sections(self):
+        page = self.make_page({"expanded_sections": ["tidy"]})
+        changes = []
+        page.changed.connect(changes.append)
+        self.assertFalse(page.asr_model.isVisible())
+        self.assertTrue(page.sections["tidy"].expanded)
+
+        QTest.mouseClick(page.sections["speech"].more, Qt.LeftButton)
+
+        self.capture(page, "speech-more-options")
+        self.assertTrue(page.asr_model.isVisible())
+        self.assertEqual([{"expanded_sections": ["speech", "tidy"]}], changes)
+
+    def test_changed_count_tracks_hidden_settings_that_differ_from_defaults(self):
+        page = self.make_page({"unload_after": "never", "press_enter": True})
+        speech, typing = page.sections["speech"].more, page.sections["typing"].more
+        self.assertEqual(1, speech.changed_count)
+        self.assertEqual(1 if platform_utils.IS_WINDOWS else 0, typing.changed_count)
+        self.capture(page, "changed-hidden-option")
+
+        page.unload.setCurrentIndex(page.unload.findData(config.DEFAULTS["unload_after"]))
+        self.assertEqual(0, speech.changed_count)
+
+        page.sync({**config.DEFAULTS, "cleanup_device": "cpu"})
+        self.assertEqual(1, page.sections["tidy"].more.changed_count)
+        self.assertEqual(0, typing.changed_count)
+
+    def test_rows_the_platform_cannot_use_are_neither_shown_nor_searchable(self):
+        with patch.object(platform_utils, "IS_WINDOWS", False):
+            page = self.make_page()
+        page.show_category("text")
+
+        self.assertFalse(page.enter_row.isVisible())
+        self.assertFalse(page.sections["typing"].more.isVisible())
+        self.assertEqual([], page.matches("enter"))
+
+
+class SettingsSearchTest(QtTestCase):
+    """Search finds settings by their words or synonyms and jumps to them, opening More options when needed."""
+
+    make_page = SettingsInteractionTest.make_page
+
+    def test_return_opens_first_match_in_its_category_and_highlights_it(self):
+        page = self.make_page()
+        changes = []
+        page.changed.connect(changes.append)
+
+        QTest.keyClicks(page.search, "gpu")
+
+        self.assertIs(page.results_page, page.stack.currentWidget())
+        self.assertEqual(["Tidy-up device"], [r.row.title for r in page.results])
+        self.capture(page, "search-results")
+
+        QTest.keyClick(page.search, Qt.Key_Return)
+        self.app.processEvents()
+
+        row = page.cleanup_device.parentWidget()
+        self.assertEqual("text", page.category)
+        self.assertIs(page.pages["text"], page.stack.currentWidget())
+        self.assertTrue(page.sections["tidy"].expanded)
+        self.assertTrue(page.cleanup_device.isVisible())
+        self.assertIs(page.cleanup_device, page.focusWidget())
+        self.assertTrue(row.property("highlight"))
+        self.assertEqual("", page.search.text())
+        self.assertEqual([], changes)  # revealing a row doesn't change the saved open sections
+        self.capture(page, "search-revealed-row")
+
+    def test_title_matches_rank_first_and_unknown_words_say_so(self):
+        page = self.make_page()
+
+        self.assertEqual("Microphone", page.matches("mic")[0].title)
+
+        page.search.setText("zzz")
+
+        self.assertEqual([], page.results)
+        self.assertTrue(page.no_results.isVisible())
+        self.assertIn("zzz", page.no_results.text())
+        self.assertIsNone(page.category_group.checkedButton())
+        QTest.keyClick(page.search, Qt.Key_Escape)
+        self.assertIs(page.pages["dictation"], page.stack.currentWidget())
+        self.assertTrue(page.dictation_button.isChecked())
+
+    def test_narrow_page_swaps_category_list_for_a_dropdown(self):
+        page = self.make_page()
+        page.resize(600, 480)
+        self.app.processEvents()
+
+        self.assertFalse(page.nav_buttons.isVisible())
+        self.assertTrue(page.category_combo.isVisible())
+        page.category_combo.setCurrentIndex(page.category_combo.findData("updates"))
+
+        self.capture(page, "compact-settings")
+        self.assertIs(page.pages["updates"], page.stack.currentWidget())
+
+        page.resize(1000, 700)
+        self.app.processEvents()
+        self.assertTrue(page.updates_button.isChecked())
+        self.assertTrue(page.nav_buttons.isVisible())

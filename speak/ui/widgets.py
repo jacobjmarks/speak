@@ -6,12 +6,12 @@ from collections import deque
 
 from PySide6.QtCore import (Property, QEasingCurve, QPointF, QPropertyAnimation, QRectF, QSize, Qt, QTimer,
                             Signal)
-from PySide6.QtGui import QColor, QPainter
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPen
 from PySide6.QtWidgets import QAbstractButton, QPushButton, QSizePolicy, QWidget
 
 from .. import hotkey, permissions
 from . import theme
-from .paint import BARS, draw_cross, draw_check, draw_mic, draw_ring, draw_shimmer_text, draw_wave
+from .paint import BARS, draw_chevron, draw_cross, draw_check, draw_mic, draw_ring, draw_shimmer_text, draw_wave
 
 
 # ---------- animation helper ----------
@@ -63,11 +63,14 @@ class Spinner(Animated):
 # ---------- toggle switch ----------
 
 class Toggle(QAbstractButton):
+    """Painted switch. Takes focus from the keyboard only, so the focus ring marks keyboard navigation."""
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setCheckable(True)
         self.setCursor(Qt.PointingHandCursor)
-        self.setFixedSize(44, 24)
+        self.setFocusPolicy(Qt.TabFocus)
+        self.setFixedSize(48, 28)
         self._pos = 0.0
         self._anim = QPropertyAnimation(self, b"knob", self, duration=160, easingCurve=QEasingCurve.OutCubic)
         self.toggled.connect(self._animate)
@@ -94,7 +97,7 @@ class Toggle(QAbstractButton):
         self.update()
 
     def sizeHint(self):
-        return QSize(44, 24)
+        return QSize(48, 28)
 
     def paintEvent(self, e):
         p = QPainter(self)
@@ -102,15 +105,115 @@ class Toggle(QAbstractButton):
         pal = self.palette_
         off, on = QColor(pal.border), QColor(pal.accent)
         t = self._pos
-        track = QColor(int(off.red() + (on.red() - off.red()) * t), int(off.green() + (on.green() - off.green()) * t),
-                       int(off.blue() + (on.blue() - off.blue()) * t))
-        if not self.isEnabled():
-            track.setAlpha(110)
-        p.setPen(Qt.NoPen)
+        knob = QColor("#ffffff")
+        if self.isEnabled():
+            track = QColor(int(off.red() + (on.red() - off.red()) * t),
+                           int(off.green() + (on.green() - off.green()) * t),
+                           int(off.blue() + (on.blue() - off.blue()) * t))
+        else:  # unavailable reads as neutral whatever its position, so it never looks switched on
+            track = QColor(pal.surface_alt)
+            knob = QColor(pal.border)
+        if self.hasFocus():
+            p.setPen(QPen(QColor(pal.accent), 2))
+            p.setBrush(Qt.NoBrush)
+            p.drawRoundedRect(QRectF(1, 1, 46, 26), 13, 13)
+        p.setPen(Qt.NoPen if self.isEnabled() else QPen(QColor(pal.border), 1))
         p.setBrush(track)
-        p.drawRoundedRect(QRectF(0, 0, 44, 24), 12, 12)
-        p.setBrush(QColor("#ffffff"))
-        p.drawEllipse(QRectF(3 + t * 20, 3, 18, 18))
+        p.drawRoundedRect(QRectF(2.5, 2.5, 43, 23), 11.5, 11.5)
+        p.setPen(Qt.NoPen)
+        p.setBrush(knob)
+        p.drawEllipse(QRectF(5 + t * 20, 5, 18, 18))
+
+
+# ---------- disclosure ----------
+
+class Disclosure(QAbstractButton):
+    """Full-width "More options" row that opens a section's technical rows. Shows how many of those rows differ
+    from their defaults, so a changed option is never hidden silently."""
+
+    def __init__(self, text: str = "More options", parent=None):
+        super().__init__(parent)
+        self.setCheckable(True)
+        self.setText(text)
+        self.setAccessibleName(text)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setFocusPolicy(Qt.TabFocus)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.changed_count = 0
+        self.summary = ""  # names of the hidden rows, shown under the label while closed
+        self.divider = False
+        self.palette_ = theme.LIGHT
+        self._fit()
+
+    def checkStateSet(self):  # runs for every setChecked, even with signals blocked
+        super().checkStateSet()
+        self._fit()
+
+    def set_summary(self, text: str) -> None:
+        self.summary = text
+        self._fit()
+        self.update()
+
+    def _fit(self):
+        self.setFixedHeight(62 if self.summary and not self.isChecked() else 46)
+
+    def set_changed(self, count: int) -> None:
+        self.changed_count = count
+        self.setAccessibleDescription(f"{count} changed" if count else "")
+        self.update()
+
+    def sizeHint(self):
+        return QSize(240, self.height())
+
+    def enterEvent(self, e):
+        super().enterEvent(e)
+        self.update()
+
+    def leaveEvent(self, e):
+        super().leaveEvent(e)
+        self.update()
+
+    def paintEvent(self, e):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        pal = self.palette_
+        rect = QRectF(self.rect())
+        if self.divider:
+            p.fillRect(QRectF(0, 0, rect.width(), 1), QColor(pal.border))
+        if self.hasFocus():
+            p.setPen(QPen(QColor(pal.accent), 2))
+            p.setBrush(Qt.NoBrush)
+            p.drawRoundedRect(rect.adjusted(2, 4, -2, -3), 9, 9)
+        hot = self.underMouse() or self.hasFocus()
+        font = self.font()
+        font.setWeight(QFont.DemiBold)
+        p.setFont(font)
+        p.setPen(QColor(pal.text if hot else pal.muted))
+        metrics = QFontMetrics(font)
+        line = QRectF(rect.left(), 0, rect.width(), 46)
+        p.drawText(line.adjusted(10, 0, 0, 0), Qt.AlignVCenter | Qt.AlignLeft, self.text())
+        small = QFont(self.font())
+        small.setPointSizeF(max(7.0, font.pointSizeF() - 1.5))
+        if self.summary and not self.isChecked():
+            p.setFont(small)
+            p.setPen(QColor(pal.muted))
+            text = QFontMetrics(small).elidedText(self.summary, Qt.ElideRight, int(rect.width() - 60))
+            p.drawText(QRectF(10, 34, rect.width() - 60, 18), Qt.AlignVCenter | Qt.AlignLeft, text)
+        if self.changed_count:
+            small.setWeight(QFont.DemiBold)
+            label = f"{self.changed_count} changed"
+            width = QFontMetrics(small).horizontalAdvance(label) + 14
+            pill = QRectF(10 + metrics.horizontalAdvance(self.text()) + 10, line.center().y() - 9, width, 18)
+            tint = QColor(pal.accent)
+            tint.setAlphaF(0.16)
+            p.setPen(Qt.NoPen)
+            p.setBrush(tint)
+            p.drawRoundedRect(pill, 9, 9)
+            p.setFont(small)
+            p.setPen(QColor(pal.accent))
+            p.drawText(pill, Qt.AlignCenter, label)
+        draw_chevron(p, QPointF(rect.right() - 20, line.center().y()), 12, QColor(pal.text if hot else pal.muted),
+                     up=self.isChecked())
 
 
 # ---------- mic button ----------

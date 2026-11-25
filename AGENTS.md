@@ -23,19 +23,19 @@ Speak is a local desktop dictation app. A global hotkey (hold or tap) records th
 | `ui/app.py` | PySide6 `SpeakApp`: tray, hotkey wiring, close behaviour, update flow, dictation → window/overlay, `main()` |
 | `ui/bridge.py` | `Bridge`: `Listener` callbacks (worker threads) re-emitted as Qt signals on the UI thread; coalesces live text |
 | `ui/single_instance.py` | `claim(wait_ms)`: `QLockFile` + `QLocalServer` so a second launch shows the running window and exits |
-| `ui/window.py` | `MainWindow` (sidebar + pages), `app_icon()`, first-close `CloseDialog` |
+| `ui/window.py` | `MainWindow` (sidebar with painted nav glyphs + pages; Ctrl+1..4 and Ctrl+, switch pages), `app_icon()`, first-close `CloseDialog` |
 | `ui/banner.py` | `Banner`: keyed in-window notices (errors, permission warnings, updates); use `window.notify(key, text, level, action)`. User-facing text must be plain language |
 | `ui/pages/dictate.py` | `DictatePage`: mic button, wave, live/final transcript, Copy |
-| `ui/pages/history.py` | `HistoryPage`: opt-in transcript list, click to copy, clear all |
-| `ui/pages/settings.py` | `SettingsPage`: basic card + collapsible Advanced; every control emits `changed` with a partial settings dict |
+| `ui/pages/history.py` | `HistoryPage`: opt-in transcript list grouped by day, click to copy, clear all (inline confirm) |
+| `ui/pages/settings.py` | `SettingsPage`: category sub-nav + search (Ctrl+F) beside one page per category (`CATEGORIES`); each `SettingsSection` hides technical/experimental rows behind "More options" (open state in `expanded_sections`, counts changed hidden rows); compact dropdown under `COMPACT_WIDTH`; every control emits `changed` with a partial settings dict |
 | `ui/pages/about.py` | `AboutPage`: version, sponsor links, licence/notices |
 | `ui/pages/setup.py` | `SetupPage`: macOS first-run permissions, shown until all are granted |
-| `ui/controls.py` | Shared page building blocks: `Page`, `make_card`/`make_label`/`make_combo`, `SettingRow`, `MicCombo`, `LanguageItemDelegate` |
+| `ui/controls.py` | Shared page building blocks: `Page`, `make_card`/`make_label`/`make_combo`/`make_badge`, `SettingRow` (key, keywords, badge, `flash`), `SettingsSection` (dividers + More options), `MicCombo`, `LanguageItemDelegate` |
 | `ui/onboarding/` | `OnboardingPage`: animated 8-step first-run flow (welcome, theme, mic check + retry, shortcut/mode/dimming, tidy level + model + speed test, overlay preview via real `Overlay.snapshot`, updates + pre-releases, done); changes apply live; changing tidy options cancels the running test (`Dictation.cancel_benchmark`) and re-tests; rerun from Settings |
 | `benchmark.py` | `run(...)`: times a recording through ASR + tidy; `Result.verdict` plain-language rating |
 | `ui/overlay.py` | Floating pill: waveform / phase word / check; position (cursor/top/bottom); live text (line/full/off) |
-| `ui/widgets.py` | Painted widgets: `MicButton`, `WaveStrip`, `Spinner`, `Toggle`, `ShortcutButton`; base class `Animated` |
-| `ui/paint.py` | Drawing helpers shared by widgets, overlay and onboarding: glyphs (`draw_mic/check/cross/ring`), `draw_wave`, `draw_shimmer_text`, `BARS` |
+| `ui/widgets.py` | Painted widgets: `MicButton`, `WaveStrip`, `Spinner`, `Toggle`, `Disclosure`, `ShortcutButton`; base class `Animated` |
+| `ui/paint.py` | Drawing helpers shared by widgets, overlay and onboarding: glyphs (`draw_mic/check/cross/ring/clock/sliders/info/chevron`), `draw_wave`, `draw_shimmer_text`, `BARS` |
 | `ui/theme.py` | Light/dark palettes + the app style sheet (all colours live here) |
 
 Entry point: `main.py` (repo root) or `python -m speak`; both call `speak.ui.app.main()`. `--background` starts hidden in the tray.
@@ -44,7 +44,7 @@ Entry point: `main.py` (repo root) or `python -m speak`; both call `speak.ui.app
 
 | Task | File |
 |---|---|
-| Add or rename a setting | `config.DEFAULTS` + `ui/pages/settings.py` `SettingsPage` (basic = user-level only; technical → Advanced) |
+| Add or rename a setting | `config.DEFAULTS` + `ui/pages/settings.py` `SettingsPage` `_row(...)` in the right category/section, with `key` and search `keywords` (visible rows = user-level only; technical → `advanced=True`, experimental also `badge="Experimental"`) |
 | Cleanup prompt / behaviour | `cleanup.py` |
 | Which tidy model/device, speed presets | `tidy.py` (benchmarks in its docstring) |
 | Runtime CLI flags, ports, readiness | `runtimes.py` |
@@ -75,6 +75,14 @@ Entry point: `main.py` (repo root) or `python -m speak`; both call `speak.ui.app
 - Never write the version into source; the Release workflow stamps `speak/_build.py`.
 - Bundled LGPL components (Qt/PySide6, pynput) must stay separate libraries; the source stays public so users can rebuild.
 - Reference issues with `Closes #N` in commit messages; the release lists and comments on them.
+
+## UI conventions
+
+- Users dictate into *other* apps; they open the window mainly to change a setting, between tasks. Defaults must be good; the window favours settings over the Dictate page.
+- One teal accent (`Palette.accent`) for selection, primary actions and live state only. Colours live only in `ui/theme.py`; badges tint their own hue (`make_badge`), never grey text on a coloured fill.
+- Copy is plain language: say what happens, not how ("Tidy up my words"). A disabled control says why in its hint. Settings use the same names, options and hints as onboarding for the same setting, so people can find what they picked during setup.
+- Technical or experimental rows go behind their section's "More options" (`advanced=True`); experimental rows also get `badge="Experimental"`. Never hide a changed value silently: More options counts them.
+- Confirm destructive actions inline (see `HistoryPage`), not with a modal. Painted controls take keyboard focus (with a visible ring) and carry accessible names.
 
 ## Run / test
 

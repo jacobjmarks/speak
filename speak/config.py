@@ -32,7 +32,7 @@ DEFAULTS = {
     "press_enter_before": False,  # experimental: Enter before pasting, same app check
     "audio_dim_enabled": False,
     "audio_dim_percent": 20,
-    "advanced_settings": False,
+    "expanded_sections": [],  # settings sections whose "More options" are open (ADVANCED_SECTIONS ids)
     "onboarding_done": False,  # first-run setup finished or skipped; existing installs count as done
     "mic_device": None,  # device name; None = system default
     "overlay_enabled": True,
@@ -123,6 +123,8 @@ THEMES = ("System", "Light", "Dark")
 # Speech model ~1 GB RAM, large tidy model ~3 GB VRAM. Reloading costs ~2-4 s on the next dictation.
 UNLOAD_AFTER = {"0": "Right away (slower start)", "5": "After 5 minutes", "30": "After 30 minutes", "never": "Never"}
 UPDATE_MODES = {"auto": "Install automatically", "notify": "Just tell me", "off": "Don't check"}
+# Settings sections with a "More options" part (ui/pages/settings.py); `expanded_sections` holds the open ones.
+ADVANCED_SECTIONS = ("speech", "tidy", "typing", "data", "updates")
 
 
 def load_settings() -> dict:
@@ -153,7 +155,13 @@ def load_settings() -> dict:
         settings["shortcut_mode"] = "auto" if stored["hold_to_talk"] else "toggle"
     if "check_updates" in stored and "updates" not in stored:
         settings["updates"] = "auto" if stored["check_updates"] else "off"
-    for key in ("cleanup_enabled", "cleanup_mode", "check_updates", "hold_to_talk"):
+    if "expanded_sections" not in stored and stored.get("advanced_settings") is True:  # one global Advanced switch
+        settings["expanded_sections"] = list(ADVANCED_SECTIONS)
+    if isinstance(settings["expanded_sections"], list):
+        settings["expanded_sections"] = [s for s in ADVANCED_SECTIONS if s in settings["expanded_sections"]]
+    else:
+        settings["expanded_sections"] = []
+    for key in ("cleanup_enabled", "cleanup_mode", "check_updates", "hold_to_talk", "advanced_settings"):
         settings.pop(key, None)
     if not isinstance(settings["model"], str) or settings["model"] not in ASR_MODELS:
         settings["model"] = DEFAULTS["model"]

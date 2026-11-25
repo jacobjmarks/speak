@@ -55,7 +55,9 @@ For settings, drive the real controls on the page object rather than poking the 
 
 ```python
 w.show_page(2)
-w.settings.advanced_toggle.setChecked(True)
+w.settings.show_category("text")           # dictation, text, indicator, app, updates
+w.settings.sections["tidy"].more.click()   # open a section's More options
+w.settings.search.setText("gpu")           # search; w.settings.reveal(row) jumps to a row
 ```
 
 If an interaction is in a nested section or a dynamically shown widget, toggle the relevant UI element, then call `QApplication.processEvents()` or `QTimer.singleShot(...)` so the UI settles before asserting.
@@ -74,7 +76,7 @@ For quick behavioral assertions, interact with widgets and inspect their state o
 
 ```python
 assert w.dictate.text.toPlainText() == "hello"
-assert w.settings.advanced_toggle.isChecked()
+assert w.settings.sections["tidy"].expanded
 ```
 
 Use `QSignalSpy` or direct widget state when the requirement is a state transition, setting persistence, or UI enabling/disabling; use a PNG only when the requirement is visual and broad enough to justify it.

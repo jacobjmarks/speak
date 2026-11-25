@@ -14,7 +14,7 @@ No application behavior, defaults, build, or release workflow changed. Small was
 
 The current application already requests ASR punctuation unconditionally in [controller.py](../speak/controller.py). [cleanup.py](../speak/cleanup.py) already performs spoken layout commands, some punctuation commands, filler/stutter removal, and pause-based paragraphing without an LLM. Thus those features are **not unique value from the 4B model**.
 
-The material additional feature is semantic editing: deciding what to discard when someone changes their mind. In [tidy.py](../speak/tidy.py), Automatic uses Large on a qualifying GPU and Small otherwise; Best prefers Large when memory permits. Large uses the smart prompt unless corrections are disabled; Small always uses literal mode, including when pinned in Advanced. Automatic and Best are identical on a qualifying GPU. Merely switching users to Automatic does not eliminate the large download.
+The material additional feature is semantic editing: deciding what to discard when someone changes their mind. In [tidy.py](../speak/tidy.py), Automatic uses Large on a qualifying GPU and Small otherwise; Best prefers Large when memory permits. Large uses the smart prompt unless corrections are disabled; Small always uses literal mode, including when pinned in More options. Automatic and Best are identical on a qualifying GPU. Merely switching users to Automatic does not eliminate the large download.
 
 Removing Large globally would remove today's supported correction behavior, not just reduce model size. Keeping Small as an offline baseline and offering Large separately avoids that regression for users who want the feature, but makes it an optional subsequent download.
 

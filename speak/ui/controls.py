@@ -1,10 +1,12 @@
-"""Building blocks shared by the main-window pages and the first-run setup: page base, cards, labels, setting rows, form controls."""
-from PySide6.QtCore import Qt
+"""Building blocks shared by the main-window pages and the first-run setup: page base, cards, labels, badges, setting rows
+and sections, form controls."""
+from PySide6.QtCore import QEvent, Qt, QTimer, Signal
 from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import (QBoxLayout, QComboBox, QFrame, QHBoxLayout, QLabel, QStyle, QStyleOptionViewItem,
                                QStyledItemDelegate, QVBoxLayout, QWidget)
 
 from .. import audio
+from .widgets import Disclosure
 
 
 def make_card() -> tuple:
@@ -31,15 +33,51 @@ class Page(QWidget):
         self.layout_.setSpacing(14)
 
 
+def make_badge(text: str, tone: str = "warn") -> QLabel:
+    """Small tinted pill beside a row title, e.g. "Experimental" (warn) or a neutral note (info)."""
+    badge = QLabel(text, objectName="badge")
+    badge.setProperty("tone", tone)
+    return badge
+
+
+def explicitly_hidden(widget: QWidget) -> bool:
+    """Hidden by a hide() call, as opposed to merely not shown yet because its window isn't."""
+    return widget.isHidden() and widget.testAttribute(Qt.WA_WState_ExplicitShowHide)
+
+
+def _repolish(widget: QWidget):
+    widget.style().unpolish(widget)
+    widget.style().polish(widget)
+
+
 class SettingRow(QWidget):
-    def __init__(self, title: str, hint: str, control: QWidget):
-        super().__init__()
+    """Title + hint on the left, control on the right; stacks under 440 px. `key` names the setting it edits and
+    `keywords` add search terms beyond the visible text."""
+
+    def __init__(self, title: str, hint: str, control: QWidget, badge: str = "", keywords: str = "", key=None):
+        super().__init__(objectName="row")
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        self.title = title
+        self.badge = badge
+        self.keywords = keywords
+        self.key = key
+        self.available = True  # False when the platform can't use it: never shown, never searched
+        self.advanced = False
+        self.section = None
         self.layout_ = QHBoxLayout(self)
         self.layout_.setSpacing(16)
         self.layout_.setContentsMargins(0, 12, 0, 12)
         self.text = QVBoxLayout()
         self.text.setSpacing(2)
-        self.text.addWidget(make_label(title))
+        heading = QHBoxLayout()
+        heading.setSpacing(8)
+        self.title_label = make_label(title)
+        self.title_label.setWordWrap(False)
+        heading.addWidget(self.title_label)
+        if badge:
+            heading.addWidget(make_badge(badge), 0, Qt.AlignVCenter)
+        heading.addStretch(1)
+        self.text.addLayout(heading)
         self.hint = make_label(hint, "hint")
         self.hint.setWordWrap(True)
         self.text.addWidget(self.hint)
@@ -48,6 +86,26 @@ class SettingRow(QWidget):
         self.layout_.addWidget(control, 0, Qt.AlignVCenter)
         self.control = control
         self._compact = None
+        self._unflash = QTimer(self, singleShot=True, interval=1600, timeout=lambda: self._set_flag("highlight", False))
+
+    def search_text(self) -> str:
+        parts = [self.title, self.hint.text(), self.keywords, self.badge]
+        if self.section:
+            parts += [self.section.title, self.section.category_label]
+        return " ".join(parts).lower()
+
+    def set_divider(self, on: bool):
+        self._set_flag("divider", on)
+
+    def flash(self):
+        """Briefly tint the row, e.g. after search jumps to it."""
+        self._set_flag("highlight", True)
+        self._unflash.start()
+
+    def _set_flag(self, name: str, on: bool):
+        if bool(self.property(name)) != on:
+            self.setProperty(name, on)
+            _repolish(self)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -60,6 +118,89 @@ class SettingRow(QWidget):
         self.layout_.setAlignment(self.control, Qt.Alignment() if compact and isinstance(self.control, QComboBox)
                                   else Qt.AlignRight if compact else Qt.AlignVCenter)
         self.layout_.setStretch(0, 1 if not compact else 0)
+
+
+class SettingsSection(QWidget):
+    """A titled card of `SettingRow`s. Rows added with `advanced=True` sit behind a "More options" disclosure at the
+    foot of the card; dividers between visible rows are managed here, so hiding a row never leaves a stray line."""
+
+    toggled = Signal(bool)
+
+    def __init__(self, title: str = "", category_label: str = "", section_id: str = ""):
+        super().__init__()
+        self.title = title
+        self.category_label = category_label
+        self.id = section_id
+        self.rows = []
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(8)
+        if title:
+            outer.addWidget(make_label(title, "section"))
+        self.card = QFrame(objectName="card")
+        card = QVBoxLayout(self.card)
+        card.setContentsMargins(8, 4, 8, 4)
+        card.setSpacing(0)
+        self._basic = QVBoxLayout()
+        self._basic.setSpacing(0)
+        card.addLayout(self._basic)
+        self.more = Disclosure("More options")
+        self.more.hide()
+        self.more.toggled.connect(self._on_toggled)
+        card.addWidget(self.more)
+        self.advanced = QWidget()
+        self._advanced = QVBoxLayout(self.advanced)
+        self._advanced.setContentsMargins(0, 0, 0, 0)
+        self._advanced.setSpacing(0)
+        self.advanced.hide()
+        card.addWidget(self.advanced)
+        outer.addWidget(self.card)
+
+    @property
+    def expanded(self) -> bool:
+        return self.more.isChecked()
+
+    def add(self, row: SettingRow, advanced: bool = False) -> SettingRow:
+        row.layout_.setContentsMargins(10, 12, 10, 12)
+        row.section = self
+        row.advanced = advanced
+        (self._advanced if advanced else self._basic).addWidget(row)
+        row.installEventFilter(self)
+        self.rows.append(row)
+        self._refresh()
+        return row
+
+    def set_expanded(self, on: bool):
+        """Open or close without emitting `toggled` (restoring a saved state, or revealing a search result)."""
+        self.more.blockSignals(True)
+        self.more.setChecked(on)
+        self.more.blockSignals(False)
+        self.advanced.setVisible(on)
+
+    def set_changed(self, count: int):
+        self.more.set_changed(count)
+
+    def eventFilter(self, watched, event):
+        if event.type() in (QEvent.ShowToParent, QEvent.HideToParent):
+            self._refresh()
+        return False
+
+    def _on_toggled(self, on: bool):
+        self.advanced.setVisible(on)
+        self.toggled.emit(on)
+
+    def _refresh(self):
+        basic = [r for r in self.rows if not r.advanced and not explicitly_hidden(r)]
+        extra = [r for r in self.rows if r.advanced and not explicitly_hidden(r)]
+        for i, row in enumerate(basic):
+            row.set_divider(i > 0)
+        for row in extra:
+            row.set_divider(True)
+        self.more.divider = bool(basic)
+        self.more.set_summary(", ".join(r.title for r in extra))
+        self.more.setVisible(bool(extra))
+        if basic or extra or self.parentWidget():
+            self.setVisible(bool(basic or extra))
 
 
 class NoWheelComboBox(QComboBox):

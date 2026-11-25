@@ -62,6 +62,20 @@ class ConfigTest(unittest.TestCase):
 
         self.assertEqual(settings, config.load_settings())
 
+    def test_old_advanced_switch_opens_every_more_options_section_once(self):
+        for stored, expected in (({"advanced_settings": True}, list(config.ADVANCED_SECTIONS)),
+                                 ({"advanced_settings": False}, []),
+                                 ({"advanced_settings": True, "expanded_sections": ["tidy"]}, ["tidy"]),
+                                 ({"expanded_sections": ["updates", "gone", 3, "speech"]}, ["speech", "updates"]),
+                                 ({"expanded_sections": "speech"}, [])):
+            with self.subTest(stored=stored):
+                self.settings_file.write_text(json.dumps(stored), encoding="utf-8")
+
+                settings = config.load_settings()
+
+                self.assertEqual(expected, settings["expanded_sections"])
+                self.assertNotIn("advanced_settings", settings)
+
     def test_unknown_language_selection_falls_back_to_automatic_detection(self):
         for value in ("xx", ["en"], None):
             with self.subTest(value=value):

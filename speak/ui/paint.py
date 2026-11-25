@@ -23,6 +23,56 @@ def draw_mic(p: QPainter, center: QPointF, size: float, color: QColor) -> None:
     p.restore()
 
 
+def _stroke(p: QPainter, color: QColor, size: float) -> None:
+    p.setPen(QPen(color, max(1.4, size * 0.09), Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+    p.setBrush(Qt.NoBrush)
+
+
+def draw_clock(p: QPainter, center: QPointF, size: float, color: QColor) -> None:
+    p.save()
+    _stroke(p, color, size)
+    r = size * 0.4
+    p.drawEllipse(center, r, r)
+    p.drawPolyline([QPointF(center.x(), center.y() - r * 0.6), center, QPointF(center.x() + r * 0.45, center.y() + r * 0.3)])
+    p.restore()
+
+
+def draw_sliders(p: QPainter, center: QPointF, size: float, color: QColor) -> None:
+    """Three tracks with knobs: the settings glyph."""
+    p.save()
+    _stroke(p, color, size)
+    half = size * 0.4
+    for dy, knob in ((-0.28, -0.14), (0.0, 0.18), (0.28, -0.02)):
+        y = center.y() + dy * size
+        x = center.x() + knob * size
+        gap = size * 0.12
+        p.drawLine(QPointF(center.x() - half, y), QPointF(x - gap, y))
+        p.drawLine(QPointF(x + gap, y), QPointF(center.x() + half, y))
+        p.drawEllipse(QPointF(x, y), size * 0.08, size * 0.08)
+    p.restore()
+
+
+def draw_info(p: QPainter, center: QPointF, size: float, color: QColor) -> None:
+    p.save()
+    _stroke(p, color, size)
+    r = size * 0.4
+    p.drawEllipse(center, r, r)
+    p.drawLine(QPointF(center.x(), center.y() - r * 0.05), QPointF(center.x(), center.y() + r * 0.5))
+    p.setPen(Qt.NoPen)
+    p.setBrush(color)
+    p.drawEllipse(QPointF(center.x(), center.y() - r * 0.45), size * 0.06, size * 0.06)
+    p.restore()
+
+
+def draw_chevron(p: QPainter, center: QPointF, size: float, color: QColor, up: bool = False) -> None:
+    p.save()
+    _stroke(p, color, size * 1.4)
+    d = size * 0.3 * (-1 if up else 1)
+    p.drawPolyline([QPointF(center.x() - size * 0.45, center.y() - d * 0.6), QPointF(center.x(), center.y() + d * 0.6),
+                    QPointF(center.x() + size * 0.45, center.y() - d * 0.6)])
+    p.restore()
+
+
 def draw_check(p: QPainter, center: QPointF, size: float, color: QColor, progress: float = 1.0) -> None:
     path = QPainterPath(QPointF(center.x() - size * 0.38, center.y() + size * 0.02))
     path.lineTo(center.x() - size * 0.1, center.y() + size * 0.3)

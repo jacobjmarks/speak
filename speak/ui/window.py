@@ -1,14 +1,14 @@
 """Main window (sidebar + pages), app icon, and the first-close prompt."""
-from PySide6.QtCore import QPointF, QRectF, Qt, Signal
-from PySide6.QtGui import QBrush, QColor, QIcon, QLinearGradient, QPainter, QPen, QPixmap
+from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
+from PySide6.QtGui import QBrush, QColor, QIcon, QKeySequence, QLinearGradient, QPainter, QPen, QPixmap, QShortcut
 from PySide6.QtWidgets import (QButtonGroup, QDialog, QHBoxLayout, QLabel, QMainWindow, QPushButton, QStackedWidget,
                                QVBoxLayout, QWidget)
 
-from .. import updates
 from ..platform_utils import IS_MAC, TRAY_NAME, hide_title_text, system_app_icon_png
+from . import theme
 from .banner import Banner
 from .onboarding import OnboardingPage
-from .paint import draw_mic
+from .paint import draw_clock, draw_info, draw_mic, draw_sliders
 from .pages.about import AboutPage
 from .pages.dictate import DictatePage
 from .pages.history import HistoryPage
@@ -82,6 +82,24 @@ def menu_bar_icon() -> QIcon:
         p.end()
         icon.addPixmap(pm)
     icon.setIsMask(True)
+    return icon
+
+
+NAV_GLYPHS = (draw_mic, draw_clock, draw_sliders, draw_info)
+
+
+def nav_icon(glyph, muted: str, selected: str) -> QIcon:
+    """18 px sidebar glyph: muted at rest, accent when its page is selected."""
+    icon = QIcon()
+    for state, colour in ((QIcon.Off, muted), (QIcon.On, selected)):
+        pm = QPixmap(36, 36)
+        pm.setDevicePixelRatio(2)
+        pm.fill(Qt.transparent)
+        p = QPainter(pm)
+        p.setRenderHint(QPainter.Antialiasing)
+        glyph(p, QPointF(9, 9.5 if glyph is draw_mic else 9), 16, QColor(colour))
+        p.end()
+        icon.addPixmap(pm, QIcon.Normal, state)
     return icon
 
 
@@ -161,11 +179,18 @@ class MainWindow(QMainWindow):
         for i, (label, page) in enumerate((("Dictate", self.dictate), ("History", self.history),
                                            ("Settings", self.settings), ("About", self.about))):
             self.stack.addWidget(page)
-            button = QPushButton(label, objectName="nav", checkable=True, cursor=Qt.PointingHandCursor)
+            button = QPushButton(f"  {label}", objectName="nav", checkable=True, cursor=Qt.PointingHandCursor)
+            button.setAccessibleName(label)
+            button.setIconSize(QSize(18, 18))
+            keys = QKeySequence(f"Ctrl+{i + 1}")
+            button.setToolTip(f"{label}  ({keys.toString(QKeySequence.NativeText)})")
+            QShortcut(keys, self, activated=lambda index=i: self._shortcut_page(index))
             self.nav.addButton(button, i)
             side.addWidget(button)
+        QShortcut(QKeySequence("Ctrl+,"), self, activated=lambda: self._shortcut_page(2))
         self.nav.button(0).setChecked(True)
         self.nav.idClicked.connect(self.show_page)
+        self.set_palette(theme.LIGHT)
         side.addStretch(1)
 
         status = QHBoxLayout()
@@ -174,9 +199,6 @@ class MainWindow(QMainWindow):
         status.addWidget(self.status_dot)
         status.addWidget(self.status_text, 1)
         side.addLayout(status)
-        version = QLabel(updates.display(), objectName="hint")
-        version.setContentsMargins(2, 4, 0, 0)
-        side.addWidget(version)
 
         layout.addWidget(sidebar)
         content = QWidget()
@@ -212,6 +234,14 @@ class MainWindow(QMainWindow):
         self.stack.setCurrentIndex(index)
         if self.stack.currentWidget() is self.history:
             self.history.refresh(self.history.enabled)
+
+    def _shortcut_page(self, index: int):
+        if self.screens.currentIndex() == 0:  # not while setup or onboarding covers the window
+            self.show_page(index)
+
+    def set_palette(self, palette):
+        for i, glyph in enumerate(NAV_GLYPHS):
+            self.nav.button(i).setIcon(nav_icon(glyph, palette.muted, palette.accent))
 
     def notify(self, key: str, text: str, level: str = "info", action: str = "", enabled: bool = True,
                timeout: float = 0.0):

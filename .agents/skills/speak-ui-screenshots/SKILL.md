@@ -5,7 +5,7 @@ description: Render and visually inspect the Speak window and overlay across sta
 
 # See the UI without driving it
 
-`tools/screenshots.py` builds the real `SpeakApp`, forces each state with the page/overlay setters, and saves `QWidget.grab()` PNGs. Takes ~15 s, needs no human, microphone, or downloaded model.
+`tools/screenshots.py` builds the real `SpeakApp`, forces each state with the page/overlay setters, and saves `QWidget.grab()` PNGs. Takes ~30 s, needs no human, microphone, or downloaded model.
 
 This is a broad visual sweep, not the default check for every `ui/` change. For a single control or state, use a focused test and capture just that state if appearance is the requirement. For behavior such as a click, state transition, or saved setting, assert the behavior directly.
 
@@ -21,10 +21,11 @@ Then **open the PNGs with the `view` tool** (absolute path) and judge them: clip
 
 ## What it does (so you can adapt it)
 
-- Patches `config.SETTINGS_FILE` / `HISTORY_FILE` to a temp dir first, so real settings are untouched, and replaces `hotkey.register` with a no-op.
-- `w = SpeakApp(...).window`; states via `w.dictate.set_mode("listening"|"processing"|"preparing", pct)`, `s.overlay.set_mode(...)`, `s.overlay.set_text(...)`, `s._on_result(text, note)`, `w.show_page(i)` (0 Dictate, 1 History, 2 Settings, 3 About), `w.settings.advanced_toggle.setChecked(True)`, `s._update({"theme": "Dark"})`.
+- Patches `config.SETTINGS_FILE` / `HISTORY_FILE` to a temp dir first, so real settings are untouched, and replaces `hotkey.register` with a no-op. The temp settings set `onboarding_done: true` and `theme: Light`; without the first, a fresh profile opens first-run onboarding instead of the main window.
+- Captures Dictate states, every Settings category, a changed hidden option, open More options, search results/no results, a 640x480 compact window, History (fake rows via `history.recent`), About, dark variants, then all 8 onboarding screens (`w.show_onboarding(True)` + `w.onboarding.go(i)`, `onboarding.common.ANIMATE = False`) with `audio.Microphone` faked and the speed test answered by a canned `Result`.
+- `w = SpeakApp(...).window`; states via `w.dictate.set_mode("listening"|"processing"|"preparing", pct)`, `s.overlay.set_mode(...)`, `s.overlay.set_text(...)`, `s._on_result(text, note)`, `w.show_page(i)` (0 Dictate, 1 History, 2 Settings, 3 About), `w.settings.show_category("text")`, `w.settings.sections[id].more.click()`, `w.settings.search.setText(...)`, `s._update({"theme": "Dark"})`.
 - Fake mic level: `w.dictate.mic.level_source = s.overlay.level_source = lambda: ...` so the waveform animates.
-- Steps run in a `QTimer` chain, 500 ms apart, so animations/layout settle. Add a `QTimer.singleShot(300, ...)` inside a step if something animates open (e.g. the Advanced section).
+- Steps run in a `QTimer` chain, 500 ms apart, so animations/layout settle. Add a `QTimer.singleShot(300, ...)` inside a step if something animates open (e.g. a More options section).
 
 To capture a new state, add a lambda to `STEPS` that sets it and one that calls `shot("name")`. If an attribute name has changed, grep `speak/ui/pages/` and `window.py` for the current one.
 

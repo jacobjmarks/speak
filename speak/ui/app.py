@@ -266,6 +266,7 @@ class SpeakApp(QObject):
         links = self.app.palette()
         links.setColor(QPalette.Link, QColor(self.palette.accent))
         self.app.setPalette(links)
+        self.window.set_palette(self.palette)
         self.window.dictate.set_palette(self.palette)
         self.window.settings.set_palette(self.palette)
         self.window.onboarding.set_palette(self.palette)
