@@ -23,7 +23,7 @@ Speak is a local desktop dictation app. A global hotkey (hold or tap) records th
 | `ui/app.py` | PySide6 `SpeakApp`: tray, hotkey wiring, close behaviour, update flow, dictation → window/overlay, `main()` |
 | `ui/bridge.py` | `Bridge`: `Listener` callbacks (worker threads) re-emitted as Qt signals on the UI thread; coalesces live text |
 | `ui/single_instance.py` | `claim(wait_ms)`: `QLockFile` + `QLocalServer` so a second launch shows the running window and exits |
-| `ui/window.py` | `MainWindow`: sidebar (Find a setting, Dictate, History, every settings category, status, About) beside the page stack; `show_page`, `show_settings(category)`, `open_setting(key)`; Ctrl+1..4, Ctrl+, and Ctrl+F; `app_icon()`, first-close `CloseDialog` |
+| `ui/window.py` | `MainWindow`: sidebar (Find a setting, Dictate, History, every settings category, divider, About; status at the foot) beside the page stack; `show_page`, `show_settings(category)`, `open_setting(key)`; Ctrl+1..4, Ctrl+, and Ctrl+F; `app_icon()`, first-close `CloseDialog` |
 | `ui/banner.py` | `Banner`: keyed in-window notices (errors, permission warnings, updates); use `window.notify(key, text, level, action)`. User-facing text must be plain language |
 | `ui/pages/dictate.py` | `DictatePage`: shortcut + status card (small mic button, wave), latest transcript with Copy, related-settings links |
 | `ui/pages/history.py` | `HistoryPage`: opt-in transcripts in one card per day, click/Enter to copy, clear all (inline confirm) |

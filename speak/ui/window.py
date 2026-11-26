@@ -2,7 +2,7 @@
 pages), app icon, and the first-close prompt."""
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QBrush, QColor, QIcon, QKeySequence, QLinearGradient, QPainter, QPen, QPixmap, QShortcut
-from PySide6.QtWidgets import (QButtonGroup, QDialog, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QPushButton,
+from PySide6.QtWidgets import (QButtonGroup, QDialog, QFrame, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QPushButton,
                                QStackedWidget, QVBoxLayout, QWidget)
 
 from ..platform_utils import IS_MAC, TRAY_NAME, hide_title_text, system_app_icon_png
@@ -222,15 +222,23 @@ class MainWindow(QMainWindow):
         side.addWidget(QLabel("Settings", objectName="navgroup"))
         for key, label in CATEGORIES.items():
             side.addWidget(nav_button(key, label, CATEGORY_GLYPHS[key], lambda _=False, k=key: self.show_settings(k)))
+        side.addSpacing(8)
+        divider = QFrame(objectName="divider")
+        divider.setContentsMargins(0, 0, 0, 0)
+        divider_row = QHBoxLayout()
+        divider_row.setContentsMargins(12, 0, 12, 0)
+        divider_row.addWidget(divider)
+        side.addLayout(divider_row)
+        side.addSpacing(8)
+        side.addWidget(nav_button(ABOUT, "About", draw_info, lambda: self.show_page(ABOUT)))
         side.addStretch(1)
         status = QHBoxLayout()
-        status.setContentsMargins(12, 0, 0, 6)
+        status.setContentsMargins(12, 0, 0, 2)
         self.status_dot = StatusDot()
         self.status_text = QLabel("Ready", objectName="hint")
         status.addWidget(self.status_dot)
         status.addWidget(self.status_text, 1)
         side.addLayout(status)
-        side.addWidget(nav_button(ABOUT, "About", draw_info, lambda: self.show_page(ABOUT)))
 
         for i, (label, keys) in enumerate((("Dictate", "Ctrl+1"), ("History", "Ctrl+2"), ("Settings", "Ctrl+3"),
                                            ("About", "Ctrl+4"))):
