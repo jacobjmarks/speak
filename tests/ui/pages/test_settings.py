@@ -235,7 +235,7 @@ class SettingsSearchTest(QtTestCase):
         QTest.keyClicks(page.search, "enter")
 
         self.assertIs(page.results_page, page.stack.currentWidget())
-        self.assertEqual(["Press Enter before pasting", "Press Enter after pasting"],
+        self.assertEqual([page.enter_before_row.title, page.enter_row.title],  # "Return" on macOS
                          [r.row.title for r in page.results])
         self.capture(page, "search-results")
 

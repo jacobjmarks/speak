@@ -247,10 +247,10 @@ class SettingsPage(QWidget):
                   "auto_paste", "paste auto-paste clipboard insert")
         self.enter_before = self._toggle(settings["press_enter_before"], "press_enter_before")
         self.enter_before_row = self._row(typing, f"Press {ENTER} before pasting", ENTER_HINT, self.enter_before,
-                                          "press_enter_before", "return send submit key", "Experimental", True)
+                                          "press_enter_before", "enter return send submit key", "Experimental", True)
         self.enter = self._toggle(settings["press_enter"], "press_enter")
         self.enter_row = self._row(typing, f"Press {ENTER} after pasting", ENTER_HINT, self.enter, "press_enter",
-                                   "return send submit key", "Experimental", True)
+                                   "enter return send submit key", "Experimental", True)
         self.paste.toggled.connect(self._sync_enter_hints)
         if not platform_utils.IS_WINDOWS:
             self._unavailable(self.enter_row, self.enter_before_row)
