@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from .config import ASR_LOG, CLEANUP_LOG, CLEANUP_MODELS, MODELS_DIR
-from .platform_utils import bundle_root, exe_name, hidden_process_kwargs, tie_to_app
+from .platform_utils import bundle_root, exe_name, hidden_process_kwargs, https_context, tie_to_app
 
 # progress(message, percent_or_None)
 Progress = Callable[[str, Optional[int]], None]
@@ -42,7 +42,7 @@ def check_model_host() -> None:
     """Fail fast, with a readable message, when the model host is unreachable (downloads otherwise retry for minutes)."""
     try:
         request = urllib.request.Request(MODEL_HOST, method="HEAD")
-        with urllib.request.urlopen(request, timeout=10):
+        with urllib.request.urlopen(request, timeout=10, context=https_context()):
             pass
     except Exception as exc:
         raise ModelDownloadError(f"Speak couldn't reach the internet to download its speech model. {DOWNLOAD_HINT}") from exc
@@ -259,7 +259,7 @@ def download_cleanup_model(model_id: str, progress: Progress) -> Path:
     url = f"https://huggingface.co/{info['repo']}/resolve/main/{info['file']}?download=true"
     progress("Downloading", 0)
     try:
-        with urllib.request.urlopen(url, timeout=60) as response, partial.open("wb") as output:
+        with urllib.request.urlopen(url, timeout=60, context=https_context()) as response, partial.open("wb") as output:
             total = int(response.headers.get("Content-Length", 0))
             downloaded = 0
             while chunk := response.read(1024 * 1024):

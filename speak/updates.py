@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
 
-from .platform_utils import IS_MAC, IS_WINDOWS
+from .platform_utils import IS_MAC, IS_WINDOWS, https_context
 
 API = "https://api.github.com/repos/jacobjmarks/speak/releases?per_page=30"
 RELEASES_PAGE = "https://github.com/jacobjmarks/speak/releases"
@@ -95,7 +95,7 @@ def display() -> str:
 
 def _get(url: str, timeout: float = 10):
     request = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json", "User-Agent": "Speak"})
-    return urllib.request.urlopen(request, timeout=timeout)
+    return urllib.request.urlopen(request, timeout=timeout, context=https_context())
 
 
 def pick(releases: list, current: tuple, allow_prerelease: bool = False,
@@ -125,15 +125,16 @@ def pick(releases: list, current: tuple, allow_prerelease: bool = False,
 
 
 def newer_release(allow_prerelease: bool = False) -> Optional[Release]:
-    """A newer release for this OS, or None (up to date, unversioned build, no package for this OS, or offline)."""
+    """A newer release for this OS, or None (up to date, unversioned build, or no package for this OS).
+
+    Raises (OSError, ValueError) when GitHub can't be reached or answers badly, so callers can tell "up to date"
+    from "couldn't check".
+    """
     current = parse(VERSION)
     if not current:
         return None
-    try:
-        with _get(API) as response:
-            return pick(json.load(response), current, allow_prerelease, package_suffix())
-    except Exception:
-        return None
+    with _get(API) as response:
+        return pick(json.load(response), current, allow_prerelease, package_suffix())
 
 
 def exe_path() -> Optional[Path]:

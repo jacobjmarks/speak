@@ -70,6 +70,7 @@ class SpeakApp(QObject):
         b.cancelled.connect(self._on_cancelled)
         b.probed.connect(self._on_probed)
         b.update_found.connect(self._on_update_found)
+        b.update_failed.connect(self._on_update_failed)
         b.update_progress.connect(lambda p: self._set_update(f"{p}%", "Downloading the update…", enabled=False))
         b.update_ready.connect(self._on_update_ready)
         b.test_progress.connect(lambda message, percent: self.window.onboarding.set_progress(message, percent))
@@ -151,13 +152,26 @@ class SpeakApp(QObject):
             return
         if manual:
             self.window.settings.set_update_status("Checking…")
-        if updates.updatable():
-            self.window.settings.set_last_check(datetime.now())
-        threading.Thread(target=lambda: self.bridge.update_found.emit(
-            updates.newer_release(self.settings["prereleases"]), manual), daemon=True).start()
+        bridge, prereleases = self.bridge, self.settings["prereleases"]
+
+        def run():
+            try:
+                release = updates.newer_release(prereleases)
+            except Exception as exc:
+                log.warning("Update check failed", exc_info=exc)
+                bridge.update_failed.emit(manual)
+            else:
+                bridge.update_found.emit(release, manual)
+        threading.Thread(target=run, daemon=True).start()
+
+    def _on_update_failed(self, manual: bool):
+        if manual:
+            self.window.settings.set_update_status("Couldn't check. Are you online?")
 
     def _on_update_found(self, release, manual: bool):
         self._release = release
+        if updates.updatable():
+            self.window.settings.set_last_check(datetime.now())
         if manual:
             self.window.settings.set_update_status(f"{release.version} available" if release else "Up to date")
         if not release:

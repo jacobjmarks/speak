@@ -11,6 +11,21 @@ from speak import updates
 class UpdatesTest(unittest.TestCase):
     """Updates target supported packages, validate releases and hashes, and recover failed swaps."""
 
+    def test_requests_verify_tls_against_the_os_trust_store(self):
+        import ssl
+        import truststore
+        with patch.object(updates.urllib.request, "urlopen") as urlopen:
+            updates._get("https://api.github.com/x")
+        context = urlopen.call_args.kwargs["context"]
+        self.assertIsInstance(context, truststore.SSLContext)
+        self.assertEqual(ssl.CERT_REQUIRED, context.verify_mode)
+        self.assertTrue(context.check_hostname)
+
+    def test_unreachable_github_raises_instead_of_reporting_up_to_date(self):
+        with patch.object(updates, "VERSION", "1.0.0"), \
+                patch.object(updates, "_get", side_effect=OSError("certificate verify failed")):
+            self.assertRaises(OSError, updates.newer_release)
+
     def test_package_suffix_matches_supported_platform_architectures(self):
         with patch.object(updates, "IS_WINDOWS", True), \
                 patch.object(updates.platform, "machine", return_value="AMD64"):

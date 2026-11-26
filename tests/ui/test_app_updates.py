@@ -102,8 +102,10 @@ class UpdateInteractionTest(QtTestCase):
         app._on_state = lambda state: SpeakApp._on_state(app, state)
         app.quit = lambda: SpeakApp.quit(app)
         app.bridge.update_found.connect(lambda release, manual: SpeakApp._on_update_found(app, release, manual))
+        app.bridge.update_failed.connect(lambda manual: SpeakApp._on_update_failed(app, manual))
         app.bridge.update_ready.connect(lambda path: SpeakApp._on_update_ready(app, path))
         self.addCleanup(app.bridge.update_found.disconnect)
+        self.addCleanup(app.bridge.update_failed.disconnect)
         self.addCleanup(app.bridge.update_ready.disconnect)
         page.check_updates.connect(lambda: SpeakApp._check_updates(app, manual=True))
         banner.action_clicked.connect(lambda key: SpeakApp._on_notice_action(app, key))
@@ -146,6 +148,19 @@ class UpdateInteractionTest(QtTestCase):
         self.assertEqual("Up to date", page.update_status.text())
         self.assertFalse(banner.isVisible())
         self.assertIsNone(app._release)
+
+    def test_manual_check_that_cannot_reach_github_says_so_and_keeps_the_offer(self):
+        app, page, banner = self.make_ui("notify")
+        banner.show_notice("update", "Speak 1.2.0 is available.", action="Download")
+        with patch("speak.ui.app.threading.Thread", side_effect=lambda target, **_: SimpleNamespace(start=target)), \
+                patch("speak.ui.app.updates.newer_release", side_effect=OSError("certificate verify failed")), \
+                patch("speak.ui.app.updates.updatable", return_value=True):
+            QTest.mouseClick(self.check_button(page), Qt.LeftButton)
+            self.app.processEvents()
+
+        self.assertEqual("Couldn't check. Are you online?", page.update_status.text())
+        self.assertNotIn("Last checked", page.updates_row.hint.text())
+        self.assertTrue(banner.isVisible())
 
     def test_automatic_update_waits_for_dictation_to_finish_before_restarting(self):
         app, page, banner = self.make_ui("auto")

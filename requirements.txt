@@ -3,5 +3,6 @@ pynput>=1.7
 pyobjc-framework-AVFoundation>=10; sys_platform == "darwin"
 pyperclip>=1.9
 sounddevice>=0.5
+truststore>=0.10
 websocket-client>=1.8
 pyinstaller>=6

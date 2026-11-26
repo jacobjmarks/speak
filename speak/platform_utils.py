@@ -1,8 +1,10 @@
 """OS-specific helpers. Keep every platform branch in this module."""
+import functools
 import os
 import plistlib
 import re
 import shlex
+import ssl
 import subprocess
 import sys
 from pathlib import Path
@@ -47,6 +49,17 @@ def hidden_process_kwargs() -> dict:
     if IS_WINDOWS:
         return {"creationflags": subprocess.CREATE_NO_WINDOW}
     return {"start_new_session": True}
+
+
+@functools.cache
+def https_context() -> ssl.SSLContext:
+    """TLS context that verifies against the OS trust store (Keychain, Windows store, Linux CA paths).
+
+    Python's default context can't read the macOS Keychain, so every HTTPS request failed in the packaged Mac app;
+    a bundled CA list (certifi) would instead miss roots added by the user or their organisation.
+    """
+    import truststore  # lazy: a load failure then only affects HTTPS requests, not startup
+    return truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
 
 
 _job = None

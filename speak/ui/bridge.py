@@ -19,6 +19,7 @@ class Bridge(QObject, Listener):
     cancelled = Signal()
     probed = Signal()
     update_found = Signal(object, bool)   # Release or None, manual check
+    update_failed = Signal(bool)          # manual check; GitHub unreachable
     update_progress = Signal(int)
     update_ready = Signal(object)        # Path of downloaded exe, or None on failure
     test_progress = Signal(str, object)  # setup test phase, percent
