@@ -6,7 +6,8 @@ faster than real time (`STREAM_SPEEDUP`), so most recognition is done by the tim
 import time
 import wave
 from dataclasses import dataclass
-from typing import Callable, Optional
+from typing import Optional
+from collections.abc import Callable
 
 from . import cleanup, tidy
 from .asr import AsrSession

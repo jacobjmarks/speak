@@ -8,7 +8,8 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Optional
+from collections.abc import Callable
 
 from .config import ASR_LOG, CLEANUP_LOG, CLEANUP_MODELS, MODELS_DIR
 from .platform_utils import bundle_root, exe_name, hidden_process_kwargs, https_context, tie_to_app

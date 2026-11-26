@@ -1,6 +1,6 @@
 """Clipboard copy and paste-into-focused-app."""
 import time
-from typing import Callable
+from collections.abc import Callable
 
 from .platform_utils import paste_shortcut
 

@@ -6,7 +6,8 @@ host API is used for listing/opening: MME truncates names to 31 characters and W
 import math
 import struct
 import sys
-from typing import Callable, Optional
+from typing import Optional
+from collections.abc import Callable
 
 _SKIP = ("Microsoft Sound Mapper", "Primary Sound Capture Driver")
 

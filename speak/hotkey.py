@@ -7,7 +7,7 @@ macOS uses its own suppressible Quartz event tap (`keytap_mac`) and a pynput Con
 Wayland has no global key grabs; see docs/wayfinder/research/cross-platform.md (GlobalShortcuts portal).
 """
 import threading
-from typing import Callable
+from collections.abc import Callable
 
 from .platform_utils import IS_MAC, IS_WINDOWS
 

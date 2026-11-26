@@ -6,7 +6,7 @@ Callbacks get the set of names a key answers to, e.g. {"cmd", "right cmd"} or {"
 """
 import logging
 import threading
-from typing import Callable
+from collections.abc import Callable
 
 from Quartz import (CFMachPortCreateRunLoopSource, CFRunLoopAddSource, CFRunLoopGetCurrent, CFRunLoopRunInMode,
                     CFRunLoopStop, CGEventGetFlags, CGEventGetIntegerValueField, CGEventMaskBit, CGEventTapCreate,

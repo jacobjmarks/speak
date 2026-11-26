@@ -1,7 +1,6 @@
 """The onboarding building blocks: painted widgets render distinctly per state, in both palettes, and the selection
 widgets behave like exclusive option groups."""
 from unittest.mock import patch
-import warnings
 
 from PySide6.QtCore import QPointF, Qt
 from PySide6.QtGui import QEnterEvent
@@ -22,15 +21,15 @@ def image(widget):
     return widget.grab().toImage()
 
 
-def focus(widget):
-    """Give `widget` keyboard focus. The window is made active inside Qt rather than asked of the OS: macOS won't
-    bring a background process's window forward (CI runners, terminals) and parallel test workers compete for it.
-    Qt deprecates this call in favour of activateWindow(), the OS request that fails here."""
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", DeprecationWarning)
-        QApplication.setActiveWindow(widget.window())
+def focused_image(widget):
+    """`widget` drawn with keyboard focus. Focus moves to it within its window for real, but only the OS can make a
+    window active and macOS won't for a background process (CI runners, terminals), so `hasFocus()` stands in for
+    that while it is drawn."""
+    assert widget.focusPolicy() & Qt.TabFocus
     widget.setFocus(Qt.TabFocusReason)
-    assert widget.hasFocus()
+    assert widget.window().focusWidget() is widget
+    with patch.object(widget, "hasFocus", return_value=True):
+        return image(widget)
 
 
 def hover(widget):
@@ -73,8 +72,7 @@ class PaintedWidgetTest(QtTestCase):
             card.leaveEvent(None)
             card.setChecked(True)
             selected = image(card)
-            focus(card)
-            focused = image(card)
+            focused = focused_image(card)
             self.capture(card, f"choice_card_{name}")
             self.assertNotEqual(plain, hovered)
             self.assertNotEqual(hovered, selected)
@@ -133,8 +131,7 @@ class PaintedWidgetTest(QtTestCase):
             plain.setEnabled(False)
             disabled = image(plain)
             plain.setEnabled(True)
-            focus(plain)
-            focused = image(plain)
+            focused = focused_image(plain)
             two_line.setChecked(True)
             self.capture(two_line, f"chip_two_line_{name}")
             self.all_different([before, selected, disabled, focused])
