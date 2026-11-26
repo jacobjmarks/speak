@@ -75,7 +75,7 @@ No GitHub account? You can also <a href="https://buymeacoffee.com/jacobjmarks">b
 
 **Does Speak send my voice anywhere?** No. Audio stays in memory on your computer and is discarded after each dictation. The only internet use is the one-time model download and an optional check for new versions.
 
-**Can I set it up with no internet?** Yes. Everything but the model weights is inside the app. Copy `nemotron-3.5-asr-streaming-0.6b.q8_0.gguf` (from `nvidia/nemotron-3.5-asr-streaming-0.6b` on Hugging Face) into the `models` folder inside Speak's data folder (Settings → App → Data folder → Open; Windows `%LOCALAPPDATA%\Speak`, macOS `~/Library/Application Support/Speak`, Linux `~/.local/share/speak`), and set *Tidy up my words* to *Quick* (no AI). For AI tidy-up too, copy the tidy model into `models/cleanup/` under its original file name (`qwen2.5-0.5b-instruct-q4_k_m.gguf` or `Qwen_Qwen3-4B-Instruct-2507-Q4_K_M.gguf`).
+**Can I set it up with no internet?** Yes. Everything but the model weights is inside the app. Copy `nemotron-3.5-asr-streaming-0.6b.q8_0.gguf` (from `nvidia/nemotron-3.5-asr-streaming-0.6b` on Hugging Face; other conversions may not load) into the `models` folder inside Speak's data folder (Settings → App → Data folder → Open; Windows `%LOCALAPPDATA%\Speak`, macOS `~/Library/Application Support/Speak`, Linux `~/.local/share/speak`), and set *Tidy up my words* to *Quick* (no AI). For AI tidy-up too, copy the tidy model into `models/cleanup/` under its original file name (`qwen2.5-0.5b-instruct-q4_k_m.gguf` or `Qwen_Qwen3-4B-Instruct-2507-Q4_K_M.gguf`).
 
 **Do I need a powerful computer?** No. Speak runs on ordinary laptops. With a graphics card it can use a larger model for smarter tidying at the same speed.
 

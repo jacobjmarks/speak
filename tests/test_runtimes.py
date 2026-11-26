@@ -92,6 +92,46 @@ class AsrServerLocalModelTest(unittest.TestCase):
         args = start.call_args.args[2]
         self.assertEqual("nemotron-3.5", args[args.index("--asr-model") + 1])
 
+    def test_runtime_rejecting_the_model_file_is_recognised(self):
+        with tempfile.TemporaryDirectory() as directory:
+            server = runtimes.AsrServer()
+            server.log_path = Path(directory) / "runtime.log"
+            server.log_path.write_text(
+                "nemo-speech serve: Unknown general.architecture='parakeet'. Supported: 'asr' (preferred).\n")
+            self.assertIsInstance(server._exit_error(0), runtimes.UnsupportedModelError)
+            server.log_path.write_text("something else broke\n")
+            self.assertNotIsInstance(server._exit_error(0), runtimes.UnsupportedModelError)
+
+    def test_rejected_pasted_gguf_explains_the_problem_when_nothing_is_downloaded(self):
+        with tempfile.TemporaryDirectory() as directory:
+            models = Path(directory)
+            (models / "handy.gguf").touch()
+            server = runtimes.AsrServer()
+            with patch.object(runtimes, "MODELS_DIR", models), \
+                    patch.object(runtimes, "check_model_host") as host, \
+                    patch.object(server, "start", side_effect=runtimes.UnsupportedModelError("no")) as start, \
+                    self.assertRaisesRegex(runtimes.ModelDownloadError, "handy.gguf"):
+                server.ensure("nemotron-3.5", lambda *_: None)
+
+        host.assert_not_called()
+        self.assertEqual(1, start.call_count)
+
+    def test_rejected_pasted_gguf_falls_back_to_the_downloaded_model(self):
+        with tempfile.TemporaryDirectory() as directory:
+            models = Path(directory)
+            (models / "handy.gguf").touch()
+            (models / "nvidia").mkdir()
+            (models / "nvidia" / "nemotron.gguf").touch()
+            server = runtimes.AsrServer()
+            with patch.object(runtimes, "MODELS_DIR", models), \
+                    patch.object(runtimes, "check_model_host") as host, \
+                    patch.object(server, "start", side_effect=[runtimes.UnsupportedModelError("no"), True]) as start:
+                server.ensure("nemotron-3.5", lambda *_: None)
+
+        host.assert_not_called()
+        args = start.call_args.args[2]
+        self.assertEqual("nemotron-3.5", args[args.index("--asr-model") + 1])
+
 
 if __name__ == "__main__":
     unittest.main()

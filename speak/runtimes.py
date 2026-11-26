@@ -25,8 +25,12 @@ class ModelDownloadError(RuntimeError):
     """A model could not be downloaded; the message is meant for the user."""
 
 
+class UnsupportedModelError(RuntimeError):
+    """The speech runtime rejected the model file it was given."""
+
+
 def _asr_model_cached() -> bool:
-    return any("cleanup" not in p.parts for p in MODELS_DIR.rglob("*.gguf"))
+    return any(p.parent != MODELS_DIR and "cleanup" not in p.parts for p in MODELS_DIR.rglob("*.gguf"))
 
 
 def user_asr_model() -> Optional[Path]:
@@ -164,14 +168,33 @@ class AsrServer(ManagedServer):
     def __init__(self):
         super().__init__("NeMo-Speech ASR", ASR_LOG, "/ready")
 
+    def _exit_error(self, log_start: int) -> RuntimeError:
+        if "Unknown general.architecture" in self._output_since(log_start):
+            return UnsupportedModelError("The speech runtime can't read this model file.")
+        return super()._exit_error(log_start)
+
     def ensure(self, model: str, progress: Progress):
         local_model = user_asr_model()
         key = (model, str(local_model)) if local_model else model
         if self.running(key):
             return
         progress("Getting ready", None)
-        if local_model is None and not _asr_model_cached():
+        if local_model is not None:
+            try:
+                self._serve(key, str(local_model), progress)
+                return
+            except UnsupportedModelError:
+                if not _asr_model_cached():
+                    raise ModelDownloadError(
+                        f"Speak can't use \"{local_model.name}\" in its models folder: it isn't a speech model this "
+                        "version of Speak can run. Replace it with nemotron-3.5-asr-streaming-0.6b.q8_0.gguf from "
+                        "nvidia/nemotron-3.5-asr-streaming-0.6b on Hugging Face, or remove it to let Speak "
+                        "download the model.") from None
+        elif not _asr_model_cached():
             check_model_host()
+        self._serve(key, model, progress)
+
+    def _serve(self, key, asr_model: str, progress: Progress):
         root = asr_root()
         executable = root / "bin" / exe_name("nemo-speech")
 
@@ -187,7 +210,7 @@ class AsrServer(ManagedServer):
             executable,
             # Max lookahead: words judged with ~0.25 s of what follows. Better accuracy on clean speech,
             # same finish time; live text updates every 320 ms instead of 160 ms.
-            ["serve", "--asr-model", str(local_model or model), "--no-ui", "--asr.streaming.rnnt_right_context=-1"],
+            ["serve", "--asr-model", asr_model, "--no-ui", "--asr.streaming.rnnt_right_context=-1"],
             cwd=root,
             env={"NEMO_SPEECH_MODEL_DIR": str(MODELS_DIR)},
             on_wait=on_wait,
