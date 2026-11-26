@@ -155,6 +155,12 @@ class SettingRow(QWidget):
         self._compact = None
         self._unflash = QTimer(self, singleShot=True, interval=1600, timeout=lambda: self._set_flag("highlight", False))
 
+    def setVisible(self, visible: bool):
+        # Explicit show/hide only (hide() and show() land here); Qt's own hiding during teardown doesn't.
+        super().setVisible(visible)
+        if getattr(self, "section", None) is not None:
+            self.section.refresh()
+
     def search_text(self) -> str:
         parts = [self.title, self.hint.text(), self.keywords, self.badge]
         if self.section:
@@ -233,9 +239,8 @@ class SettingsSection(QWidget):
         row.section = self
         row.advanced = advanced
         (self._advanced if advanced else self._basic).addWidget(row)
-        row.installEventFilter(self)
         self.rows.append(row)
-        self._refresh()
+        self.refresh()
         return row
 
     def set_expanded(self, on: bool):
@@ -253,11 +258,6 @@ class SettingsSection(QWidget):
     def set_changed(self, count: int):
         self.more.set_changed(count)
 
-    def eventFilter(self, watched, event):
-        if event.type() in (QEvent.ShowToParent, QEvent.HideToParent):
-            self._refresh()
-        return False
-
     def _on_toggled(self, on: bool):
         self._show_advanced()
         self.toggled.emit(on)
@@ -265,7 +265,8 @@ class SettingsSection(QWidget):
     def _show_advanced(self):
         self.advanced.setVisible(self.inline or self.more.isChecked())
 
-    def _refresh(self):
+    def refresh(self):
+        """Re-lay dividers and More options after a row was shown or hidden."""
         basic = [r for r in self.rows if not r.advanced and not explicitly_hidden(r)]
         extra = [r for r in self.rows if r.advanced and not explicitly_hidden(r)]
         for i, row in enumerate(basic):

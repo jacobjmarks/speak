@@ -215,6 +215,7 @@ class SettingsPage(QWidget):
         language_layout = QHBoxLayout(language_control)
         language_layout.setContentsMargins(0, 0, 0, 0)
         language_layout.addWidget(self.language)
+        language_control.setFocusProxy(self.language)  # search focuses the row's control
         self._row(section, "Language", "Spoken language, or detect automatically", language_control, "language",
                   "locale spoken english detect")
 
@@ -288,6 +289,7 @@ class SettingsPage(QWidget):
         self.audio_dim_value.setMinimumWidth(42)
         self.audio_dim_value.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         level_layout.addWidget(self.audio_dim_slider, 1)
+        self.audio_dim_level.setFocusProxy(self.audio_dim_slider)
         level_layout.addWidget(self.audio_dim_value)
         self.audio_dim_slider.setEnabled(settings["audio_dim_enabled"])
         self.audio_dim_slider.valueChanged.connect(self._on_audio_dim_changed)
@@ -357,6 +359,7 @@ class SettingsPage(QWidget):
         check.setEnabled(updates.updatable())
         line.addWidget(self.update_status)
         line.addWidget(check)
+        version.setFocusProxy(check)
         self.prereleases = self._toggle(settings["prereleases"], "prereleases")
         self._row(section, config.PRERELEASES_LABEL,
                   f"{config.PRERELEASES_HINT}. Always on while you run a pre-release",
@@ -386,10 +389,12 @@ class SettingsPage(QWidget):
         self.category_shown.emit(key)
 
     def clear_search(self):
+        """Empty the search and put the current category back in front of any results, without signalling."""
         if self.search.text():
             self.search.blockSignals(True)
             self.search.clear()
             self.search.blockSignals(False)
+        self.stack.setCurrentWidget(self.pages[self.category])
 
     def row_for(self, key: str) -> SettingRow:
         return next(r for r in self.rows if r.key == key)

@@ -9,7 +9,7 @@ from PySide6.QtWidgets import QDialog, QPushButton
 from tests.ui import QtTestCase
 from speak import config
 from speak.ui import theme as ui_theme
-from speak.ui.window import DICTATE, CloseDialog, MainWindow
+from speak.ui.window import DICTATE, SETTINGS, CloseDialog, MainWindow
 
 
 class MainWindowInteractionTest(QtTestCase):
@@ -20,6 +20,7 @@ class MainWindowInteractionTest(QtTestCase):
         with patch("speak.audio.input_devices", return_value=[]), \
                 patch("speak.platform_utils.launch_at_login_enabled", return_value=False):
             window = MainWindow({**config.DEFAULTS}, lambda: 0.0)
+        window.allow_close = True  # as SpeakApp.quit does; otherwise close() is ignored and it's destroyed while shown
         window.setStyleSheet(ui_theme.stylesheet(ui_theme.DARK))
         window.show()
         self.addCleanup(window.close)
@@ -48,6 +49,17 @@ class MainWindowInteractionTest(QtTestCase):
 
         QTest.mouseClick(window.nav_buttons[DICTATE], Qt.LeftButton)
         self.assertIs(window.dictate, window.stack.currentWidget())
+
+    def test_returning_to_settings_after_leaving_a_search_shows_the_category_not_old_results(self):
+        window = self.make_window()
+        QTest.keyClicks(window.settings.search, "mic")
+        QTest.mouseClick(window.nav_buttons[DICTATE], Qt.LeftButton)
+
+        window.show_page(SETTINGS)
+
+        self.assertEqual("", window.settings.search.text())
+        self.assertIs(window.settings.pages[window.settings.category], window.settings.stack.currentWidget())
+        self.assertTrue(window.nav_buttons[window.settings.category].isChecked())
 
     def test_related_settings_on_dictate_open_the_setting(self):
         window = self.make_window()

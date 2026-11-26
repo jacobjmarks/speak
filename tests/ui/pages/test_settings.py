@@ -252,6 +252,14 @@ class SettingsSearchTest(QtTestCase):
         self.assertEqual([], changes)  # revealing a row doesn't change the saved open sections
         self.capture(page, "search-revealed-row")
 
+    def test_opening_a_result_focuses_the_control_inside_a_wrapped_row(self):
+        page = self.make_page()
+
+        QTest.keyClicks(page.search, "language")
+        QTest.keyClick(page.search, Qt.Key_Return)
+
+        self.assertIs(page.language, page.focusWidget())
+
     def test_synonyms_find_settings_named_differently(self):
         page = self.make_page()
 
