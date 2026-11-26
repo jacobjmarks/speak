@@ -1,7 +1,7 @@
 """The onboarding building blocks: painted widgets render distinctly per state, in both palettes, and the selection
 widgets behave like exclusive option groups."""
-import os
 from unittest.mock import patch
+import warnings
 
 from PySide6.QtCore import QPointF, Qt
 from PySide6.QtGui import QEnterEvent
@@ -23,17 +23,14 @@ def image(widget):
 
 
 def focus(widget):
-    """Give `widget` keyboard focus. Returns False if the desktop keeps focus elsewhere (parallel test runs compete
-    for it on Windows), so the focused look can't be compared."""
-    window = widget.window()
-    for _ in range(3):
-        window.activateWindow()
-        if QTest.qWaitForWindowActive(window, 1000):
-            widget.setFocus(Qt.TabFocusReason)
-            QTest.qWait(50)
-            if widget.hasFocus():
-                return True
-    return False
+    """Give `widget` keyboard focus. The window is made active inside Qt rather than asked of the OS: macOS won't
+    bring a background process's window forward (CI runners, terminals) and parallel test workers compete for it.
+    Qt deprecates this call in favour of activateWindow(), the OS request that fails here."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        QApplication.setActiveWindow(widget.window())
+    widget.setFocus(Qt.TabFocusReason)
+    assert widget.hasFocus()
 
 
 def hover(widget):
@@ -76,13 +73,12 @@ class PaintedWidgetTest(QtTestCase):
             card.leaveEvent(None)
             card.setChecked(True)
             selected = image(card)
-            has_focus = focus(card)
+            focus(card)
             focused = image(card)
             self.capture(card, f"choice_card_{name}")
             self.assertNotEqual(plain, hovered)
             self.assertNotEqual(hovered, selected)
-            if has_focus and not os.environ.get("GITHUB_ACTIONS"):
-                self.assertNotEqual(selected, focused)
+            self.assertNotEqual(selected, focused)
             self.assertEqual(plain, self.after_leave(card))
 
         self.each_palette(lambda pal: self.shown(ChoiceCard("Smart", "Sub", example="Example"), pal, (260, 160)),
@@ -130,22 +126,18 @@ class PaintedWidgetTest(QtTestCase):
     def test_chip_shows_selected_disabled_and_two_line_states(self):
         def check(name, chips):
             plain, two_line = chips
+            plain.clearFocus()  # window activation may already have given the first chip its focus ring
             before = image(plain)
             plain.setChecked(True)
             selected = image(plain)
             plain.setEnabled(False)
             disabled = image(plain)
             plain.setEnabled(True)
-            has_focus = focus(plain)
+            focus(plain)
             focused = image(plain)
             two_line.setChecked(True)
             self.capture(two_line, f"chip_two_line_{name}")
-            
-            images = [before, selected, disabled]
-            if has_focus and not os.environ.get("GITHUB_ACTIONS"):
-                images.append(focused)
-            self.all_different(images)
-            
+            self.all_different([before, selected, disabled, focused])
             self.assertGreater(distinct_colours(two_line), 3)
             self.assertGreaterEqual(two_line.sizeHint().width(), plain.sizeHint().width())
             self.assertEqual(two_line.sizeHint(), two_line.minimumSizeHint())
